@@ -19,7 +19,7 @@ export type CheckinStatus = {
 }
 
 export async function submitCheckin(payload: CheckinPayload) {
-  return apiFetch('/api/checkin', { method: 'POST', body: payload })
+  return apiFetch('/api/mobile/checkin', { method: 'POST', body: payload })
 }
 
 export async function getCheckinStatus(): Promise<CheckinStatus> {
