@@ -16,7 +16,7 @@ export type SessionUser = {
 
 export async function login(payload: LoginPayload): Promise<SessionUser> {
   const res = await apiFetch<{ token: string; user: SessionUser }>(
-    '/api/auth/mobile/login',
+    '/api/mobile/auth/login',
     { method: 'POST', body: payload, auth: false }
   )
   await saveToken(res.token)
@@ -28,5 +28,5 @@ export async function logout() {
 }
 
 export async function getMe(): Promise<SessionUser> {
-  return apiFetch<SessionUser>('/api/auth/mobile/me')
+  return apiFetch<SessionUser>('/api/mobile/auth/me')
 }
