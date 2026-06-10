@@ -1,5 +1,24 @@
 import { apiFetch } from './client'
 
+export type PublicTemplate = {
+  id: string
+  name: string
+  description: string | null
+  goal: string | null
+  level: string | null
+  daysPerWeek: number
+  category: string | null
+  trainingDays: number
+}
+
+export async function getPublicTemplates(): Promise<PublicTemplate[]> {
+  return apiFetch<PublicTemplate[]>('/api/mobile/gym/templates')
+}
+
+export async function assignTemplate(templateId: string) {
+  return apiFetch('/api/gym/assign', { method: 'POST', body: { templateId } })
+}
+
 export type GymSessionData = {
   assignedWorkoutId: string
   templateName: string

@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store'
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://medaliq.com'
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const TOKEN_KEY = 'medaliq_session_token'
 
@@ -49,8 +49,8 @@ export async function apiFetch<T>(
   })
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: 'Error de red' }))
-    throw new Error(error.message ?? `HTTP ${res.status}`)
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.error ?? error.message ?? `HTTP ${res.status}`)
   }
 
   return res.json() as Promise<T>

@@ -74,7 +74,7 @@ export default function LogScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: '#f8fafc' }}
+      style={{ flex: 1, backgroundColor: '#f1f5f9' }}
     >
       {/* Header */}
       <LinearGradient

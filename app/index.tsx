@@ -21,6 +21,8 @@ export default function Index() {
         setUser(user)
         if (!user.onboardingCompleted) {
           router.replace('/(auth)/onboarding')
+        } else if (user.userPlan === 'INACTIVE') {
+          router.replace('/(app)/upgrade')
         } else {
           router.replace('/(app)/(tabs)/dashboard')
         }

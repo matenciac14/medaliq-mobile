@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { login } from '../../src/api/auth'
@@ -31,6 +32,8 @@ export default function LoginScreen() {
       setUser(user)
       if (!user.onboardingCompleted) {
         router.replace('/(auth)/onboarding')
+      } else if (user.userPlan === 'INACTIVE') {
+        router.replace('/(app)/upgrade')
       } else {
         router.replace('/(app)/(tabs)/dashboard')
       }
@@ -122,9 +125,21 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
-          ¿No tienes cuenta? Regístrate en medaliq.com
-        </Text>
+        <TouchableOpacity onPress={() => router.replace('/(auth)/register')} activeOpacity={0.7}>
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
+            ¿No tienes cuenta?{' '}
+            <Text style={{ color: '#f97316', fontFamily: 'Inter_700Bold' }}>Crear cuenta</Text>
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => Linking.openURL('mailto:hola@medaliq.com?subject=Recuperar%20contrase%C3%B1a')}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
+            ¿Olvidaste tu contraseña? Contáctanos
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   )

@@ -16,15 +16,23 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: {
           backgroundColor: 'white',
-          borderTopColor: '#e5e7eb',
+          borderTopColor: '#e9ecf0',
           borderTopWidth: 1,
           paddingBottom: insets.bottom,
-          height: 52 + insets.bottom,
+          height: 58 + insets.bottom,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.07,
+          shadowRadius: 10,
+          elevation: 12,
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          fontFamily: 'Inter_500Medium',
+          fontFamily: 'Inter_600SemiBold',
           marginTop: -2,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
       }}
     >
@@ -52,6 +60,15 @@ export default function TabsLayout() {
           title: 'Gym',
           tabBarIcon: ({ color }) => (
             <Ionicons name="barbell-outline" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="ai-coach"
+        options={{
+          title: 'AI Coach',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="flash-outline" size={22} color={color} />
           ),
         }}
       />

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -71,51 +71,54 @@ export default function ProfileScreen() {
     ])
   }
 
-  const plan = (user as any)?.userPlan ?? 'FREE'
+  const plan = (user as any)?.userPlan ?? 'INACTIVE'
   const planLabel: Record<string, string> = {
-    FREE: 'Free',
+    INACTIVE: 'Inactivo',
     TRIAL: 'Trial 30 días',
     PRO: 'Pro',
   }
 
+  const cardStyle = {
+    backgroundColor: 'white', borderRadius: 16, marginHorizontal: 16, overflow: 'hidden' as const,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  }
+  const sectionTitleStyle = {
+    fontSize: 11, fontFamily: 'Inter_600SemiBold' as const, color: '#9ca3af',
+    textTransform: 'uppercase' as const, letterSpacing: 0.8,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8,
+  }
+
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#f8fafc' }}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, gap: 16 }}
+      style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+      contentContainerStyle={{ paddingBottom: 32, gap: 14 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header avatar */}
-      <View style={{ paddingHorizontal: 16 }}>
-        <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5, marginBottom: 16 }}>
-          Perfil
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <LinearGradient
-            colors={['#1e3a5f', '#2d5a8e']}
-            style={{ width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text style={{ color: 'white', fontSize: 22, fontFamily: 'Inter_900Black' }}>{initials}</Text>
-          </LinearGradient>
-          <View>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827' }}>{user?.name ?? 'Atleta'}</Text>
-            <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>{user?.email}</Text>
-            <View style={{
-              flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5,
-              backgroundColor: plan === 'TRIAL' ? '#fff7ed' : plan === 'PRO' ? '#f0fdf4' : '#f3f4f6',
-              borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start',
-            }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: plan === 'TRIAL' ? '#f97316' : plan === 'PRO' ? '#22c55e' : '#9ca3af' }} />
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: plan === 'TRIAL' ? '#92400e' : plan === 'PRO' ? '#166534' : '#6b7280' }}>
-                {planLabel[plan] ?? plan}
-              </Text>
-            </View>
+      {/* Gradient hero header with avatar */}
+      <LinearGradient
+        colors={['#1e3a5f', '#2d5a8e']}
+        style={{ paddingTop: insets.top + 20, paddingBottom: 28, alignItems: 'center' }}
+      >
+        <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: 'white', fontSize: 24, fontFamily: 'Inter_900Black' }}>{initials}</Text>
           </View>
         </View>
-      </View>
+        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: 'white' }}>{user?.name ?? 'Atleta'}</Text>
+        <View style={{
+          marginTop: 8, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
+          backgroundColor: plan === 'TRIAL' ? '#f97316' : plan === 'PRO' ? '#22c55e' : 'rgba(255,255,255,0.2)',
+        }}>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
+            {plan === 'TRIAL' ? '✦ Trial 30 días' : plan === 'PRO' ? '✦ Pro' : 'Inactivo'}
+          </Text>
+        </View>
+      </LinearGradient>
 
-      {/* Plan card if trial */}
+      {/* Trial banner */}
       {plan === 'TRIAL' && (
-        <View style={{ marginHorizontal: 16, backgroundColor: '#fff7ed', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#fed7aa' }}>
+        <View style={{ marginHorizontal: 16, backgroundColor: '#fff7ed', borderRadius: 14, padding: 14,
+          borderLeftWidth: 4, borderLeftColor: '#f97316' }}>
           <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>
             Trial activo — acceso completo por 30 días
           </Text>
@@ -126,35 +129,29 @@ export default function ProfileScreen() {
       )}
 
       {/* Cuenta */}
-      <View style={{ backgroundColor: 'white', borderRadius: 16, marginHorizontal: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
-          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Cuenta
-          </Text>
+      <View>
+        <Text style={sectionTitleStyle}>Cuenta</Text>
+        <View style={cardStyle}>
+          <MenuItem icon="person-outline" label="Nombre" value={firstName} />
+          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
+          <MenuItem icon="mail-outline" label="Email" value={user?.email ?? ''} />
+          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
+          <MenuItem icon="medal-outline" label="Plan" value={planLabel[plan] ?? plan} />
         </View>
-        <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-        <MenuItem icon="person-outline" label="Nombre" value={firstName} />
-        <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 66 }} />
-        <MenuItem icon="mail-outline" label="Email" value={user?.email ?? ''} />
-        <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 66 }} />
-        <MenuItem icon="medal-outline" label="Plan" value={planLabel[plan] ?? plan} />
       </View>
 
       {/* Soporte */}
-      <View style={{ backgroundColor: 'white', borderRadius: 16, marginHorizontal: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
-          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Soporte
-          </Text>
+      <View>
+        <Text style={sectionTitleStyle}>Soporte</Text>
+        <View style={cardStyle}>
+          <MenuItem icon="help-circle-outline" label="Ayuda y FAQ" onPress={() => Linking.openURL('https://medaliq.com/help')} />
+          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
+          <MenuItem icon="chatbubble-outline" label="Contactar soporte" onPress={() => Linking.openURL('mailto:hola@medaliq.com')} />
         </View>
-        <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-        <MenuItem icon="help-circle-outline" label="Ayuda y FAQ" onPress={() => {}} />
-        <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 66 }} />
-        <MenuItem icon="chatbubble-outline" label="Contactar soporte" onPress={() => {}} />
       </View>
 
       {/* Sesión */}
-      <View style={{ backgroundColor: 'white', borderRadius: 16, marginHorizontal: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+      <View style={cardStyle}>
         <MenuItem icon="log-out-outline" label="Cerrar sesión" onPress={handleLogout} danger />
       </View>
 

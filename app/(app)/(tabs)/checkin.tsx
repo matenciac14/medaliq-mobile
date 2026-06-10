@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQueryClient } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import { submitCheckin } from '../../../src/api/checkin'
+import { useAuthStore } from '../../../src/store/auth'
+import UpgradeWall from '../../../src/components/UpgradeWall'
 
 type ScaleProps = {
   label: string
@@ -54,6 +56,7 @@ function ScaleSelector({ label, value, onChange, low, high, color = '#f97316' }:
 }
 
 export default function CheckinScreen() {
+  const { user } = useAuthStore()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
 
@@ -64,6 +67,10 @@ export default function CheckinScreen() {
   const [stress, setStress] = useState(0)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+
+  if (!user?.features?.checkin) {
+    return <UpgradeWall icon="📋" title="Check-in semanal" description="Registra tu evolución semanal y recibe ajustes automáticos en tu plan con el plan Pro." />
+  }
 
   async function handleSubmit() {
     if (energy === 0 || soreness === 0 || stress === 0) {
@@ -95,7 +102,7 @@ export default function CheckinScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: '#f8fafc' }}
+      style={{ flex: 1, backgroundColor: '#f1f5f9' }}
     >
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40, paddingHorizontal: 16, gap: 20 }}

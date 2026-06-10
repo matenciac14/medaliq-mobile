@@ -178,7 +178,7 @@ export default function GymSessionScreen() {
 
   if (isLoading || !session) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ fontSize: 32, marginBottom: 12 }}>⏳</Text>
         <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Cargando sesión...</Text>
       </View>
@@ -186,7 +186,7 @@ export default function GymSessionScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
       {restTimer.show && (
         <RestTimerModal
           seconds={restTimer.seconds}

@@ -9,6 +9,13 @@ export type TodaySession = {
   completed: boolean
 }
 
+export type WeekSession = {
+  dayIndex: number   // 0=Mon … 6=Sun
+  type: string | null
+  done: boolean
+  isToday: boolean
+}
+
 export type DashboardData = {
   firstName: string
   todaySession: TodaySession | null
@@ -20,9 +27,12 @@ export type DashboardData = {
   } | null
   metrics: {
     weightKg: number | null
+    weightGoalKg: number | null
     hrResting: number | null
     sleepHours: number | null
   }
+  weekSessions: WeekSession[]
+  kcalTarget: number | null
   completedCount: number
   totalTraining: number
   checkinPending: boolean

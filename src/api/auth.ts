@@ -10,8 +10,18 @@ export type SessionUser = {
   name: string
   email: string
   role: 'ATHLETE' | 'COACH' | 'ADMIN'
-  userPlan: 'FREE' | 'TRIAL' | 'PRO'
+  userPlan: 'INACTIVE' | 'TRIAL' | 'PRO'
   onboardingCompleted: boolean
+  features: {
+    plan: boolean
+    checkin: boolean
+    nutrition: boolean
+    progress: boolean
+    log: boolean
+    coach: boolean
+    gym: boolean
+    aiCoach: boolean
+  }
 }
 
 export async function login(payload: LoginPayload): Promise<SessionUser> {
