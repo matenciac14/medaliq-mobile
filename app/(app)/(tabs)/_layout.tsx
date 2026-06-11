@@ -64,20 +64,11 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="ai-coach"
+        name="nutrition"
         options={{
-          title: 'AI Coach',
+          title: 'Nutrición',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="flash-outline" size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="checkin"
-        options={{
-          title: 'Check-in',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="checkmark-circle-outline" size={22} color={color} />
+            <Ionicons name="nutrition-outline" size={22} color={color} />
           ),
         }}
       />
@@ -90,6 +81,9 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Tabs ocultos del nav pero rutas accesibles */}
+      <Tabs.Screen name="ai-coach" options={{ href: null }} />
+      <Tabs.Screen name="checkin" options={{ href: null }} />
     </Tabs>
   )
 }

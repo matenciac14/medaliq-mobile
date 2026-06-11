@@ -14,6 +14,9 @@ export type WeekSession = {
   type: string | null
   done: boolean
   isToday: boolean
+  id: string | null
+  durationMin: number | null
+  zoneTarget: string | null
 }
 
 export type DashboardData = {
@@ -37,6 +40,21 @@ export type DashboardData = {
   totalTraining: number
   checkinPending: boolean
   trialDaysLeft: number | null
+  // hero cards
+  streakDays: number
+  raceDays: number | null
+  isRecomp: boolean
+  formStatus: 'good' | 'moderate' | 'rest'
+  formMessage: string
+  lastCheckIn: {
+    energyLevel: number | null
+    hardestSessionRpe: number | null
+    sleepHours: number | null
+  } | null
+  weeklyWeightChange: number | null
+  weightProgressPct: number | null
+  currentVolume: number | null
+  volumeDeltaPct: number | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {

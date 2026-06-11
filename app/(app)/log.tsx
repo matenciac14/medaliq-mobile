@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -42,14 +42,24 @@ export default function LogScreen() {
   const [rpe, setRpe] = useState(0)
   const [hrAvg, setHrAvg] = useState('')
   const [notes, setNotes] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+
+  useEffect(() => {
+    if (showSuccess) {
+      const timer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        queryClient.invalidateQueries({ queryKey: ['plan'] })
+        router.back()
+      }, 1800)
+      return () => clearTimeout(timer)
+    }
+  }, [showSuccess])
 
   const { mutate: submitLog, isPending } = useMutation({
-    mutationFn: (payload: LogPayload) => apiFetch('/api/log/session', { method: 'POST', body: payload }),
+    mutationFn: (payload: LogPayload) => apiFetch('/api/mobile/log/session', { method: 'POST', body: payload }),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      queryClient.invalidateQueries({ queryKey: ['plan'] })
-      router.back()
+      setShowSuccess(true)
     },
     onError: (err: any) => {
       Alert.alert('Error', err.message ?? 'No se pudo guardar.')
@@ -69,6 +79,26 @@ export default function LogScreen() {
       hrAvg: hrAvg ? parseInt(hrAvg) : undefined,
       notes: notes.trim() || undefined,
     })
+  }
+
+  if (showSuccess) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 }}>
+        <View style={{
+          width: 88, height: 88, borderRadius: 44,
+          backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Ionicons name="checkmark" size={48} color="white" />
+        </View>
+        <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center' }}>
+          ¡Sesión registrada!
+        </Text>
+        <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+          Tu entrenamiento ha sido guardado correctamente.
+        </Text>
+        <ActivityIndicator color="#22c55e" style={{ marginTop: 8 }} />
+      </View>
+    )
   }
 
   return (

@@ -50,17 +50,16 @@ function getIntensityLabel(sessionType: string | null | undefined): string {
   return 'Día suave'
 }
 
-function getCoachMessage(type: string | null, duration: number | null): string {
-  if (!type || type === 'DESCANSO') return 'Día de descanso. ¿Cómo te has sentido esta semana?'
-  const label = SESSION_SHORT[type] ?? type.toLowerCase()
-  return `Hoy tienes ${label} de ${duration ?? '?'} min. ¿Cómo te sientes?`
-}
-
 // ── Weekly Strip ──────────────────────────────────────────────────
-function WeeklyStrip({ sessions, completed, total }: {
-  sessions: WeekSession[]; completed: number; total: number
+function WeeklyStrip({ sessions, completed, total, onLogSession }: {
+  sessions: WeekSession[]
+  completed: number
+  total: number
+  onLogSession: (s: WeekSession) => void
 }) {
   const pct = total > 0 ? completed / total : 0
+  const todayIdx = sessions.find(s => s.isToday)?.dayIndex ?? -1
+
   return (
     <View style={{ backgroundColor: 'white', borderRadius: 18, padding: 14, ...SHADOW }}>
       {/* Header row */}
@@ -80,8 +79,47 @@ function WeeklyStrip({ sessions, completed, total }: {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {sessions.map((s) => {
           const isRest = !s.type || s.type === 'DESCANSO'
+          const isFuture = s.dayIndex > todayIdx
+          const isPast = s.dayIndex < todayIdx
+          // Solo tappable: pasado sin registrar + hoy sin completar (no rest, tiene id)
+          const canLog = !isRest && !s.done && !isFuture && !!s.id
           const label = s.type ? (SESSION_SHORT[s.type] ?? '?') : '·'
           const labelColor = s.isToday ? 'white' : (SESSION_COLORS[s.type ?? ''] ?? '#6b7280')
+
+          const cell = (
+            <View style={{
+              width: 28, height: 28, borderRadius: isRest ? 14 : 8, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: s.isToday
+                ? '#1e3a5f'
+                : s.done && !isRest
+                  ? '#dcfce7'
+                  : isFuture && !isRest
+                    ? '#f8fafc'
+                    : isRest
+                      ? 'transparent'
+                      : isPast && !s.done && !isRest
+                        ? '#fff7ed'   // naranja suave = pendiente de registro
+                        : '#f1f5f9',
+              borderWidth: canLog && isPast ? 1 : 0,
+              borderColor: '#f97316',
+              opacity: isFuture && !isRest ? 0.35 : 1,
+            }}>
+              {s.done && !isRest ? (
+                <Text style={{ fontSize: 12, color: '#22c55e', fontFamily: 'Inter_700Bold' }}>✓</Text>
+              ) : isPast && !s.done && !isRest ? (
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#f97316' }}>!</Text>
+              ) : (
+                <Text style={{
+                  fontSize: isRest ? 14 : 9,
+                  fontFamily: 'Inter_700Bold',
+                  color: isRest ? '#d1d5db' : isFuture ? '#9ca3af' : labelColor,
+                }}>
+                  {isRest ? '·' : label}
+                </Text>
+              )}
+            </View>
+          )
+
           return (
             <View key={s.dayIndex} style={{ alignItems: 'center', gap: 4, flex: 1 }}>
               <Text style={{
@@ -91,85 +129,206 @@ function WeeklyStrip({ sessions, completed, total }: {
               }}>
                 {DAY_LABELS[s.dayIndex]}
               </Text>
-              <View style={{
-                width: 28, height: 28, borderRadius: isRest ? 14 : 8, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: s.isToday
-                  ? '#1e3a5f'
-                  : s.done && !isRest
-                    ? '#dcfce7'
-                    : isRest
-                      ? 'transparent'
-                      : '#f1f5f9',
-              }}>
-                {s.done && !isRest ? (
-                  <Text style={{ fontSize: 12, color: '#22c55e', fontFamily: 'Inter_700Bold' }}>✓</Text>
-                ) : (
-                  <Text style={{
-                    fontSize: isRest ? 14 : 9,
-                    fontFamily: 'Inter_700Bold',
-                    color: isRest ? '#d1d5db' : labelColor,
-                  }}>
-                    {isRest ? '·' : label}
-                  </Text>
-                )}
-              </View>
+              {canLog ? (
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); onLogSession(s) }}
+                  activeOpacity={0.7}
+                >
+                  {cell}
+                </TouchableOpacity>
+              ) : cell}
             </View>
           )
         })}
       </View>
+      {/* Hint: pasados pendientes */}
+      {sessions.some(s => !s.done && s.dayIndex < todayIdx && s.type && s.type !== 'DESCANSO') && (
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#f97316', marginTop: 8, textAlign: 'center' }}>
+          Toca ! para registrar sesiones pasadas
+        </Text>
+      )}
     </View>
   )
 }
 
-// ── Actionable KPI Cards ─────────────────────────────────────────
-function KpiRow({ kcal, completed, total, sessionType }: {
-  kcal: number | null; completed: number; total: number; sessionType?: string | null
+// ── Hero Cards ────────────────────────────────────────────────────
+const FORM_COLORS = {
+  good:     { bg: '#f0fdf4', border: '#22c55e', label: '#166534', text: '#14532d', chip: '#bbf7d0', chipText: '#14532d' },
+  moderate: { bg: '#fffbeb', border: '#f59e0b', label: '#92400e', text: '#78350f', chip: '#fde68a', chipText: '#78350f' },
+  rest:     { bg: '#fef2f2', border: '#ef4444', label: '#991b1b', text: '#7f1d1d', chip: '#fecaca', chipText: '#7f1d1d' },
+}
+
+function HeroForma({ formStatus, formMessage, lastCheckIn }: {
+  formStatus: 'good' | 'moderate' | 'rest'
+  formMessage: string
+  lastCheckIn: { energyLevel: number | null; hardestSessionRpe: number | null; sleepHours: number | null } | null
 }) {
-  const intensityLabel = getIntensityLabel(sessionType)
+  const c = FORM_COLORS[formStatus]
+  const icon = formStatus === 'good' ? '⚡' : formStatus === 'moderate' ? '⚠️' : '😴'
   return (
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      {/* Kcal del día */}
-      <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
-        <View style={{ height: 3, backgroundColor: '#f97316' }} />
-        <View style={{ padding: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Text style={{ fontSize: 14 }}>🔥</Text>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
-              {kcal ? kcal.toLocaleString('es-CO') : '—'}
-            </Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>kcal</Text>
+    <View style={{ backgroundColor: c.bg, borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ height: 3, backgroundColor: c.border }} />
+      <View style={{ padding: 14 }}>
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: c.label, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+          {icon}  CÓMO LLEGÁS HOY
+        </Text>
+        <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: c.text, marginBottom: 10 }}>
+          {formMessage}
+        </Text>
+        {lastCheckIn && (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {lastCheckIn.energyLevel != null && (
+              <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
+                  Energía {lastCheckIn.energyLevel}/5
+                </Text>
+              </View>
+            )}
+            {lastCheckIn.hardestSessionRpe != null && (
+              <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
+                  RPE {lastCheckIn.hardestSessionRpe}/10
+                </Text>
+              </View>
+            )}
+            {lastCheckIn.sleepHours != null && (
+              <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
+                  Sueño {lastCheckIn.sleepHours >= 6.5 ? '✓' : `${lastCheckIn.sleepHours}h`}
+                </Text>
+              </View>
+            )}
           </View>
-          <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
-            objetivo hoy · {intensityLabel}
+        )}
+      </View>
+    </View>
+  )
+}
+
+function HeroCarrera({ raceDays, isRecomp, planData, metrics }: {
+  raceDays: number | null
+  isRecomp: boolean
+  planData: { currentWeek: number; totalWeeks: number } | null
+  metrics: { weightKg: number | null; weightGoalKg: number | null }
+}) {
+  const progressPct = planData ? Math.round(((planData.currentWeek - 1) / planData.totalWeeks) * 100) : 0
+  if (isRecomp) {
+    const kg = metrics.weightKg; const goal = metrics.weightGoalKg
+    const diff = kg && goal ? Math.abs(kg - goal) : null
+    return (
+      <View style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+        <View style={{ height: 3, backgroundColor: '#f97316' }} />
+        <View style={{ padding: 14, flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+              🎯  TU OBJETIVO
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              <Text style={{ fontSize: 34, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1 }}>
+                {diff != null ? diff.toFixed(1) : '—'}
+              </Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>kg restantes</Text>
+            </View>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 4 }}>
+              {kg ? `${kg} kg actual` : ''}{goal ? `  →  ${goal} kg meta` : ''}
+            </Text>
+          </View>
+          {planData && (
+            <View style={{ backgroundColor: '#f1f5f9', borderRadius: 12, padding: 10, alignItems: 'center', minWidth: 80 }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Semana</Text>
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{planData.currentWeek} / {planData.totalWeeks}</Text>
+              <View style={{ height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, width: 60, marginTop: 6 }}>
+                <View style={{ height: 4, backgroundColor: '#f97316', borderRadius: 2, width: `${progressPct}%` as any }} />
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    )
+  }
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ height: 3, backgroundColor: '#f97316' }} />
+      <View style={{ padding: 14, flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+            🏁  TU CARRERA
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+            <Text style={{ fontSize: 34, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1 }}>
+              {raceDays != null && raceDays > 0 ? raceDays : '—'}
+            </Text>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>días</Text>
+          </View>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 4 }}>
+            {raceDays != null && raceDays > 0 ? 'para tu próxima carrera' : 'sin fecha de carrera'}
           </Text>
         </View>
-      </View>
-      {/* Adherencia con dots */}
-      <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
-        <View style={{ height: 3, backgroundColor: '#1e3a5f' }} />
-        <View style={{ padding: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Text style={{ fontSize: 14 }}>⚡</Text>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
-              {total > 0 ? `${completed}/${total}` : '—'}
-            </Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>ses</Text>
+        {planData && (
+          <View style={{ backgroundColor: '#f1f5f9', borderRadius: 12, padding: 10, alignItems: 'center', minWidth: 80 }}>
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Semana</Text>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{planData.currentWeek} / {planData.totalWeeks}</Text>
+            <View style={{ height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, width: 60, marginTop: 6 }}>
+              <View style={{ height: 4, backgroundColor: '#f97316', borderRadius: 2, width: `${progressPct}%` as any }} />
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            {Array.from({ length: Math.max(total, 5) }, (_, i) => (
-              <View key={i} style={{
-                flex: 1, height: 8, borderRadius: 4,
-                backgroundColor: i < completed ? '#22c55e' : '#e5e7eb',
-              }} />
-            ))}
-          </View>
-        </View>
+        )}
       </View>
     </View>
   )
 }
 
-// ── AI Coach Teaser ──────────────────────────────────────────────
+function HeroPeso({ metrics, weeklyWeightChange, weightProgressPct }: {
+  metrics: { weightKg: number | null; weightGoalKg: number | null }
+  weeklyWeightChange: number | null
+  weightProgressPct: number | null
+}) {
+  const losing = (metrics.weightKg ?? 0) > (metrics.weightGoalKg ?? 0)
+  const changeColor = weeklyWeightChange == null ? '#9ca3af'
+    : losing ? (weeklyWeightChange < 0 ? '#22c55e' : '#ef4444')
+    : (weeklyWeightChange > 0 ? '#22c55e' : '#ef4444')
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ height: 3, backgroundColor: '#3b82f6' }} />
+      <View style={{ padding: 14, flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
+            ⚖️  META DE PESO
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text style={{ fontSize: 30, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
+              {metrics.weightKg ?? '—'}
+            </Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kg</Text>
+            {metrics.weightGoalKg && (
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#22c55e' }}>
+                → {metrics.weightGoalKg} kg
+              </Text>
+            )}
+          </View>
+          {weeklyWeightChange != null && (
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: changeColor, marginTop: 4 }}>
+              {weeklyWeightChange > 0 ? '+' : ''}{weeklyWeightChange} kg esta semana
+            </Text>
+          )}
+        </View>
+        {weightProgressPct != null && (
+          <View style={{ backgroundColor: '#f0fdf4', borderRadius: 12, padding: 10, alignItems: 'center', minWidth: 72 }}>
+            <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#22c55e', letterSpacing: -0.5 }}>
+              {weightProgressPct}%
+            </Text>
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+              del objetivo
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  )
+}
+
+// ── AI Coach Teaser — desactivado, preservado para nueva UX proactiva ────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function AICoachTeaser({ message, onPress }: { message: string; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.88}>
@@ -252,25 +411,37 @@ export default function DashboardScreen() {
         colors={['#1e3a5f', '#2d5a8e']}
         style={{ paddingTop: insets.top + 16, paddingBottom: 22, paddingHorizontal: 20, gap: 12 }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}
+          >
             {getGreeting()}, {firstName}
           </Text>
           {d.trialDaysLeft !== null && d.trialDaysLeft > 0 && (
-            <View style={{ backgroundColor: '#fef9c3', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <View style={{ backgroundColor: '#fef9c3', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexShrink: 0 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>
                 {d.trialDaysLeft}d trial
               </Text>
             </View>
           )}
         </View>
-        {d.planData && (
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-              Semana {d.planData.currentWeek}/{d.planData.totalWeeks}  ·  {d.planData.phase}
-            </Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {d.planData && (
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
+                Semana {d.planData.currentWeek}/{d.planData.totalWeeks}  ·  {d.planData.phase}
+              </Text>
+            </View>
+          )}
+          {d.streakDays > 0 && (
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
+                🔥 {d.streakDays} días · racha
+              </Text>
+            </View>
+          )}
+        </View>
       </LinearGradient>
 
       <View style={{ paddingHorizontal: 16, gap: 12 }}>
@@ -311,26 +482,28 @@ export default function DashboardScreen() {
                 {d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
               </Text>
             </LinearGradient>
-            <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                  router.push({
-                    pathname: '/(app)/log',
-                    params: {
-                      sessionId: d.todaySession!.id,
-                      type: d.todaySession!.type,
-                      duration: String(d.todaySession!.durationMin),
-                      zone: d.todaySession!.zoneTarget,
-                    },
-                  })
-                }}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-              >
-                <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión</Text>
-              </TouchableOpacity>
-            </View>
+            {!d.todaySession.completed && (
+              <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                    router.push({
+                      pathname: '/(app)/log',
+                      params: {
+                        sessionId: d.todaySession!.id,
+                        type: d.todaySession!.type,
+                        duration: String(d.todaySession!.durationMin),
+                        zone: d.todaySession!.zoneTarget,
+                      },
+                    })
+                  }}
+                  activeOpacity={0.85}
+                  style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : (
           <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}>
@@ -348,27 +521,24 @@ export default function DashboardScreen() {
             sessions={d.weekSessions}
             completed={d.completedCount}
             total={d.totalTraining}
+            onLogSession={(s) => {
+              router.push({
+                pathname: '/(app)/log',
+                params: {
+                  sessionId: s.id!,
+                  type: s.type!,
+                  duration: String(s.durationMin ?? ''),
+                  zone: s.zoneTarget ?? '2',
+                },
+              })
+            }}
           />
         )}
-
-        {/* ── KPIs accionables ──────────────────────────────── */}
-        <KpiRow
-          kcal={d.kcalTarget}
-          completed={d.completedCount}
-          total={d.totalTraining}
-          sessionType={d.todaySession?.type}
-        />
-
-        {/* ── AI Coach Teaser ───────────────────────────────── */}
-        <AICoachTeaser
-          message={getCoachMessage(d.todaySession?.type ?? null, d.todaySession?.durationMin ?? null)}
-          onPress={() => router.push('/(app)/(tabs)/ai-coach')}
-        />
 
         {/* ── Check-in pendiente ────────────────────────────── */}
         {d.checkinPending && (
           <TouchableOpacity
-            onPress={() => router.push('/(app)/(tabs)/checkin')}
+            onPress={() => router.push('/(app)/(tabs)/plan')}
             activeOpacity={0.85}
             style={{ backgroundColor: '#fff7ed', borderRadius: 14, overflow: 'hidden', flexDirection: 'row', ...SHADOW }}
           >
@@ -384,30 +554,31 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Quick Access ──────────────────────────────────── */}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {[
-            { emoji: '🥗', title: 'Nutrición', sub: d.kcalTarget ? `${d.kcalTarget.toLocaleString('es-CO')} kcal hoy` : 'Macros del día', accent: '#22c55e', route: '/(app)/nutrition' },
-            { emoji: '📈', title: 'Progreso',  sub: d.planData ? `Semana ${d.planData.currentWeek}` : 'Ver evolución', accent: '#3b82f6', route: '/(app)/progress' },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.title}
-              onPress={() => router.push(item.route as any)}
-              activeOpacity={0.85}
-              style={{ flex: 1, backgroundColor: 'white', borderRadius: 14, overflow: 'hidden', ...SHADOW }}
-            >
-              {/* Left colored bar */}
-              <View style={{ position: 'absolute', left: 0, top: 15, width: 3, height: 40, backgroundColor: item.accent, borderRadius: 2 }} />
-              <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 18 }}>{item.emoji}</Text>
-                <View>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{item.title}</Text>
-                  <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>{item.sub}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* ── Tu Progreso ───────────────────────────────────── */}
+        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 }}>
+          Tu Progreso
+        </Text>
+
+        {d.lastCheckIn && (
+          <HeroForma
+            formStatus={d.formStatus}
+            formMessage={d.formMessage}
+            lastCheckIn={d.lastCheckIn}
+          />
+        )}
+
+        <HeroCarrera
+          raceDays={d.raceDays}
+          isRecomp={d.isRecomp}
+          planData={d.planData}
+          metrics={d.metrics}
+        />
+
+        <HeroPeso
+          metrics={d.metrics}
+          weeklyWeightChange={d.weeklyWeightChange}
+          weightProgressPct={d.weightProgressPct}
+        />
 
       </View>
     </ScrollView>
