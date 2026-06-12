@@ -220,10 +220,11 @@ function CalendarStrip({ days, selectedDow, onSelect, completedCount, totalTrain
 
 // ── SessionDetailCard ────────────────────────────────────────────────
 
-function SessionDetailCard({ session, isToday, onLog }: {
+function SessionDetailCard({ session, isToday, onLog, onEdit }: {
   session: PlannedSession
   isToday: boolean
   onLog: () => void
+  onEdit: () => void
 }) {
   if (session.type === 'DESCANSO') {
     return (
@@ -345,17 +346,39 @@ function SessionDetailCard({ session, isToday, onLog }: {
       </View>
 
       {/* CTA */}
-      {!session.completed && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 4 }}>
-          <TouchableOpacity
-            onPress={onLog}
-            activeOpacity={0.85}
-            style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-          >
-            <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión →</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 4, flexDirection: 'row', gap: 10 }}>
+        {session.completed ? (
+          <>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f0fdf4', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: '#bbf7d0' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#16a34a' }}>✓ Completada</Text>
+            </View>
+            <TouchableOpacity
+              onPress={onEdit}
+              activeOpacity={0.85}
+              style={{ paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_500Medium', color: '#374151' }}>✏️</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              onPress={onLog}
+              activeOpacity={0.85}
+              style={{ flex: 1, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onEdit}
+              activeOpacity={0.85}
+              style={{ paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_500Medium', color: '#374151' }}>✏️</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
     </View>
   )
 }
@@ -689,6 +712,26 @@ export default function PlanScreen() {
     })
   }
 
+  function handleEditSession() {
+    if (!selectedSession) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    router.push({
+      pathname: '/(app)/edit-session',
+      params: {
+        sessionId:   selectedSession.id,
+        type:        selectedSession.type,
+        duration:    String(selectedSession.durationMin),
+        zone:        selectedSession.zoneTarget || '',
+        detail:      selectedSession.detailText || '',
+        logId:       selectedSession.log?.id ?? '',
+        logDuration: String(selectedSession.log?.durationMin ?? ''),
+        logRpe:      String(selectedSession.log?.rpe ?? ''),
+        logHrAvg:    String(selectedSession.log?.hrAvg ?? ''),
+        logNotes:    selectedSession.log?.notes ?? '',
+      },
+    })
+  }
+
   // ── Render ──────────────────────────────────────────────────────
 
   return (
@@ -770,6 +813,7 @@ export default function PlanScreen() {
             session={selectedSession}
             isToday={isCurrentWeek && selectedDow === todayDow}
             onLog={handleLogSession}
+            onEdit={handleEditSession}
           />
         ) : (
           <View style={{ backgroundColor: 'white', borderRadius: 16, flexDirection: 'row', overflow: 'hidden', ...SHADOW }}>

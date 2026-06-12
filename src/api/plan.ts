@@ -1,5 +1,13 @@
 import { apiFetch } from './client'
 
+export type SessionLog = {
+  id: string
+  durationMin: number | null
+  rpe: number | null
+  hrAvg: number | null
+  notes: string | null
+}
+
 export type PlannedSession = {
   id: string
   type: string
@@ -11,6 +19,7 @@ export type PlannedSession = {
   detailText: string | null
   intensity: string | null
   completed: boolean
+  log: SessionLog | null
 }
 
 export type PlanWeek = {
