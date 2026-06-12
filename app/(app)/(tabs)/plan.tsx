@@ -62,7 +62,26 @@ const SHADOW = {
   shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
 }
 
+const ZONE_COLORS: Record<string, string> = {
+  Z1: '#22c55e', Z2: '#3b82f6', Z3: '#eab308', Z4: '#f97316', Z5: '#ef4444',
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
+
+function parseStructureBlock(line: string): { zone: string | null; color: string; durationMin: number | null; text: string } {
+  const parts = line.split('|')
+  if (parts.length === 3) {
+    const zone = parts[0].trim().toUpperCase()
+    const durationMin = parseInt(parts[1].trim(), 10) || null
+    const text = parts[2].trim()
+    return { zone, color: ZONE_COLORS[zone] ?? '#9ca3af', durationMin, text }
+  }
+  // Old plain-text fallback
+  const match = line.match(/\b(Z[1-5])\b/i)
+  if (!match) return { zone: null, color: '#d1d5db', durationMin: null, text: line }
+  const zone = match[1].toUpperCase()
+  return { zone, color: ZONE_COLORS[zone] ?? '#9ca3af', durationMin: null, text: line }
+}
 
 function getIntensityKey(type: string, intensityField?: string | null): string {
   if (intensityField) return intensityField
@@ -290,9 +309,36 @@ function SessionDetailCard({ session, isToday, onLog }: {
                 </Text>
                 <View style={{ flex: 1, height: 1, backgroundColor: '#f1f5f9' }} />
               </View>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', lineHeight: 21 }}>
-                {structureText}
-              </Text>
+              <ScrollView
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: 180 }}
+              >
+                {structureText.split('\n').filter(Boolean).map((line, idx) => {
+                  const { zone, color, durationMin, text } = parseStructureBlock(line)
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                      {/* Zone dot + label */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2, width: 36 }}>
+                        <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: color }} />
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color, lineHeight: 14 }}>
+                          {zone ?? ''}
+                        </Text>
+                      </View>
+                      {/* Duration */}
+                      {durationMin != null && (
+                        <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#111827', width: 44, paddingTop: 1 }}>
+                          {durationMin} m
+                        </Text>
+                      )}
+                      {/* Description */}
+                      <Text style={{ flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', lineHeight: 20 }}>
+                        {text}
+                      </Text>
+                    </View>
+                  )
+                })}
+              </ScrollView>
             </View>
           ) : null}
         </View>
