@@ -46,9 +46,12 @@ export default function LogScreen() {
 
   useEffect(() => {
     if (showSuccess) {
-      const timer = setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-        queryClient.invalidateQueries({ queryKey: ['plan'] })
+      const timer = setTimeout(async () => {
+        // Await refetch so plan screen shows updated state immediately
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['plan'] }),
+          queryClient.refetchQueries({ queryKey: ['dashboard'] }),
+        ])
         router.back()
       }, 1800)
       return () => clearTimeout(timer)
