@@ -1,576 +1,521 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  ActivityIndicator, RefreshControl, Alert, KeyboardAvoidingView, Platform,
+  View, Text, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl,
 } from 'react-native'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'expo-router'
+import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getPlan, PlannedSession } from '../../../src/api/plan'
-import { submitCheckin } from '../../../src/api/checkin'
-import { getProgress } from '../../../src/api/progress'
+import { getPlan, type PlannedSession } from '../../../src/api/plan'
+import { getDashboard } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
-type PlanTab = 'weeks' | 'progress' | 'checkin'
+// ── Constants ────────────────────────────────────────────────────────
 
-// ── Constants ──────────────────────────────────────────────────────
-const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+const DAY_SHORT   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const MONTHS      = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
 
-const SESSION_META: Record<string, { icon: string; color: string; bg: string }> = {
-  RODAJE_Z2:    { icon: '🏃', color: '#22c55e', bg: '#f0fdf4' },
-  FARTLEK:      { icon: '🏃', color: '#f97316', bg: '#fff7ed' },
-  TIRADA_LARGA: { icon: '🏃', color: '#3b82f6', bg: '#eff6ff' },
-  CICLA:        { icon: '🚴', color: '#8b5cf6', bg: '#f5f3ff' },
-  NATACION:     { icon: '🏊', color: '#06b6d4', bg: '#ecfeff' },
-  FUERZA:       { icon: '💪', color: '#f59e0b', bg: '#fffbeb' },
-  DESCANSO:     { icon: '😴', color: '#9ca3af', bg: '#f9fafb' },
+const SESSION_ICONS: Record<string, string> = {
+  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃', TEMPO: '🏃',
+  INTERVALOS: '⚡', SIMULACRO: '🏁', TEST: '📊',
+  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
 }
 
-const PHASE_COLOR: Record<string, string> = {
-  BASE: '#1e3a5f',
-  DESARROLLO: '#f97316',
-  ESPECIFICO: '#dc2626',
-  AFINAMIENTO: '#7c3aed',
+const SESSION_LABELS: Record<string, string> = {
+  RODAJE_Z2: 'Rodaje Z2', FARTLEK: 'Fartlek', TIRADA_LARGA: 'Tirada Larga',
+  TEMPO: 'Tempo', INTERVALOS: 'Intervalos', SIMULACRO: 'Simulacro', TEST: 'Test',
+  CICLA: 'Cicla', NATACION: 'Natación', FUERZA: 'Fuerza', DESCANSO: 'Descanso', OTRO: 'Entrenamiento',
+}
+
+const PLAN_NAME_MAP: Record<string, string> = {
+  RACE_HALF_MARATHON: 'Media Maratón', RACE_MARATHON: 'Maratón',
+  RACE_10K: '10K', RACE_5K: '5K',
+  RACE_CYCLING: 'Ciclismo', RACE_TRIATHLON: 'Triatlón',
+  BODY_RECOMPOSITION: 'Recomposición Corporal',
+  WEIGHT_LOSS: 'Pérdida de Peso', GENERAL_FITNESS: 'Fitness General',
+  HALF_MARATHON_18W: 'Media Maratón', TEN_K_12W: '10K',
+  FIVE_K_8W: '5K', BODY_RECOMPOSITION_16W: 'Recomposición Corporal',
+}
+
+const INTENSITY_BADGE: Record<string, { bg: string; text: string; emoji: string; label: string }> = {
+  HIGH:     { bg: '#fff7ed', text: '#ea580c', emoji: '🔥', label: 'ALTA intensidad' },
+  MODERATE: { bg: '#fffbeb', text: '#d97706', emoji: '💪', label: 'MODERADA'        },
+  LOW:      { bg: '#f0fdf4', text: '#16a34a', emoji: '🌿', label: 'BAJA intensidad' },
+  REST:     { bg: '#f9fafb', text: '#9ca3af', emoji: '😴', label: 'Descanso'        },
+}
+
+const PHASES_ORDER = ['BASE', 'DESARROLLO', 'ESPECIFICO', 'AFINAMIENTO']
+const PHASE_SHORT: Record<string, string> = {
+  BASE: 'BASE', DESARROLLO: 'DESARRO', ESPECIFICO: 'ESPECÍF.', AFINAMIENTO: 'AFIN.',
+}
+const PHASE_SHORT_GYM: Record<string, string> = {
+  BASE: 'ADAPT.', DESARROLLO: 'VOLUM.', ESPECIFICO: 'INTENS.', AFINAMIENTO: 'PICO',
 }
 
 const SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 8,
-  elevation: 2,
+  shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
 }
 
-// ── SessionCard ────────────────────────────────────────────────────
-function SessionCard({ session, isToday }: { session: PlannedSession; isToday?: boolean }) {
-  const meta = SESSION_META[session.type] ?? { icon: '🏅', color: '#6b7280', bg: '#f9fafb' }
-  const isRest = session.type === 'DESCANSO'
-  const stripColor = isToday ? '#f97316' : session.completed ? '#22c55e' : isRest ? '#d1d5db' : '#1e3a5f'
+// ── Helpers ──────────────────────────────────────────────────────────
 
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 14, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', ...SHADOW }}>
-      <View style={{ width: 4, alignSelf: 'stretch', backgroundColor: stripColor }} />
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: meta.bg, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-              {isRest ? 'Descanso' : `${session.durationMin} min`}
-            </Text>
-            {!isRest && (
-              <Text style={{ fontSize: 11, color: meta.color, fontFamily: 'Inter_600SemiBold',
-                backgroundColor: meta.bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20 }}>
-                Z{session.zoneTarget}
-              </Text>
-            )}
-            {isToday && (
-              <View style={{ backgroundColor: '#f97316', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white' }}>HOY</Text>
-              </View>
-            )}
-          </View>
-          <Text style={{ fontSize: 12, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-            {session.sportLabel ?? session.type.toLowerCase().replace(/_/g, ' ')}
-          </Text>
-          {session.coachNote ? (
-            <Text style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'Inter_400Regular', marginTop: 3, fontStyle: 'italic' }}>
-              {session.coachNote}
-            </Text>
-          ) : null}
-        </View>
-        {session.completed && (
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="checkmark" size={16} color="white" />
-          </View>
-        )}
-      </View>
-    </View>
-  )
+function getIntensityKey(type: string, intensityField?: string | null): string {
+  if (intensityField) return intensityField
+  if (['INTERVALOS', 'TIRADA_LARGA', 'SIMULACRO', 'TEST'].includes(type)) return 'HIGH'
+  if (['TEMPO', 'FARTLEK', 'CICLA', 'NATACION', 'FUERZA', 'OTRO'].includes(type)) return 'MODERATE'
+  if (type === 'RODAJE_Z2') return 'LOW'
+  if (type === 'DESCANSO') return 'REST'
+  return 'MODERATE'
 }
 
-// ── MiniBarChart ───────────────────────────────────────────────────
-function MiniBarChart({ data, minVal, maxVal, barColor, accentLast = true }: {
-  data: { label: string; value: number }[]
-  minVal: number; maxVal: number; barColor: string; accentLast?: boolean
+function formatPlanName(name: string): string {
+  const base = name.split(' — ')[0].split(' - ')[0].replace(/^Plan\s+/i, '').trim()
+  return PLAN_NAME_MAP[base] ?? base
+}
+
+function formatTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m} min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function getWeekMonday(currentWeekNum: number, activeWeekNum: number): Date {
+  const today = new Date()
+  const todayDow = today.getDay() === 0 ? 7 : today.getDay()
+  const thisMonday = new Date(today)
+  thisMonday.setDate(today.getDate() - (todayDow - 1))
+  thisMonday.setHours(0, 0, 0, 0)
+  const monday = new Date(thisMonday)
+  monday.setDate(thisMonday.getDate() + (activeWeekNum - currentWeekNum) * 7)
+  return monday
+}
+
+function formatWeekRange(monday: Date): string {
+  const sun = new Date(monday); sun.setDate(monday.getDate() + 6)
+  if (monday.getMonth() === sun.getMonth()) {
+    return `${monday.getDate()}–${sun.getDate()} ${MONTHS[monday.getMonth()]}`
+  }
+  return `${monday.getDate()} ${MONTHS[monday.getMonth()]} – ${sun.getDate()} ${MONTHS[sun.getMonth()]}`
+}
+
+// ── CalendarStrip ────────────────────────────────────────────────────
+
+type DayInfo = {
+  dow: number; letter: string; dateNum: number
+  type: string | null; done: boolean; isToday: boolean; canLog: boolean
+}
+
+function CalendarStrip({ days, selectedDow, onSelect, completedCount, totalTraining }: {
+  days: DayInfo[]
+  selectedDow: number
+  onSelect: (dow: number) => void
+  completedCount: number
+  totalTraining: number
 }) {
-  const range = maxVal - minVal || 1
-  const barH = 52
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 12 }}>
-      {data.map((d, i) => {
-        const h = Math.max(4, Math.round(((d.value - minVal) / range) * barH))
-        const isLast = i === data.length - 1
-        return (
-          <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
-            <View style={{ width: '100%', height: h, borderRadius: 6,
-              backgroundColor: accentLast && isLast ? barColor : barColor + '66' }} />
-            <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{d.label}</Text>
-          </View>
-        )
-      })}
-    </View>
-  )
-}
-
-// ── ScaleSelector ──────────────────────────────────────────────────
-function ScaleSelector({ label, value, onChange, low, high, color = '#f97316' }: {
-  label: string; value: number; onChange: (v: number) => void
-  low: string; high: string; color?: string
-}) {
-  return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{label}</Text>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color }}>{value > 0 ? value : '–'}</Text>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {[1, 2, 3, 4, 5].map(n => (
-          <TouchableOpacity
-            key={n}
-            onPress={() => { Haptics.selectionAsync(); onChange(n) }}
-            activeOpacity={0.8}
-            style={{
-              flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: value === n ? color : 'white',
-              borderWidth: 1.5,
-              borderColor: value === n ? color : '#e5e7eb',
-            }}
-          >
-            <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: value === n ? 'white' : '#6b7280' }}>
-              {n}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>{low}</Text>
-        <Text style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>{high}</Text>
-      </View>
-    </View>
-  )
-}
-
-// ── WeeksView ──────────────────────────────────────────────────────
-function WeeksView({ plan, selectedWeek, setSelectedWeek, refetch, isRefetching }: {
-  plan: any; selectedWeek: number | null; setSelectedWeek: (n: number) => void
-  refetch: () => void; isRefetching: boolean
-}) {
-  const today = new Date().getDay()
-  const currentWeekNum = selectedWeek ?? plan.currentWeek
-  const week = plan.weeks.find((w: any) => w.weekNumber === currentWeekNum) ?? plan.weeks[0]
-  const sortedSessions = [...(week?.sessions ?? [])].sort((a: any, b: any) => a.dayOfWeek - b.dayOfWeek)
-  const isCurrentWeek = currentWeekNum === plan.currentWeek
-  const completedInWeek = sortedSessions.filter((s: any) => s.completed && s.type !== 'DESCANSO').length
-  const totalInWeek = sortedSessions.filter((s: any) => s.type !== 'DESCANSO').length
-  const progressPct = totalInWeek > 0 ? completedInWeek / totalInWeek : 0
+  const pct = totalTraining > 0 ? completedCount / totalTraining : 0
 
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingBottom: 32, gap: 12, paddingTop: 12 }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
-    >
-      {/* Week selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 4 }}>
-        {plan.weeks.map((w: any) => {
-          const active = w.weekNumber === currentWeekNum
-          const isCurrent = w.weekNumber === plan.currentWeek
+    <View style={{ backgroundColor: 'white' }}>
+      {/* Progress bar */}
+      <View style={{ marginHorizontal: 16, marginTop: 14, height: 2, backgroundColor: '#e5e7eb', borderRadius: 1, overflow: 'hidden' }}>
+        <View style={{ height: 2, width: `${pct * 100}%` as any, backgroundColor: '#22c55e', borderRadius: 1 }} />
+      </View>
+
+      {/* Day cells */}
+      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
+        {days.map(day => {
+          const isSelected = day.dow === selectedDow
+          const isRest = !day.type || day.type === 'DESCANSO'
+          const isSelectedNonToday = isSelected && !day.isToday
+          const circleColor = day.done && !isRest
+            ? '#22c55e'
+            : day.isToday
+              ? '#f97316'
+              : isSelectedNonToday
+                ? 'transparent'
+                : day.canLog
+                  ? '#fff7ed'
+                  : 'transparent'
+          const numColor = day.done || day.isToday
+            ? 'white'
+            : isSelectedNonToday ? '#1e3a5f'
+            : day.canLog ? '#f97316' : '#6b7280'
+          const letterBold = day.isToday || isSelected
+          const hasBorder = day.canLog && !day.done && !day.isToday && !isSelectedNonToday
+          const circleBorderWidth = day.isToday || isSelectedNonToday ? 2 : hasBorder ? 1.5 : 0
+          const circleBorderColor = day.isToday && isSelected
+            ? '#1e3a5f'
+            : day.isToday
+              ? 'rgba(249,115,22,0.35)'
+              : isSelectedNonToday ? '#1e3a5f' : '#f97316'
+
           return (
             <TouchableOpacity
-              key={w.weekNumber}
-              onPress={() => setSelectedWeek(w.weekNumber)}
-              activeOpacity={0.8}
-              style={{
-                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
-                backgroundColor: active ? '#1e3a5f' : 'white',
-                borderWidth: active ? 0 : 1,
-                borderColor: isCurrent ? '#f97316' : '#e5e7eb',
-                flexDirection: 'row', alignItems: 'center', gap: 4,
-                ...SHADOW,
-                shadowOpacity: active ? 0.15 : 0.04,
-              }}
+              key={day.dow}
+              style={{ flex: 1, alignItems: 'center', gap: 4 }}
+              onPress={() => { Haptics.selectionAsync(); onSelect(day.dow) }}
+              activeOpacity={0.7}
             >
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold',
-                color: active ? 'white' : (isCurrent ? '#f97316' : '#374151') }}>
-                S{w.weekNumber}
+              <Text style={{
+                fontSize: 10,
+                fontFamily: letterBold ? 'Inter_700Bold' : 'Inter_500Medium',
+                color: day.isToday ? '#f97316' : isSelected ? '#1e3a5f' : '#9ca3af',
+              }}>
+                {day.letter}
               </Text>
-              {isCurrent && !active && (
-                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#f97316' }} />
-              )}
+              <View style={{
+                width: 34, height: 34, borderRadius: 17,
+                backgroundColor: circleColor,
+                alignItems: 'center', justifyContent: 'center',
+                borderWidth: circleBorderWidth,
+                borderColor: circleBorderColor,
+              }}>
+                {day.done && !isRest ? (
+                  <Text style={{ fontSize: 14, color: 'white' }}>✓</Text>
+                ) : (
+                  <Text style={{
+                    fontSize: 13,
+                    fontFamily: day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
+                    color: numColor,
+                  }}>
+                    {day.dateNum}
+                  </Text>
+                )}
+              </View>
             </TouchableOpacity>
           )
         })}
-      </ScrollView>
-
-      {/* Week summary */}
-      {week && (
-        <View style={{ marginHorizontal: 16, backgroundColor: 'white', borderRadius: 16, padding: 16, ...SHADOW }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <View>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {week.phase}
-              </Text>
-              <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3, marginTop: 2 }}>
-                Semana {week.weekNumber}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
-              {completedInWeek}
-              <Text style={{ fontSize: 14, color: '#9ca3af', fontFamily: 'Inter_500Medium' }}>/{totalInWeek}</Text>
-            </Text>
-          </View>
-          <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ height: 6, width: `${progressPct * 100}%`, backgroundColor: '#f97316', borderRadius: 3 }} />
-          </View>
-        </View>
-      )}
-
-      {/* Sessions */}
-      <View style={{ paddingHorizontal: 16, gap: 8 }}>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280',
-          textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>
-          Sesiones
-        </Text>
-        {sortedSessions.map((session: any) => (
-          <View key={session.id}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#9ca3af', marginBottom: 4, marginLeft: 4 }}>
-              {DAY_LABELS[session.dayOfWeek] ?? `Día ${session.dayOfWeek}`}
-            </Text>
-            <SessionCard session={session} isToday={isCurrentWeek && session.dayOfWeek === today} />
-          </View>
-        ))}
       </View>
-    </ScrollView>
+
+      <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
+    </View>
   )
 }
 
-// ── ProgressView ───────────────────────────────────────────────────
-function ProgressView() {
-  const { data, isLoading } = useQuery({ queryKey: ['progress'], queryFn: getProgress })
+// ── SessionDetailCard ────────────────────────────────────────────────
 
-  if (isLoading) {
+function SessionDetailCard({ session, isToday, onLog }: {
+  session: PlannedSession
+  isToday: boolean
+  onLog: () => void
+}) {
+  if (session.type === 'DESCANSO') {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#f97316" size="large" />
+      <View style={{ backgroundColor: 'white', borderRadius: 16, flexDirection: 'row', overflow: 'hidden', ...SHADOW }}>
+        <View style={{ width: 4, backgroundColor: '#d1d5db', alignSelf: 'stretch' }} />
+        <View style={{ flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: 28 }}>😴</Text>
+          <View>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#374151' }}>Día de descanso</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>Recupera bien hoy</Text>
+          </View>
+        </View>
       </View>
     )
   }
 
-  const hasData = (data?.weightPoints.length ?? 0) > 0 || (data?.hrPoints.length ?? 0) > 0
+  const intensityKey = getIntensityKey(session.type, session.intensity)
+  const badge = INTENSITY_BADGE[intensityKey] ?? INTENSITY_BADGE.MODERATE
+  const stripColor = isToday ? '#f97316' : session.completed ? '#22c55e' : session.type === 'FUERZA' ? '#8b5cf6' : '#1e3a5f'
+  const gymSession = session.type === 'FUERZA'
+  const structureText = session.detailText ?? session.coachNote ?? null
 
-  if (!hasData) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 48, marginBottom: 12 }}>📈</Text>
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1e3a5f', textAlign: 'center' }}>
-          Aún no hay datos
-        </Text>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280',
-          textAlign: 'center', marginTop: 8, maxWidth: 240 }}>
-          Haz tu primer check-in para ver tu evolución aquí.
-        </Text>
-      </View>
-    )
-  }
+  const sessionTitle = gymSession
+    ? (session.sportLabel ? `Fuerza — ${session.sportLabel}` : 'Fuerza')
+    : (SESSION_LABELS[session.type] ?? session.type.replace(/_/g, ' '))
 
-  const weightData = data!.weightPoints.map(p => ({ label: `S${p.week}`, value: p.kg }))
-  const hrData = data!.hrPoints.map(p => ({ label: `S${p.week}`, value: p.bpm }))
-  const lastWeight = data!.weightPoints.at(-1)?.kg ?? null
-  const firstWeight = data!.weightPoints[0]?.kg ?? null
-  const lastHr = data!.hrPoints.at(-1)?.bpm ?? null
-  const weightDiff = lastWeight !== null && firstWeight !== null
-    ? +(lastWeight - firstWeight).toFixed(1) : null
+  const hasZone = session.zoneTarget && session.zoneTarget !== '—' && session.zoneTarget !== 'N/A' && session.zoneTarget !== ''
+  const middleBadge = gymSession
+    ? (session.sportLabel ?? session.type.replace(/_/g, ' '))
+    : hasZone ? `Zona ${session.zoneTarget}` : null
 
   return (
-    <ScrollView
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 32 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Stats row */}
-      <View style={{ backgroundColor: '#1e3a5f0f', borderWidth: 1, borderColor: '#1e3a5f26', borderRadius: 16, padding: 16, flexDirection: 'row' }}>
-        {[
-          { v: String(data!.weeks.length), l: 'Semanas' },
-          { v: `${data!.overallAdherencePct}%`, l: 'Adherencia' },
-          { v: String(data!.totalCheckIns), l: 'Check-ins' },
-        ].map((s, i) => (
-          <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-            {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 1, backgroundColor: '#1e3a5f33' }} />}
-            <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{s.v}</Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>{s.l}</Text>
-          </View>
-        ))}
-      </View>
+    <View style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: 4, backgroundColor: stripColor, alignSelf: 'stretch' }} />
+        <View style={{ flex: 1, padding: 16, gap: 12 }}>
 
-      {/* Peso */}
-      {weightData.length > 0 && (
-        <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
-            PESO
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-            <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
-              {lastWeight} kg
+          {/* Title row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 28 }}>{SESSION_ICONS[session.type] ?? '🏅'}</Text>
+            <Text style={{ flex: 1, fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
+              {sessionTitle}
             </Text>
-            {weightDiff !== null && (
-              <View style={{ backgroundColor: weightDiff <= 0 ? '#dcfce7' : '#fee2e2', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: weightDiff <= 0 ? '#16a34a' : '#dc2626' }}>
-                  {weightDiff > 0 ? '+' : ''}{weightDiff} kg
-                </Text>
+            {isToday && (
+              <View style={{ backgroundColor: '#f97316', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: 'white' }}>HOY</Text>
+              </View>
+            )}
+            {session.completed && !isToday && (
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: 'white', fontSize: 12 }}>✓</Text>
               </View>
             )}
           </View>
-          {data!.weightGoal && (
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
-              Objetivo: {data!.weightGoal} kg
-            </Text>
-          )}
-          <MiniBarChart
-            data={weightData}
-            minVal={Math.min(...weightData.map(d => d.value)) - 1}
-            maxVal={Math.max(...weightData.map(d => d.value)) + 1}
-            barColor="#1e3a5f"
-          />
-        </View>
-      )}
 
-      {/* FC Reposo */}
-      {hrData.length > 0 && (
-        <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
-            FC REPOSO
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-            <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
-              {lastHr} bpm
-            </Text>
-            {lastHr && (
-              <View style={{ backgroundColor: lastHr < 60 ? '#dcfce7' : lastHr < 70 ? '#fef9c3' : '#fee2e2', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: lastHr < 60 ? '#16a34a' : lastHr < 70 ? '#ca8a04' : '#dc2626' }}>
-                  {lastHr < 60 ? '✓ Excelente' : lastHr < 70 ? '✓ Normal' : '⚠ Alta'}
+          {/* Badges row */}
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <View style={{ backgroundColor: '#f1f5f9', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }}>
+                {session.durationMin} min
+              </Text>
+            </View>
+            {middleBadge != null && (
+              <View style={{ backgroundColor: '#f1f5f9', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }}>
+                  {middleBadge}
                 </Text>
               </View>
             )}
+            <View style={{ backgroundColor: badge.bg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: badge.text }}>
+                {badge.emoji} {badge.label}
+              </Text>
+            </View>
           </View>
-          <MiniBarChart
-            data={hrData}
-            minVal={Math.min(...hrData.map(d => d.value)) - 3}
-            maxVal={Math.max(...hrData.map(d => d.value)) + 3}
-            barColor="#ef4444"
-          />
-        </View>
-      )}
 
-      {/* Adherencia por semana */}
-      {data!.weeks.length > 0 && (
-        <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
-            ADHERENCIA AL PLAN
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-            {data!.weeks.map((w: any, i: number) => {
-              const h = Math.max(4, Math.round((w.adherencePct / 100) * 72))
-              const color = PHASE_COLOR[w.phase] ?? '#1e3a5f'
-              return (
-                <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
-                  <Text style={{ fontSize: 8, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{w.adherencePct}%</Text>
-                  <View style={{ width: '100%', height: h, borderRadius: 4, backgroundColor: color }} />
-                  <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>S{w.weekNumber}</Text>
-                </View>
-              )
-            })}
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-            {Object.entries(PHASE_COLOR).map(([phase, color]) => (
-              <View key={phase} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
-                  {phase.charAt(0) + phase.slice(1).toLowerCase()}
+          {/* Structure / Exercises */}
+          {structureText ? (
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  {gymSession ? 'Ejercicios' : 'Estructura'}
                 </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#f1f5f9' }} />
               </View>
-            ))}
-          </View>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', lineHeight: 21 }}>
+                {structureText}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {/* CTA */}
+      {!session.completed && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 4 }}>
+          <TouchableOpacity
+            onPress={onLog}
+            activeOpacity={0.85}
+            style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+          >
+            <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión →</Text>
+          </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+    </View>
   )
 }
 
-// ── CheckinView ────────────────────────────────────────────────────
-function CheckinView() {
-  const queryClient = useQueryClient()
-  const [weight, setWeight] = useState('')
-  const [sleep, setSleep] = useState('')
-  const [energy, setEnergy] = useState(0)
-  const [soreness, setSoreness] = useState(0)
-  const [stress, setStress] = useState(0)
-  const [notes, setNotes] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
+// ── KPI Cards ────────────────────────────────────────────────────────
 
-  async function handleSubmit() {
-    if (energy === 0 || soreness === 0 || stress === 0) {
-      Alert.alert('Faltan datos', 'Completa los tres indicadores antes de enviar.')
-      return
-    }
-    setLoading(true)
-    try {
-      await submitCheckin({
-        energyLevel: energy,
-        muscleSoreness: soreness,
-        stressLevel: stress,
-        weightKg: weight ? parseFloat(weight) : undefined,
-        sleepHours: sleep ? parseFloat(sleep) : undefined,
-        notes: notes.trim() || undefined,
-      })
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      queryClient.invalidateQueries({ queryKey: ['progress'] })
-      setDone(true)
-    } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
-    } finally {
-      setLoading(false)
-    }
-  }
+function KPICards({ completed, total, volumeLabel, adherencePct }: {
+  completed: number; total: number; volumeLabel: string; adherencePct: number
+}) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {[
+        { label: 'Completadas', value: `${completed} / ${total}`, sub: 'sesiones',   color: '#111827' },
+        { label: 'Volumen',     value: volumeLabel,               sub: 'esta semana', color: '#111827' },
+        { label: 'Adherencia',  value: `${adherencePct}%`,        sub: 'meta: 80%',  color: '#f97316' },
+      ].map((kpi, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: 'white', borderRadius: 14, padding: 12, ...SHADOW }}>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_500Medium', color: '#9ca3af', marginBottom: 4 }}>
+            {kpi.label}
+          </Text>
+          <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: kpi.color, letterSpacing: -0.5 }}>
+            {kpi.value}
+          </Text>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+            {kpi.sub}
+          </Text>
+        </View>
+      ))}
+    </View>
+  )
+}
 
-  if (done) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 56 }}>✅</Text>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1e3a5f', textAlign: 'center' }}>
-          Check-in registrado
-        </Text>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
-          Tu plan se ajustará automáticamente esta semana.
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            setWeight(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setNotes(''); setDone(false)
-          }}
-          style={{ marginTop: 8, backgroundColor: '#f1f5f9', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
-        >
-          <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Nuevo check-in</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
+// ── NutritionCard ────────────────────────────────────────────────────
+
+function NutritionCard({ kcal, proteinG, carbsG, fatG }: {
+  kcal: number; proteinG: number; carbsG: number; fatG: number
+}) {
+  const macros = [
+    { label: 'Proteína', value: proteinG, bg: '#eef2ff' },
+    { label: 'Carbos',   value: carbsG,   bg: '#fff1f0' },
+    { label: 'Grasas',   value: fatG,     bg: '#f0fdf4' },
+  ]
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-    >
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Métricas físicas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Métricas opcionales
+    <View style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, ...SHADOW }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#22c55e' }} />
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          Plan nutricional del día
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        {/* Kcal */}
+        <View style={{ minWidth: 90 }}>
+          <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1 }}>
+            {kcal.toLocaleString('es')}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Peso (kg)</Text>
-              <TextInput
-                value={weight}
-                onChangeText={setWeight}
-                placeholder="72.5"
-                placeholderTextColor="#d1d5db"
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                style={{ backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb' }}
-              />
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#9ca3af', marginTop: 4 }}>kcal</Text>
+        </View>
+
+        {/* Macro pills */}
+        <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
+          {macros.map(m => (
+            <View key={m.label} style={{
+              flex: 1, backgroundColor: m.bg, borderRadius: 10,
+              paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center',
+            }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280', marginBottom: 6 }}>
+                {m.label}
+              </Text>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+                {m.value} g
+              </Text>
             </View>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Sueño (h)</Text>
-              <TextInput
-                value={sleep}
-                onChangeText={setSleep}
-                placeholder="7.5"
-                placeholderTextColor="#d1d5db"
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                style={{ backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb' }}
-              />
-            </View>
-          </View>
+          ))}
         </View>
-
-        {/* Escalas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 20, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Cómo te sientes
-          </Text>
-          <ScaleSelector label="Energía general" value={energy} onChange={setEnergy} low="Agotado" high="Excelente" color="#f97316" />
-          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-          <ScaleSelector label="Dolor muscular" value={soreness} onChange={setSoreness} low="Sin dolor" high="Muy fuerte" color="#ef4444" />
-          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-          <ScaleSelector label="Estrés / carga mental" value={stress} onChange={setStress} low="Tranquilo" high="Muy estresado" color="#8b5cf6" />
-        </View>
-
-        {/* Notas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Notas (opcional)
-          </Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Lesión leve, semana pesada en trabajo, dormí mal..."
-            placeholderTextColor="#d1d5db"
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-            style={{ backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
-              fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827',
-              borderWidth: 1, borderColor: '#e5e7eb', minHeight: 80 }}
-          />
-        </View>
-
-        {/* CTA */}
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={loading}
-          activeOpacity={0.85}
-          style={{ backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 18,
-            alignItems: 'center', opacity: loading ? 0.7 : 1 }}
-        >
-          {loading
-            ? <ActivityIndicator color="white" />
-            : <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Enviar check-in</Text>
-          }
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </View>
   )
 }
 
-// ── PlanScreen ─────────────────────────────────────────────────────
+// ── PhaseBar ─────────────────────────────────────────────────────────
+
+type PlanWeekForPhase = { weekNumber: number; phase: string }
+
+function PhaseBar({ planPhases, currentPhase, currentWeekNum, totalWeeks, weeks, isGymPlan }: {
+  planPhases: string[]; currentPhase: string
+  currentWeekNum: number; totalWeeks: number
+  weeks: PlanWeekForPhase[]; isGymPlan?: boolean
+}) {
+  const display = PHASES_ORDER.filter(p => planPhases.includes(p))
+  if (display.length === 0) return null
+
+  const activeIdx = display.indexOf(currentPhase)
+  const pct = Math.round((currentWeekNum / totalWeeks) * 100)
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 14, ...SHADOW }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#111827' }}>Progreso del plan</Text>
+        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+          Sem. {currentWeekNum}/{totalWeeks} · {pct}%
+        </Text>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        {display.map((phase, idx) => {
+          const isActive   = idx === activeIdx
+          const isCompleted = idx < activeIdx
+          const count = weeks.filter(w => w.phase === phase).length || 1
+          const barColor = isActive ? '#1e3a5f' : isCompleted ? '#22c55e' : '#e5e7eb'
+          const textColor = isActive ? '#1e3a5f' : isCompleted ? '#16a34a' : '#9ca3af'
+          return (
+            <View key={phase} style={{ flex: count, alignItems: 'center', gap: 5 }}>
+              <View style={{ height: 6, width: '100%', borderRadius: 3, backgroundColor: barColor }} />
+              <Text style={{ fontSize: 8, fontFamily: isActive ? 'Inter_700Bold' : 'Inter_500Medium', color: textColor }}>
+                {isCompleted ? '✓ ' : ''}{(isGymPlan ? PHASE_SHORT_GYM : PHASE_SHORT)[phase] ?? phase}
+              </Text>
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+// ── AdherenceChart ────────────────────────────────────────────────────
+
+type AdherenceWeek = { weekNumber: number; sessions: { type: string; completed: boolean; dayOfWeek: number }[] }
+
+function AdherenceChart({ weeks, currentWeekNum, totalWeeks, todayDow }: {
+  weeks: AdherenceWeek[]; currentWeekNum: number; totalWeeks: number; todayDow: number
+}) {
+  const startWeek = Math.max(1, Math.min(currentWeekNum - 2, totalWeeks - 4))
+  const slots = Array.from({ length: 5 }, (_, i) => {
+    const weekNum = startWeek + i
+    if (weekNum > totalWeeks) return null
+    const weekData  = weeks.find(w => w.weekNumber === weekNum)
+    const isFuture  = weekNum > currentWeekNum
+    const isCurrent = weekNum === currentWeekNum
+    if (!weekData || isFuture) return { weekNum, pct: 0, isCurrent, isFuture: true }
+    const sessions = isCurrent
+      ? weekData.sessions.filter(s => s.dayOfWeek <= todayDow)
+      : weekData.sessions
+    const t = sessions.filter(s => s.type !== 'DESCANSO').length
+    const c = sessions.filter(s => s.completed && s.type !== 'DESCANSO').length
+    return { weekNum, pct: t > 0 ? (c / t) * 100 : 0, isCurrent, isFuture: false }
+  }).filter(Boolean) as { weekNum: number; pct: number; isCurrent: boolean; isFuture: boolean }[]
+
+  if (slots.length === 0) return null
+
+  const pastSlots = slots.filter(s => !s.isFuture)
+  const avgPct = pastSlots.length > 0
+    ? Math.round(pastSlots.reduce((sum, s) => sum + s.pct, 0) / pastSlots.length)
+    : 0
+
+  const MAX_H = 40
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 14, ...SHADOW }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#111827' }}>Adherencia semanal</Text>
+        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Promedio {avgPct}%</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: MAX_H + 18, gap: 6 }}>
+        {slots.map(({ weekNum, pct, isCurrent, isFuture }) => {
+          const barH = isFuture ? 4 : pct === 0 ? 3 : Math.max(8, pct * MAX_H / 100)
+          const barColor = isFuture ? '#e5e7eb' : pct === 0 ? '#d1d5db' : isCurrent ? '#f97316' : '#3b82f6'
+          return (
+            <View key={weekNum} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+              <View style={{ width: '100%', height: barH, borderRadius: 4, backgroundColor: barColor }} />
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>S{weekNum}</Text>
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+// ── PlanScreen ───────────────────────────────────────────────────────
+
 export default function PlanScreen() {
-  const { user } = useAuthStore()
+  const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [activeTab, setActiveTab] = useState<PlanTab>('weeks')
-  const [selectedWeek, setSelectedWeek] = useState<number | null>(null)
+  const { user } = useAuthStore()
 
-  const { data: plan, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['plan'],
-    queryFn: getPlan,
-  })
+  const todayDow = useMemo(() => {
+    const d = new Date().getDay()
+    return d === 0 ? 7 : d
+  }, [])
+
+  const [selectedWeekNum, setSelectedWeekNum] = useState<number | null>(null)
+  const [selectedDow, setSelectedDow] = useState(todayDow)
+
+  const { data: plan, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['plan'], queryFn: getPlan })
+  const { data: dash } = useQuery({ queryKey: ['dashboard'], queryFn: getDashboard })
 
   if (!user?.features?.plan) {
-    return <UpgradeWall icon="📅" title="Mi Plan" description="Accede a tu plan periodizado, progreso y check-in semanal con el plan Pro." />
+    return (
+      <UpgradeWall
+        icon="📅"
+        title="Mi Plan"
+        description="Accede a tu plan periodizado, CalendarStrip interactivo y métricas semanales con el plan Pro."
+      />
+    )
   }
 
   if (isLoading) {
@@ -595,60 +540,246 @@ export default function PlanScreen() {
     )
   }
 
-  const TABS: { key: PlanTab; label: string }[] = [
-    { key: 'weeks',    label: 'Plan' },
-    { key: 'progress', label: 'Progreso' },
-    { key: 'checkin',  label: 'Check-in' },
-  ]
+  // ── Derived state ────────────────────────────────────────────────
+
+  const currentWeekNum    = plan.currentWeek
+  const activeWeekNum     = selectedWeekNum ?? currentWeekNum
+  const isCurrentWeek     = activeWeekNum === currentWeekNum
+  const week              = plan.weeks.find(w => w.weekNumber === activeWeekNum) ?? plan.weeks[0]
+  const realCurrentPhase  = plan.weeks.find(w => w.weekNumber === currentWeekNum)?.phase ?? 'BASE'
+  const allPhases         = [...new Set(plan.weeks.map(w => w.phase))]
+
+  // Week dates (Mon–Sun of active week)
+  const weekMonday = getWeekMonday(currentWeekNum, activeWeekNum)
+  const weekDates  = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekMonday)
+    d.setDate(weekMonday.getDate() + i)
+    return d
+  })
+
+  // Calendar strip days
+  const stripDays: DayInfo[] = Array.from({ length: 7 }, (_, i) => {
+    const dow     = i + 1
+    const session = week?.sessions.find(s => s.dayOfWeek === dow)
+    const isToday  = isCurrentWeek && dow === todayDow
+    const isFuture = isCurrentWeek && dow > todayDow
+    const canLog   = !!session && session.type !== 'DESCANSO'
+                  && !session.completed && !isFuture && !!session.id
+    return {
+      dow, letter: DAY_LETTERS[i], dateNum: weekDates[i].getDate(),
+      type: session?.type ?? null,
+      done: session?.completed ?? false,
+      isToday, canLog,
+    }
+  })
+
+  // Selected session
+  const selectedSession = week?.sessions.find(s => s.dayOfWeek === selectedDow) ?? null
+  const selectedLabel   = `${DAY_SHORT[selectedDow - 1]} ${weekDates[selectedDow - 1]?.getDate()}`
+
+  // KPI — adherencia solo cuenta sesiones hasta hoy (no sesiones futuras de la semana)
+  const completedCount = week?.sessions.filter(s => s.completed && s.type !== 'DESCANSO').length ?? 0
+  const todaySessions  = isCurrentWeek
+    ? (week?.sessions.filter(s => s.type !== 'DESCANSO' && s.dayOfWeek <= todayDow) ?? [])
+    : (week?.sessions.filter(s => s.type !== 'DESCANSO') ?? [])
+  const totalTraining  = isCurrentWeek ? todaySessions.length : (week?.sessions.filter(s => s.type !== 'DESCANSO').length ?? 0)
+  const adherencePct   = totalTraining > 0 ? Math.round((completedCount / totalTraining) * 100) : 0
+
+  // Volume label
+  const gymPlan = plan.name.toLowerCase().includes('recomp')
+    || plan.name.toLowerCase().includes('body')
+    || plan.name.toLowerCase().includes('fuerza')
+    || (week?.sessions.filter(s => s.type === 'FUERZA').length ?? 0) >
+       (week?.sessions.filter(s => s.type !== 'FUERZA' && s.type !== 'DESCANSO').length ?? 0)
+
+  let volumeLabel: string
+  if (gymPlan) {
+    const totalMin = week?.sessions
+      .filter(s => s.completed && s.type !== 'DESCANSO')
+      .reduce((sum, s) => sum + (s.durationMin ?? 0), 0) ?? 0
+    volumeLabel = totalMin > 0 ? formatTime(totalMin) : '0 min'
+  } else {
+    const vol = isCurrentWeek ? (dash?.currentVolume ?? null) : null
+    if (vol != null) {
+      volumeLabel = `${vol} km`
+    } else {
+      const totalMin = week?.sessions
+        .filter(s => s.type !== 'DESCANSO')
+        .reduce((sum, s) => sum + (s.durationMin ?? 0), 0) ?? 0
+      volumeLabel = formatTime(totalMin)
+    }
+  }
+
+  // Nutrition (from dashboard — today's adjusted target)
+  const nt = dash?.nutritionTarget ?? null
+
+  // ── Handlers ────────────────────────────────────────────────────
+
+  function handleWeekChange(delta: number) {
+    Haptics.selectionAsync()
+    const next = activeWeekNum + delta
+    if (next < 1 || next > plan.totalWeeks) return
+    setSelectedWeekNum(next)
+    // Keep selected dow or fall back to first session of new week
+    const nextWeek = plan.weeks.find(w => w.weekNumber === next)
+    const hasDow   = nextWeek?.sessions.some(s => s.dayOfWeek === selectedDow)
+    if (!hasDow) {
+      const first = nextWeek?.sessions.find(s => s.type !== 'DESCANSO')
+      if (first) setSelectedDow(first.dayOfWeek)
+    }
+  }
+
+  function handleLogSession() {
+    if (!selectedSession) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    router.push({
+      pathname: '/(app)/log',
+      params: {
+        sessionId: selectedSession.id,
+        type:      selectedSession.type,
+        duration:  String(selectedSession.durationMin),
+        zone:      selectedSession.zoneTarget || '—',
+      },
+    })
+  }
+
+  // ── Render ──────────────────────────────────────────────────────
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
-      {/* Gradient Header + Tab switcher */}
+
+      {/* ── Header ── */}
       <LinearGradient
         colors={['#1e3a5f', '#2d5a8e']}
-        style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: 20 }}
+        style={{ paddingTop: insets.top + 8, paddingBottom: 14, paddingHorizontal: 20, gap: 4 }}
       >
-        <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-          Mi Plan
-        </Text>
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-          {plan.name} · {plan.totalWeeks} semanas
+        {/* Title + Phase badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}>
+            Mi Plan
+          </Text>
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 20,
+            paddingHorizontal: 10, paddingVertical: 4, marginTop: 2,
+          }}>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: 'rgba(147,197,253,1)' }}>
+              {realCurrentPhase} · Sem {currentWeekNum}/{plan.totalWeeks}
+            </Text>
+          </View>
+        </View>
+
+        {/* Subtitle */}
+        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>
+          {formatPlanName(plan.name)} · {plan.totalWeeks} semanas
         </Text>
 
-        <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 3, marginTop: 16 }}>
-          {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
-              activeOpacity={0.8}
-              style={{
-                flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
-                backgroundColor: activeTab === tab.key ? 'white' : 'transparent',
-              }}
-            >
-              <Text style={{
-                fontSize: 13, fontFamily: 'Inter_600SemiBold',
-                color: activeTab === tab.key ? '#1e3a5f' : 'rgba(255,255,255,0.65)',
-              }}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* WeekNav */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', marginTop: 8,
+          backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 8, overflow: 'hidden',
+        }}>
+          <TouchableOpacity
+            onPress={() => handleWeekChange(-1)}
+            disabled={activeWeekNum <= 1}
+            style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}
+          >
+            <Ionicons name="chevron-back" size={16} color={activeWeekNum <= 1 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.7)'} />
+          </TouchableOpacity>
+          <Text style={{ flex: 1, textAlign: 'center', fontSize: 13, fontFamily: 'Inter_500Medium', color: 'white' }}>
+            Semana {activeWeekNum} · {formatWeekRange(weekMonday)}
+          </Text>
+          <TouchableOpacity
+            onPress={() => handleWeekChange(1)}
+            disabled={activeWeekNum >= plan.totalWeeks}
+            style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}
+          >
+            <Ionicons name="chevron-forward" size={16} color={activeWeekNum >= plan.totalWeeks ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.7)'} />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      {/* Content */}
-      {activeTab === 'weeks' && (
-        <WeeksView
-          plan={plan}
-          selectedWeek={selectedWeek}
-          setSelectedWeek={setSelectedWeek}
-          refetch={refetch}
-          isRefetching={isRefetching}
+      {/* ── Calendar Strip ── */}
+      <CalendarStrip
+        days={stripDays}
+        selectedDow={selectedDow}
+        onSelect={setSelectedDow}
+        completedCount={completedCount}
+        totalTraining={totalTraining}
+      />
+
+      {/* ── Scrollable content ── */}
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 36 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
+      >
+        {/* Session header label */}
+        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          Sesión seleccionada — {selectedLabel}
+        </Text>
+
+        {/* Session card */}
+        {selectedSession ? (
+          <SessionDetailCard
+            session={selectedSession}
+            isToday={isCurrentWeek && selectedDow === todayDow}
+            onLog={handleLogSession}
+          />
+        ) : (
+          <View style={{ backgroundColor: 'white', borderRadius: 16, flexDirection: 'row', overflow: 'hidden', ...SHADOW }}>
+            <View style={{ width: 4, backgroundColor: '#d1d5db', alignSelf: 'stretch' }} />
+            <View style={{ flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 28 }}>😴</Text>
+              <View>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#374151' }}>Día de descanso</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>Recupera bien hoy</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* KPI section */}
+        <Text style={{
+          fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af',
+          textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4,
+        }}>
+          Semana en números
+        </Text>
+        <KPICards
+          completed={completedCount}
+          total={totalTraining}
+          volumeLabel={volumeLabel}
+          adherencePct={adherencePct}
         />
-      )}
-      {activeTab === 'progress' && <ProgressView />}
-      {activeTab === 'checkin' && <CheckinView />}
+
+        {/* Nutrition card */}
+        {nt && (
+          <NutritionCard
+            kcal={nt.kcal}
+            proteinG={nt.proteinG}
+            carbsG={nt.carbsG}
+            fatG={nt.fatG}
+          />
+        )}
+
+        {/* Phase bar */}
+        <PhaseBar
+          planPhases={allPhases}
+          currentPhase={realCurrentPhase}
+          currentWeekNum={currentWeekNum}
+          totalWeeks={plan.totalWeeks}
+          weeks={plan.weeks}
+          isGymPlan={gymPlan}
+        />
+
+        {/* Adherence chart */}
+        <AdherenceChart
+          weeks={plan.weeks}
+          currentWeekNum={currentWeekNum}
+          totalWeeks={plan.totalWeeks}
+          todayDow={todayDow}
+        />
+      </ScrollView>
     </View>
   )
 }

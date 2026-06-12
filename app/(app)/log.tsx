@@ -121,7 +121,7 @@ export default function LogScreen() {
               Registrar sesión
             </Text>
             <Text style={{ color: 'white', fontSize: 20, fontFamily: 'Inter_900Black', letterSpacing: -0.3, marginTop: 2 }}>
-              {duration} min · Zona {zone}
+              {duration} min{zone && zone !== '—' && zone !== '' ? ` · Zona ${zone}` : ''}
             </Text>
             <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
               {(type ?? '').toLowerCase().replace(/_/g, ' ')}

@@ -55,6 +55,13 @@ export type DashboardData = {
   weightProgressPct: number | null
   currentVolume: number | null
   volumeDeltaPct: number | null
+  nutritionTarget: {
+    kcal: number
+    proteinG: number
+    carbsG: number
+    fatG: number
+    label: string
+  } | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {

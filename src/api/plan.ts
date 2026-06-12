@@ -8,6 +8,8 @@ export type PlannedSession = {
   dayOfWeek: number
   coachNote: string | null
   sportLabel: string | null
+  detailText: string | null
+  intensity: string | null
   completed: boolean
 }
 
