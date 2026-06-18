@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { AppState, AppStateStatus } from 'react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -10,10 +11,19 @@ import {
   Inter_700Bold,
   Inter_900Black,
 } from '@expo-google-fonts/inter'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 SplashScreen.preventAutoHideAsync()
+
+// React Native no tiene eventos de window focus — usar AppState para que
+// React Query refresque queries cuando la app vuelve al primer plano.
+focusManager.setEventListener((handleFocus) => {
+  const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+    handleFocus(state === 'active')
+  })
+  return () => sub.remove()
+})
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -577,7 +577,15 @@ export default function PlanScreen() {
   const { data: plan, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['plan'], queryFn: getPlan })
   const { data: dash } = useQuery({ queryKey: ['dashboard'], queryFn: getDashboard })
 
+  // Refetch when returning from any screen (e.g. after edit-session or log)
+  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
+
   if (!user?.features?.plan) {
+    // GYM users: redirect to gym tab
+    if (user?.features?.gym) {
+      router.replace('/(app)/(tabs)/gym')
+      return null
+    }
     return (
       <UpgradeWall
         icon="📅"
@@ -685,6 +693,7 @@ export default function PlanScreen() {
   // ── Handlers ────────────────────────────────────────────────────
 
   function handleWeekChange(delta: number) {
+    if (!plan) return
     Haptics.selectionAsync()
     const next = activeWeekNum + delta
     if (next < 1 || next > plan.totalWeeks) return

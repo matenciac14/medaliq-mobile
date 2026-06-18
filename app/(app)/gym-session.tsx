@@ -11,6 +11,12 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { getTodayGymSession, completeGymSession, SetLog, GymSessionData } from '../../src/api/gym'
 
+const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
+  BISERIE:  { bg: '#e0e7ff', text: '#4338ca', label: 'Biserie'  },
+  DROPSET:  { bg: '#ffe4e6', text: '#e11d48', label: 'Drop Set' },
+}
+
 type LocalSet = {
   workoutExerciseId: string
   setNumber: number
@@ -34,6 +40,122 @@ function buildInitialSets(data: GymSessionData): LocalSet[] {
     }
   }
   return sets
+}
+
+// Finish Session Modal
+function FinishModal({
+  visible,
+  completedCount,
+  defaultDuration,
+  onConfirm,
+  onClose,
+  submitting,
+}: {
+  visible: boolean
+  completedCount: number
+  defaultDuration: number
+  onConfirm: (rpe: number, durationMin: number, notes: string) => void
+  onClose: () => void
+  submitting: boolean
+}) {
+  const [rpe, setRpe] = useState(7)
+  const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+  const [notes, setNotes] = useState('')
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
+          <View>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Finalizar sesión</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>
+              {completedCount} series completadas
+            </Text>
+          </View>
+
+          {/* RPE */}
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Esfuerzo (RPE)</Text>
+              <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#f97316' }}>{rpe}/10</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => setRpe(n)}
+                  style={{
+                    flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: rpe === n ? '#f97316' : '#f3f4f6',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: rpe === n ? 'white' : '#6b7280' }}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Muy fácil</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Máximo esfuerzo</Text>
+            </View>
+          </View>
+
+          {/* Duration */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Duración (minutos)</Text>
+            <TextInput
+              value={durationMin}
+              onChangeText={setDurationMin}
+              keyboardType="number-pad"
+              style={{
+                borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#111827',
+              }}
+            />
+          </View>
+
+          {/* Notes */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Notas (opcional)</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="¿Alguna observación?"
+              placeholderTextColor="#d1d5db"
+              multiline
+              numberOfLines={2}
+              style={{
+                borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827',
+                minHeight: 64, textAlignVertical: 'top',
+              }}
+            />
+          </View>
+
+          {/* Buttons */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              disabled={submitting}
+              style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onConfirm(rpe, parseInt(durationMin) || 60, notes)}
+              disabled={submitting}
+              style={{ flex: 2, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                {submitting ? 'Guardando...' : 'Guardar sesión'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
 }
 
 // Rest Timer Modal
@@ -94,6 +216,7 @@ export default function GymSessionScreen() {
   const [restTimer, setRestTimer] = useState<{ show: boolean; seconds: number }>({ show: false, seconds: 90 })
   const [elapsedSecs, setElapsedSecs] = useState(0)
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
+  const [showFinishModal, setShowFinishModal] = useState(false)
   const startTimeRef = useRef(Date.now())
 
   const { data: session, isLoading } = useQuery({
@@ -147,30 +270,27 @@ export default function GymSessionScreen() {
       Alert.alert('Sin sets', 'Completa al menos un set antes de finalizar.')
       return
     }
+    setShowFinishModal(true)
+  }
 
-    Alert.alert('Finalizar sesión', `Completaste ${completedCount} sets. ¿Guardar?`, [
-      { text: 'Seguir', style: 'cancel' },
-      {
-        text: 'Guardar', style: 'default',
-        onPress: () => {
-          const setLogs: SetLog[] = sets
-            .filter(s => s.completed)
-            .map(s => ({
-              workoutExerciseId: s.workoutExerciseId,
-              setNumber: s.setNumber,
-              weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
-              repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
-              completed: true,
-            }))
-          finishSession({
-            assignedWorkoutId: session!.assignedWorkoutId,
-            dayOfWeek: new Date().getDay(),
-            setLogs,
-            durationMin: Math.round(elapsedSecs / 60),
-          })
-        },
-      },
-    ])
+  function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
+    const setLogs: SetLog[] = sets
+      .filter(s => s.completed)
+      .map(s => ({
+        workoutExerciseId: s.workoutExerciseId,
+        setNumber: s.setNumber,
+        weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+        repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+        completed: true,
+      }))
+    finishSession({
+      assignedWorkoutId: session!.assignedWorkoutId,
+      dayOfWeek: (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })(),
+      setLogs,
+      durationMin,
+      rpe,
+      notes: notes.trim() || undefined,
+    })
   }
 
   const elapsedMins = Math.floor(elapsedSecs / 60)
@@ -185,6 +305,8 @@ export default function GymSessionScreen() {
     )
   }
 
+  const completedCount = sets.filter(s => s.completed).length
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
       {restTimer.show && (
@@ -193,6 +315,14 @@ export default function GymSessionScreen() {
           onDone={() => setRestTimer({ show: false, seconds: 90 })}
         />
       )}
+      <FinishModal
+        visible={showFinishModal}
+        completedCount={completedCount}
+        defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
+        onConfirm={handleConfirmFinish}
+        onClose={() => setShowFinishModal(false)}
+        submitting={finishing}
+      />
 
       {/* Top bar */}
       <LinearGradient
@@ -249,6 +379,9 @@ export default function GymSessionScreen() {
                   <Text style={{ fontSize: 8, color: 'white', fontFamily: 'Inter_700Bold' }}>{done}</Text>
                 </View>
               )}
+              {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].text }} />
+              )}
             </TouchableOpacity>
           )
         })}
@@ -284,6 +417,13 @@ export default function GymSessionScreen() {
                         <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{mg}</Text>
                       </View>
                     ))}
+                  </View>
+                )}
+                {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
+                  <View style={{ backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].bg, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 6 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: MOBILE_SUPERSET_STYLES[ex.setType].text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      ↕ {MOBILE_SUPERSET_STYLES[ex.setType].label}
+                    </Text>
                   </View>
                 )}
                 {ex.exercise.tips && (

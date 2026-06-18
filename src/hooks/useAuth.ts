@@ -25,7 +25,7 @@ export function useBootstrap() {
         if (!user.onboardingCompleted) {
           router.replace('/(auth)/onboarding')
         } else {
-          router.replace('/(app)/dashboard')
+          router.replace('/(app)/dashboard' as any)
         }
       } catch {
         setUser(null)

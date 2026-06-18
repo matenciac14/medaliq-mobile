@@ -61,10 +61,13 @@ export default function CheckinScreen() {
   const queryClient = useQueryClient()
 
   const [weight, setWeight] = useState('')
+  const [hrResting, setHrResting] = useState('')
   const [sleep, setSleep] = useState('')
   const [energy, setEnergy] = useState(0)
   const [soreness, setSoreness] = useState(0)
   const [stress, setStress] = useState(0)
+  const [motivation, setMotivation] = useState(0)
+  const [hasPain, setHasPain] = useState(false)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -83,7 +86,10 @@ export default function CheckinScreen() {
         energyLevel: energy,
         muscleSoreness: soreness,
         stressLevel: stress,
+        painLevel: hasPain ? 8 : 0,         // boolean → 1-10 (>=5 activa flag en servidor)
+        motivationLevel: motivation > 0 ? motivation * 2 : undefined, // 1-5 → 1-10
         weightKg: weight ? parseFloat(weight) : undefined,
+        hrResting: hrResting ? parseInt(hrResting) : undefined,
         sleepHours: sleep ? parseFloat(sleep) : undefined,
         notes: notes.trim() || undefined,
       })
@@ -91,7 +97,7 @@ export default function CheckinScreen() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       Alert.alert('¡Listo!', 'Check-in registrado. Tu plan se ajustará esta semana.')
       // Reset
-      setWeight(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setNotes('')
+      setWeight(''); setHrResting(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setMotivation(0); setHasPain(false); setNotes('')
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
     } finally {
@@ -142,6 +148,24 @@ export default function CheckinScreen() {
               />
             </View>
             <View style={{ flex: 1, gap: 6 }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>FC reposo (bpm)</Text>
+              <TextInput
+                value={hrResting}
+                onChangeText={setHrResting}
+                placeholder="58"
+                placeholderTextColor="#d1d5db"
+                keyboardType="number-pad"
+                inputMode="numeric"
+                style={{
+                  backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                }}
+              />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1, gap: 6 }}>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Sueño (h)</Text>
               <TextInput
                 value={sleep}
@@ -157,6 +181,7 @@ export default function CheckinScreen() {
                 }}
               />
             </View>
+            <View style={{ flex: 1 }} />
           </View>
         </View>
 
@@ -191,6 +216,53 @@ export default function CheckinScreen() {
             high="Muy estresado"
             color="#8b5cf6"
           />
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+          <ScaleSelector
+            label="Motivación"
+            value={motivation}
+            onChange={setMotivation}
+            low="Sin ganas"
+            high="Muy motivado"
+            color="#22c55e"
+          />
+        </View>
+
+        {/* Molestia o dolor */}
+        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Molestia o dolor
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }}>
+            ¿Tuviste alguna molestia física esta semana?
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setHasPain(false) }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1, paddingVertical: 13, borderRadius: 10, alignItems: 'center',
+                backgroundColor: !hasPain ? '#22c55e' : 'white',
+                borderWidth: 1.5, borderColor: !hasPain ? '#22c55e' : '#e5e7eb',
+              }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: !hasPain ? 'white' : '#6b7280' }}>
+                No
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setHasPain(true) }}
+              activeOpacity={0.8}
+              style={{
+                flex: 1, paddingVertical: 13, borderRadius: 10, alignItems: 'center',
+                backgroundColor: hasPain ? '#ef4444' : 'white',
+                borderWidth: 1.5, borderColor: hasPain ? '#ef4444' : '#e5e7eb',
+              }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: hasPain ? 'white' : '#6b7280' }}>
+                Sí
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Notas */}

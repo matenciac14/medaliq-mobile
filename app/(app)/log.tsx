@@ -16,6 +16,8 @@ const SESSION_ICONS: Record<string, string> = {
   CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴',
 }
 
+const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA', 'NATACION'])
+
 type LogPayload = {
   sessionId: string
   completed: boolean
@@ -23,6 +25,7 @@ type LogPayload = {
   actualZone?: string
   rpe?: number
   hrAvg?: number
+  distanceKm?: number
   notes?: string
 }
 
@@ -41,8 +44,11 @@ export default function LogScreen() {
   const [actualDuration, setActualDuration] = useState(duration ?? '')
   const [rpe, setRpe] = useState(0)
   const [hrAvg, setHrAvg] = useState('')
+  const [distanceKm, setDistanceKm] = useState('')
   const [notes, setNotes] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+
+  const isDistanceType = DISTANCE_TYPES.has(type ?? '')
 
   useEffect(() => {
     if (showSuccess) {
@@ -80,6 +86,7 @@ export default function LogScreen() {
       actualDurationMin: actualDuration ? parseInt(actualDuration) : undefined,
       rpe: rpe > 0 ? rpe : undefined,
       hrAvg: hrAvg ? parseInt(hrAvg) : undefined,
+      distanceKm: distanceKm ? parseFloat(distanceKm) : undefined,
       notes: notes.trim() || undefined,
     })
   }
@@ -214,6 +221,24 @@ export default function LogScreen() {
                   />
                 </View>
               </View>
+              {isDistanceType && (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Distancia (km)</Text>
+                  <TextInput
+                    value={distanceKm}
+                    onChangeText={setDistanceKm}
+                    placeholder="12.5"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+              )}
             </View>
 
             {/* RPE */}
