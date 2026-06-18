@@ -35,7 +35,6 @@ export type DashboardData = {
     sleepHours: number | null
   }
   weekSessions: WeekSession[]
-  kcalTarget: number | null
   completedCount: number
   totalTraining: number
   checkinPending: boolean
@@ -66,4 +65,17 @@ export type DashboardData = {
 
 export async function getDashboard(): Promise<DashboardData> {
   return apiFetch<DashboardData>('/api/mobile/dashboard')
+}
+
+export type WeekSessionsData = {
+  weekSessions: WeekSession[]
+  completedCount: number
+  totalTraining: number
+  weekLabel: string | null
+  weekOffset: number
+  isCurrentWeek: boolean
+}
+
+export async function getWeekSessions(weekOffset: number): Promise<WeekSessionsData> {
+  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}`)
 }

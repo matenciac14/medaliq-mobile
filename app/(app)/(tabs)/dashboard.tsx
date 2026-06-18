@@ -1,10 +1,11 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
+import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getDashboard, type WeekSession } from '../../../src/api/dashboard'
+import { getDashboard, getWeekSessions, type WeekSession } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
 
 const SESSION_ICONS: Record<string, string> = {
@@ -51,38 +52,83 @@ function getIntensityLabel(sessionType: string | null | undefined): string {
 }
 
 // ── Weekly Strip ──────────────────────────────────────────────────
-function WeeklyStrip({ sessions, completed, total, onLogSession }: {
-  sessions: WeekSession[]
-  completed: number
-  total: number
+function WeeklyStrip({ mainData, onLogSession }: {
+  mainData: { weekSessions: WeekSession[]; completedCount: number; totalTraining: number; volumeDeltaPct: number | null }
   onLogSession: (s: WeekSession) => void
 }) {
+  const [weekOffset, setWeekOffset] = useState(0)
+  const isCurrentWeek = weekOffset === 0
+
+  const { data: weekData } = useQuery({
+    queryKey: ['week-sessions', weekOffset],
+    queryFn: () => getWeekSessions(weekOffset),
+    enabled: weekOffset !== 0,
+  })
+
+  const sessions = isCurrentWeek ? mainData.weekSessions : (weekData?.weekSessions ?? mainData.weekSessions)
+  const completed = isCurrentWeek ? mainData.completedCount : (weekData?.completedCount ?? 0)
+  const total = isCurrentWeek ? mainData.totalTraining : (weekData?.totalTraining ?? 0)
+  const weekLabel = isCurrentWeek ? 'Esta semana' : (weekData?.weekLabel ?? '...')
   const pct = total > 0 ? completed / total : 0
-  const todayIdx = sessions.find(s => s.isToday)?.dayIndex ?? -1
+
+  const todayIdx = isCurrentWeek
+    ? (sessions.find(s => s.isToday)?.dayIndex ?? -1)
+    : -1
 
   return (
     <View style={{ backgroundColor: 'white', borderRadius: 18, padding: 14, ...SHADOW }}>
-      {/* Header row */}
+      {/* Header row with nav */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-          Esta semana
+          {weekLabel}
         </Text>
-        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>
-          {completed}/{total} sesiones
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {!isCurrentWeek && (
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setWeekOffset(0) }}
+              style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, backgroundColor: '#fff7ed' }}
+            >
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#f97316' }}>Hoy</Text>
+            </TouchableOpacity>
+          )}
+          {isCurrentWeek && mainData.volumeDeltaPct != null && (
+            <View style={{ backgroundColor: mainData.volumeDeltaPct >= 0 ? '#f0fdf4' : '#fff1f2', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: mainData.volumeDeltaPct >= 0 ? '#16a34a' : '#dc2626' }}>
+                {mainData.volumeDeltaPct >= 0 ? '+' : ''}{mainData.volumeDeltaPct}% vol
+              </Text>
+            </View>
+          )}
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>
+            {completed}/{total} sesiones
+          </Text>
+          {/* Nav buttons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 8, overflow: 'hidden' }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w - 1) }}
+              style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 13, color: '#6b7280', lineHeight: 18 }}>‹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w + 1) }}
+              style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 13, color: '#6b7280', lineHeight: 18 }}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
       {/* Progress bar */}
       <View style={{ height: 3, backgroundColor: '#e5e7eb', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
-        <View style={{ height: 3, width: `${pct * 100}%`, backgroundColor: '#22c55e', borderRadius: 2 }} />
+        <View style={{ height: 3, width: `${pct * 100}%` as any, backgroundColor: '#22c55e', borderRadius: 2 }} />
       </View>
       {/* Day cells */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {sessions.map((s) => {
           const isRest = !s.type || s.type === 'DESCANSO'
-          const isFuture = s.dayIndex > todayIdx
-          const isPast = s.dayIndex < todayIdx
-          // Solo tappable: pasado sin registrar + hoy sin completar (no rest, tiene id)
-          const canLog = !isRest && !s.done && !isFuture && !!s.id
+          const isFuture = isCurrentWeek && s.dayIndex > todayIdx
+          const isPast = isCurrentWeek && s.dayIndex < todayIdx
+          const canLog = isCurrentWeek && !isRest && !s.done && !isFuture && !!s.id
           const label = s.type ? (SESSION_SHORT[s.type] ?? '?') : '·'
           const labelColor = s.isToday ? 'white' : (SESSION_COLORS[s.type ?? ''] ?? '#6b7280')
 
@@ -91,15 +137,11 @@ function WeeklyStrip({ sessions, completed, total, onLogSession }: {
               width: 28, height: 28, borderRadius: isRest ? 14 : 8, alignItems: 'center', justifyContent: 'center',
               backgroundColor: s.isToday
                 ? '#1e3a5f'
-                : s.done && !isRest
-                  ? '#dcfce7'
-                  : isFuture && !isRest
-                    ? '#f8fafc'
-                    : isRest
-                      ? 'transparent'
-                      : isPast && !s.done && !isRest
-                        ? '#fff7ed'   // naranja suave = pendiente de registro
-                        : '#f1f5f9',
+                : s.done && !isRest ? '#dcfce7'
+                : isFuture && !isRest ? '#f8fafc'
+                : isRest ? 'transparent'
+                : isPast && !s.done && !isRest ? '#fff7ed'
+                : '#f1f5f9',
               borderWidth: canLog && isPast ? 1 : 0,
               borderColor: '#f97316',
               opacity: isFuture && !isRest ? 0.35 : 1,
@@ -109,11 +151,7 @@ function WeeklyStrip({ sessions, completed, total, onLogSession }: {
               ) : isPast && !s.done && !isRest ? (
                 <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#f97316' }}>!</Text>
               ) : (
-                <Text style={{
-                  fontSize: isRest ? 14 : 9,
-                  fontFamily: 'Inter_700Bold',
-                  color: isRest ? '#d1d5db' : isFuture ? '#9ca3af' : labelColor,
-                }}>
+                <Text style={{ fontSize: isRest ? 14 : 9, fontFamily: 'Inter_700Bold', color: isRest ? '#d1d5db' : isFuture ? '#9ca3af' : labelColor }}>
                   {isRest ? '·' : label}
                 </Text>
               )}
@@ -122,18 +160,11 @@ function WeeklyStrip({ sessions, completed, total, onLogSession }: {
 
           return (
             <View key={s.dayIndex} style={{ alignItems: 'center', gap: 4, flex: 1 }}>
-              <Text style={{
-                fontSize: 10,
-                fontFamily: s.isToday ? 'Inter_700Bold' : 'Inter_400Regular',
-                color: s.isToday ? '#1e3a5f' : '#9ca3af',
-              }}>
+              <Text style={{ fontSize: 10, fontFamily: s.isToday ? 'Inter_700Bold' : 'Inter_400Regular', color: s.isToday ? '#1e3a5f' : '#9ca3af' }}>
                 {DAY_LABELS[s.dayIndex]}
               </Text>
               {canLog ? (
-                <TouchableOpacity
-                  onPress={() => { Haptics.selectionAsync(); onLogSession(s) }}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onLogSession(s) }} activeOpacity={0.7}>
                   {cell}
                 </TouchableOpacity>
               ) : cell}
@@ -141,8 +172,7 @@ function WeeklyStrip({ sessions, completed, total, onLogSession }: {
           )
         })}
       </View>
-      {/* Hint: pasados pendientes */}
-      {sessions.some(s => !s.done && s.dayIndex < todayIdx && s.type && s.type !== 'DESCANSO') && (
+      {isCurrentWeek && sessions.some(s => !s.done && s.dayIndex < todayIdx && s.type && s.type !== 'DESCANSO') && (
         <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#f97316', marginTop: 8, textAlign: 'center' }}>
           Toca ! para registrar sesiones pasadas
         </Text>
@@ -158,10 +188,11 @@ const FORM_COLORS = {
   rest:     { bg: '#fef2f2', border: '#ef4444', label: '#991b1b', text: '#7f1d1d', chip: '#fecaca', chipText: '#7f1d1d' },
 }
 
-function HeroForma({ formStatus, formMessage, lastCheckIn }: {
+function HeroForma({ formStatus, formMessage, lastCheckIn, hrResting }: {
   formStatus: 'good' | 'moderate' | 'rest'
   formMessage: string
   lastCheckIn: { energyLevel: number | null; hardestSessionRpe: number | null; sleepHours: number | null } | null
+  hrResting: number | null
 }) {
   const c = FORM_COLORS[formStatus]
   const icon = formStatus === 'good' ? '⚡' : formStatus === 'moderate' ? '⚠️' : '😴'
@@ -176,7 +207,7 @@ function HeroForma({ formStatus, formMessage, lastCheckIn }: {
           {formMessage}
         </Text>
         {lastCheckIn && (
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {lastCheckIn.energyLevel != null && (
               <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
@@ -195,6 +226,13 @@ function HeroForma({ formStatus, formMessage, lastCheckIn }: {
               <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
                   Sueño {lastCheckIn.sleepHours >= 6.5 ? '✓' : `${lastCheckIn.sleepHours}h`}
+                </Text>
+              </View>
+            )}
+            {hrResting != null && (
+              <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
+                  FC basal {hrResting} bpm
                 </Text>
               </View>
             )}
@@ -368,6 +406,13 @@ export default function DashboardScreen() {
     queryFn: getDashboard,
   })
 
+  // Refrescar al volver al tab (tabs no se desmontan, refetchOnMount no dispara)
+  useFocusEffect(
+    useCallback(() => {
+      refetch()
+    }, [refetch])
+  )
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
@@ -487,20 +532,26 @@ export default function DashboardScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                    router.push({
-                      pathname: '/(app)/log',
-                      params: {
-                        sessionId: d.todaySession!.id,
-                        type: d.todaySession!.type,
-                        duration: String(d.todaySession!.durationMin),
-                        zone: d.todaySession!.zoneTarget,
-                      },
-                    })
+                    if (d.todaySession!.id === 'gym-today') {
+                      router.push('/(app)/(tabs)/gym')
+                    } else {
+                      router.push({
+                        pathname: '/(app)/log',
+                        params: {
+                          sessionId: d.todaySession!.id,
+                          type: d.todaySession!.type,
+                          duration: String(d.todaySession!.durationMin),
+                          zone: d.todaySession!.zoneTarget,
+                        },
+                      })
+                    }
                   }}
                   activeOpacity={0.85}
                   style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
                 >
-                  <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar sesión</Text>
+                  <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>
+                    {d.todaySession!.id === 'gym-today' ? 'Ir al Gym →' : 'Registrar sesión'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -518,9 +569,7 @@ export default function DashboardScreen() {
         {/* ── Weekly Strip ──────────────────────────────────── */}
         {d.weekSessions.length > 0 && (
           <WeeklyStrip
-            sessions={d.weekSessions}
-            completed={d.completedCount}
-            total={d.totalTraining}
+            mainData={{ weekSessions: d.weekSessions, completedCount: d.completedCount, totalTraining: d.totalTraining, volumeDeltaPct: d.volumeDeltaPct }}
             onLogSession={(s) => {
               router.push({
                 pathname: '/(app)/log',
@@ -538,7 +587,7 @@ export default function DashboardScreen() {
         {/* ── Check-in pendiente ────────────────────────────── */}
         {d.checkinPending && (
           <TouchableOpacity
-            onPress={() => router.push('/(app)/(tabs)/plan')}
+            onPress={() => router.push('/(app)/(tabs)/checkin')}
             activeOpacity={0.85}
             style={{ backgroundColor: '#fff7ed', borderRadius: 14, overflow: 'hidden', flexDirection: 'row', ...SHADOW }}
           >
@@ -564,6 +613,7 @@ export default function DashboardScreen() {
             formStatus={d.formStatus}
             formMessage={d.formMessage}
             lastCheckIn={d.lastCheckIn}
+            hrResting={d.metrics.hrResting}
           />
         )}
 

@@ -19,6 +19,41 @@ export async function assignTemplate(templateId: string) {
   return apiFetch('/api/gym/assign', { method: 'POST', body: { templateId } })
 }
 
+export type GymDayDetail = {
+  dow: number
+  dateNum: number
+  isToday: boolean
+  isCompleted: boolean
+  isRest: boolean
+  hasSession: boolean
+  label: string | null
+  muscleGroup: string | null
+}
+
+export type GymWeekDetail =
+  | { type: 'rest' }
+  | { type: 'none' }
+  | { type: 'planned'; planned: { label: string; exercises: { name: string; sets: number; repsScheme: string }[] } }
+  | { type: 'completed'; session: { durationMin: number | null; rpe: number | null; notes: string | null; exercises: { name: string; sets: { setNumber: number; weightKg: number | null; repsCompleted: number | null; completed: boolean }[] }[] } }
+
+export type GymWeekData = {
+  templateName: string
+  coachName: string | null
+  weekOffset: number
+  isCurrentWeek: boolean
+  mondayDate: string
+  completedCount: number
+  trainingDays: number
+  days: GymDayDetail[]
+  selectedDetail: GymWeekDetail | null
+}
+
+export async function getGymWeek(weekOffset: number, selectedDow?: number): Promise<GymWeekData> {
+  const params = new URLSearchParams({ weekOffset: String(weekOffset) })
+  if (selectedDow) params.set('selectedDow', String(selectedDow))
+  return apiFetch<GymWeekData>(`/api/mobile/gym/week?${params}`)
+}
+
 export type GymSessionData = {
   assignedWorkoutId: string
   templateName: string
@@ -33,6 +68,8 @@ export type GymSessionData = {
     sets: number
     repsScheme: string
     restSeconds: number | null
+    setType: string
+    supersetWith: string | null
     exercise: {
       id: string
       name: string
