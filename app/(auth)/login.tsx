@@ -8,7 +8,6 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Linking,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { login } from '../../src/api/auth'
@@ -133,11 +132,12 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => Linking.openURL('mailto:hola@medaliq.com?subject=Recuperar%20contrase%C3%B1a')}
+          onPress={() => router.push('/(auth)/forgot-password' as any)}
           activeOpacity={0.7}
         >
-          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
-            ¿Olvidaste tu contraseña? Contáctanos
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
+            ¿Olvidaste tu contraseña?{' '}
+            <Text style={{ color: '#f97316', fontFamily: 'Inter_600SemiBold' }}>Restablecer</Text>
           </Text>
         </TouchableOpacity>
       </View>
