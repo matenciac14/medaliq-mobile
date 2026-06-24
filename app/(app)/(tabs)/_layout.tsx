@@ -82,7 +82,6 @@ export default function TabsLayout() {
         }}
       />
       {/* Tabs ocultos del nav pero rutas accesibles */}
-      <Tabs.Screen name="ai-coach" options={{ href: null }} />
       <Tabs.Screen name="checkin" options={{ href: null }} />
     </Tabs>
   )
