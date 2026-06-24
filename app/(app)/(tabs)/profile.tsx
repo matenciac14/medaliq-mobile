@@ -123,7 +123,7 @@ export default function ProfileScreen() {
             Trial activo — acceso completo por 30 días
           </Text>
           <Text style={{ fontSize: 12, color: '#c2410c', fontFamily: 'Inter_400Regular', marginTop: 3 }}>
-            Plan, check-in, nutrición, gym y AI coach disponibles.
+            Plan, check-in, nutrición y gym disponibles.
           </Text>
         </View>
       )}

@@ -461,7 +461,7 @@ export default function NutritionScreen() {
                       Armar mi plan de comidas
                     </Text>
                     <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
-                      La AI arma tu menú con tus alimentos disponibles
+                      Medaliq arma tu menú con tus alimentos disponibles
                     </Text>
                   </View>
                   <Text style={{ fontSize: 22, color: '#1e3a5f' }}>+</Text>

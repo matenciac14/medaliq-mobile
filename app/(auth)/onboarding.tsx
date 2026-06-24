@@ -273,7 +273,7 @@ export default function OnboardingScreen() {
           Generando tu plan...
         </Text>
         <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
-          La IA está creando tu plan personalizado. Esto puede tomar unos segundos.
+          Medaliq está creando tu plan personalizado. Esto puede tomar unos segundos.
         </Text>
       </View>
     )
@@ -536,7 +536,7 @@ export default function OnboardingScreen() {
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 {[
                   { id: 'known', label: 'Sí, la conozco', desc: 'La he medido en test' },
-                  { id: 'estimated', label: 'Estimarla', desc: 'El AI la calculará' },
+                  { id: 'estimated', label: 'Estimarla', desc: 'Se calculará automáticamente' },
                 ].map(opt => (
                   <TouchableOpacity
                     key={opt.id}

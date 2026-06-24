@@ -384,7 +384,7 @@ function AICoachTeaser({ message, onPress }: { message: string; onPress: () => v
         <Text style={{ fontSize: 22 }}>🤖</Text>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: 'white', marginBottom: 3 }}>
-            Tu AI Coach
+            Medaliq
           </Text>
           <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)', lineHeight: 16 }}>
             {message}

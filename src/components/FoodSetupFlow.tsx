@@ -370,7 +370,7 @@ export default function FoodSetupFlow({ visible, onClose }: Props) {
                   Analizando tu perfil...
                 </Text>
                 <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', maxWidth: 240 }}>
-                  La AI está armando tu menú personalizado con tus alimentos disponibles
+                  Medaliq está armando tu menú personalizado con tus alimentos disponibles
                 </Text>
               </View>
             )}
