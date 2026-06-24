@@ -10,7 +10,7 @@ export type SessionUser = {
   name: string
   email: string
   role: 'ATHLETE' | 'COACH' | 'ADMIN'
-  userPlan: 'INACTIVE' | 'TRIAL' | 'PRO'
+  userPlan: 'FREE' | 'TRIAL' | 'PRO' | 'INACTIVE'
   onboardingCompleted: boolean
   features: {
     plan: boolean
@@ -20,7 +20,6 @@ export type SessionUser = {
     log: boolean
     coach: boolean
     gym: boolean
-    aiCoach: boolean
   }
 }
 
