@@ -19,20 +19,13 @@ import type { SessionUser } from '../../src/api/auth'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type MainGoal = 'SPORT' | 'GYM' | 'BODY'
-type Sport = 'RUNNING' | 'CYCLING' | 'SWIMMING' | 'TRIATHLON' | 'FOOTBALL' | 'STRENGTH'
-type Step = 'goal' | 'sport' | 'sport-details' | 'hr-fitness' | 'physical' | 'schedule' | 'health' | 'generating'
+type Sport = 'RUNNING' | 'STRENGTH'
+type Step = 'goal' | 'sport' | 'hr-fitness' | 'physical' | 'schedule' | 'health' | 'generating'
 
 type FormData = {
   mainGoal: MainGoal | null
   sport: Sport | null
   raceDistance: string | null
-  cyclingModality: string | null
-  ftpWatts: string
-  swimStroke: string | null
-  triathlonDistance: string | null
-  weakestSegment: string | null
-  footballPosition: string | null
-  competitionLevel: string | null
   hrSource: 'known' | 'estimated'
   hrMax: string
   gender: 'male' | 'female'
@@ -48,9 +41,6 @@ type FormData = {
 
 const INITIAL: FormData = {
   mainGoal: null, sport: null, raceDistance: null,
-  cyclingModality: null, ftpWatts: '', swimStroke: null,
-  triathlonDistance: null, weakestSegment: null,
-  footballPosition: null, competitionLevel: null,
   hrSource: 'estimated', hrMax: '',
   gender: 'male', age: '', weightKg: '', heightCm: '',
   daysPerWeek: 4, hoursPerSession: 1,
@@ -67,11 +57,7 @@ const GOALS = [
 
 const SPORTS = [
   { id: 'RUNNING', label: 'Running', emoji: '🏃' },
-  { id: 'CYCLING', label: 'Ciclismo', emoji: '🚴' },
-  { id: 'SWIMMING', label: 'Natación', emoji: '🏊' },
-  { id: 'TRIATHLON', label: 'Triatlón', emoji: '🏅' },
-  { id: 'FOOTBALL', label: 'Fútbol', emoji: '⚽' },
-  { id: 'STRENGTH', label: 'Fuerza', emoji: '💪' },
+  { id: 'STRENGTH', label: 'Fuerza / Gym', emoji: '🏋️' },
 ]
 
 const RACE_DISTANCES = [
@@ -79,44 +65,6 @@ const RACE_DISTANCES = [
   { id: 'RACE_10K', label: '10K' },
   { id: 'RACE_HALF_MARATHON', label: 'Media maratón' },
   { id: 'RACE_MARATHON', label: 'Maratón' },
-]
-
-const CYCLING_MODALITIES = [
-  { id: 'ROAD', label: 'Ruta', emoji: '🚴' },
-  { id: 'MTB', label: 'MTB', emoji: '🏔️' },
-]
-
-const SWIM_STROKES = [
-  { id: 'FREESTYLE', label: 'Libre' },
-  { id: 'BREASTSTROKE', label: 'Pecho' },
-  { id: 'BACKSTROKE', label: 'Espalda' },
-  { id: 'BUTTERFLY', label: 'Mariposa' },
-]
-
-const TRIATHLON_DISTANCES = [
-  { id: 'SPRINT', label: 'Sprint' },
-  { id: 'OLYMPIC', label: 'Olímpico' },
-  { id: 'HALF', label: '70.3' },
-  { id: 'FULL', label: 'Ironman' },
-]
-
-const WEAKEST_SEGMENTS = [
-  { id: 'SWIM', label: 'Nado', emoji: '🏊' },
-  { id: 'BIKE', label: 'Ciclismo', emoji: '🚴' },
-  { id: 'RUN', label: 'Carrera', emoji: '🏃' },
-]
-
-const FOOTBALL_POSITIONS = [
-  { id: 'GOALKEEPER', label: 'Portero' },
-  { id: 'DEFENDER', label: 'Defensa' },
-  { id: 'MIDFIELDER', label: 'Centrocampista' },
-  { id: 'FORWARD', label: 'Delantero' },
-]
-
-const COMPETITION_LEVELS = [
-  { id: 'RECREATIONAL', label: 'Recreativo', desc: 'Solo por diversión' },
-  { id: 'AMATEUR', label: 'Amateur', desc: 'Ligas locales' },
-  { id: 'SEMIPRO', label: 'Semi-pro', desc: 'Nivel competitivo' },
 ]
 
 const EXPERIENCE_LEVELS = [
@@ -128,18 +76,13 @@ const EXPERIENCE_LEVELS = [
 const INJURY_OPTIONS = ['Rodilla', 'Espalda/Lumbar', 'Tobillo', 'Hombro', 'Cadera', 'Ninguna']
 const CONDITION_OPTIONS = ['Hipertensión', 'Diabetes', 'Asma', 'Condición cardíaca', 'Ninguna']
 
-const AEROBIC_SPORTS: Sport[] = ['RUNNING', 'CYCLING', 'SWIMMING', 'TRIATHLON']
-const SPORTS_WITH_DETAILS: Sport[] = ['CYCLING', 'SWIMMING', 'TRIATHLON', 'FOOTBALL']
+const AEROBIC_SPORTS: Sport[] = ['RUNNING']
 
 function getNextStep(current: Step, form: FormData): Step {
   switch (current) {
     case 'goal':
       return form.mainGoal === 'SPORT' ? 'sport' : 'physical'
     case 'sport':
-      if (SPORTS_WITH_DETAILS.includes(form.sport!)) return 'sport-details'
-      if (AEROBIC_SPORTS.includes(form.sport!)) return 'hr-fitness'
-      return 'physical'
-    case 'sport-details':
       if (AEROBIC_SPORTS.includes(form.sport!)) return 'hr-fitness'
       return 'physical'
     case 'hr-fitness': return 'physical'
@@ -188,13 +131,6 @@ export default function OnboardingScreen() {
         mainGoal: form.mainGoal,
         sport: form.sport,
         raceDistance: form.raceDistance,
-        cyclingModality: form.cyclingModality,
-        ftp: form.ftpWatts ? parseInt(form.ftpWatts) : undefined,
-        swimStroke: form.swimStroke,
-        triathlonDistance: form.triathlonDistance,
-        weakestSegment: form.weakestSegment,
-        footballPosition: form.footballPosition,
-        competitionLevel: form.competitionLevel,
         hrMax: form.hrSource === 'known' && form.hrMax ? parseInt(form.hrMax) : undefined,
         hrSource: form.hrSource,
         gender: form.gender,
@@ -249,12 +185,6 @@ export default function OnboardingScreen() {
   const canNext = (() => {
     if (step === 'goal') return !!form.mainGoal
     if (step === 'sport') return !!form.sport
-    if (step === 'sport-details') {
-      if (form.sport === 'SWIMMING') return !!form.swimStroke
-      if (form.sport === 'TRIATHLON') return !!form.triathlonDistance && !!form.weakestSegment
-      if (form.sport === 'FOOTBALL') return !!form.footballPosition
-      return true // CYCLING — cyclingModality optional
-    }
     if (step === 'hr-fitness') return true // hrMax optional (can be estimated)
     if (step === 'physical') return !!form.age && !!form.weightKg && !!form.heightCm
     return true
@@ -336,7 +266,7 @@ export default function OnboardingScreen() {
               {SPORTS.map(s => (
                 <TouchableOpacity
                   key={s.id}
-                  onPress={() => setForm(f => ({ ...f, sport: s.id as Sport, raceDistance: null, cyclingModality: null, swimStroke: null, triathlonDistance: null, weakestSegment: null, footballPosition: null }))}
+                  onPress={() => setForm(f => ({ ...f, sport: s.id as Sport, raceDistance: null }))}
                   activeOpacity={0.85}
                   style={{
                     borderRadius: 14, padding: 16, alignItems: 'center', gap: 6, width: '47%',
@@ -370,160 +300,6 @@ export default function OnboardingScreen() {
                   ))}
                 </View>
               </View>
-            )}
-          </View>
-        )}
-
-        {/* ── Sport-details step ── */}
-        {step === 'sport-details' && (
-          <View style={{ gap: 24 }}>
-            {form.sport === 'CYCLING' && (
-              <>
-                <View style={{ gap: 10 }}>
-                  <Text style={labelStyle}>Modalidad</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {CYCLING_MODALITIES.map(m => (
-                      <TouchableOpacity
-                        key={m.id}
-                        onPress={() => setForm(f => ({ ...f, cyclingModality: m.id }))}
-                        activeOpacity={0.85}
-                        style={{
-                          borderRadius: 14, padding: 14, alignItems: 'center', gap: 4, width: '47%',
-                          backgroundColor: form.cyclingModality === m.id ? '#1e3a5f' : 'white',
-                          borderWidth: 2, borderColor: form.cyclingModality === m.id ? '#1e3a5f' : '#e2e8f0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 24 }}>{m.emoji}</Text>
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.cyclingModality === m.id ? 'white' : '#0f172a' }}>{m.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={{ gap: 8 }}>
-                  <Text style={labelStyle}>FTP (opcional)</Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#94a3b8', marginTop: -4 }}>Potencia umbral funcional en vatios. Si no lo sabes, déjalo vacío.</Text>
-                  <TextInput
-                    value={form.ftpWatts}
-                    onChangeText={v => setForm(f => ({ ...f, ftpWatts: v }))}
-                    placeholder="Ej: 220"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    style={fieldStyle}
-                  />
-                </View>
-              </>
-            )}
-
-            {form.sport === 'SWIMMING' && (
-              <View style={{ gap: 10 }}>
-                <Text style={labelStyle}>Estilo principal</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  {SWIM_STROKES.map(s => (
-                    <TouchableOpacity
-                      key={s.id}
-                      onPress={() => setForm(f => ({ ...f, swimStroke: s.id }))}
-                      activeOpacity={0.85}
-                      style={{
-                        borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14, alignItems: 'center',
-                        backgroundColor: form.swimStroke === s.id ? '#1e3a5f' : 'white',
-                        borderWidth: 2, borderColor: form.swimStroke === s.id ? '#1e3a5f' : '#e2e8f0',
-                      }}
-                    >
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.swimStroke === s.id ? 'white' : '#0f172a' }}>{s.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {form.sport === 'TRIATHLON' && (
-              <>
-                <View style={{ gap: 10 }}>
-                  <Text style={labelStyle}>Distancia objetivo</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {TRIATHLON_DISTANCES.map(d => (
-                      <TouchableOpacity
-                        key={d.id}
-                        onPress={() => setForm(f => ({ ...f, triathlonDistance: d.id }))}
-                        activeOpacity={0.85}
-                        style={{
-                          flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center',
-                          backgroundColor: form.triathlonDistance === d.id ? '#1e3a5f' : 'white',
-                          borderWidth: 2, borderColor: form.triathlonDistance === d.id ? '#1e3a5f' : '#e2e8f0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: form.triathlonDistance === d.id ? 'white' : '#0f172a' }}>{d.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={{ gap: 10 }}>
-                  <Text style={labelStyle}>Segmento más débil</Text>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {WEAKEST_SEGMENTS.map(s => (
-                      <TouchableOpacity
-                        key={s.id}
-                        onPress={() => setForm(f => ({ ...f, weakestSegment: s.id }))}
-                        activeOpacity={0.85}
-                        style={{
-                          flex: 1, borderRadius: 14, padding: 14, alignItems: 'center', gap: 4,
-                          backgroundColor: form.weakestSegment === s.id ? '#f97316' : 'white',
-                          borderWidth: 2, borderColor: form.weakestSegment === s.id ? '#f97316' : '#e2e8f0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 22 }}>{s.emoji}</Text>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: form.weakestSegment === s.id ? 'white' : '#0f172a' }}>{s.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </>
-            )}
-
-            {form.sport === 'FOOTBALL' && (
-              <>
-                <View style={{ gap: 10 }}>
-                  <Text style={labelStyle}>Posición</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {FOOTBALL_POSITIONS.map(p => (
-                      <TouchableOpacity
-                        key={p.id}
-                        onPress={() => setForm(f => ({ ...f, footballPosition: p.id }))}
-                        activeOpacity={0.85}
-                        style={{
-                          borderRadius: 12, paddingHorizontal: 18, paddingVertical: 14, alignItems: 'center',
-                          backgroundColor: form.footballPosition === p.id ? '#1e3a5f' : 'white',
-                          borderWidth: 2, borderColor: form.footballPosition === p.id ? '#1e3a5f' : '#e2e8f0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.footballPosition === p.id ? 'white' : '#0f172a' }}>{p.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={{ gap: 10 }}>
-                  <Text style={labelStyle}>Nivel de competición</Text>
-                  <View style={{ gap: 8 }}>
-                    {COMPETITION_LEVELS.map(l => (
-                      <TouchableOpacity
-                        key={l.id}
-                        onPress={() => setForm(f => ({ ...f, competitionLevel: l.id }))}
-                        activeOpacity={0.85}
-                        style={{
-                          borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
-                          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                          backgroundColor: form.competitionLevel === l.id ? '#1e3a5f' : 'white',
-                          borderWidth: 2, borderColor: form.competitionLevel === l.id ? '#1e3a5f' : '#e2e8f0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.competitionLevel === l.id ? 'white' : '#0f172a' }}>{l.label}</Text>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: form.competitionLevel === l.id ? 'rgba(255,255,255,0.65)' : '#64748b' }}>{l.desc}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </>
             )}
           </View>
         )}
@@ -782,7 +558,6 @@ function stepTitle(step: Step): string {
   const map: Record<Step, string> = {
     goal: '¿Cuál es tu objetivo?',
     sport: '¿Qué deporte practicas?',
-    'sport-details': 'Detalles de tu deporte',
     'hr-fitness': 'Tu condición cardiovascular',
     physical: 'Tu perfil físico',
     schedule: 'Tu disponibilidad',
@@ -796,7 +571,6 @@ function stepSubtitle(step: Step): string {
   const map: Record<Step, string> = {
     goal: 'Elige el que mejor describe lo que quieres lograr.',
     sport: 'Selecciona tu deporte principal.',
-    'sport-details': 'Esto permite calibrar mejor tu plan.',
     'hr-fitness': 'Usamos esto para calcular tus zonas de entrenamiento.',
     physical: 'Usamos estos datos para calibrar tu plan.',
     schedule: '¿Cuánto tiempo puedes entrenar?',
