@@ -96,7 +96,7 @@ export type SetLog = {
 export type CompleteSessionPayload = {
   assignedWorkoutId: string
   dayOfWeek: number
-  setLogs: SetLog[]
+  sets: SetLog[]
   rpe?: number
   durationMin?: number
   notes?: string

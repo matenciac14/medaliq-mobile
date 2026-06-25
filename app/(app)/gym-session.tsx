@@ -274,7 +274,7 @@ export default function GymSessionScreen() {
   }
 
   function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
-    const setLogs: SetLog[] = sets
+    const completedSets: SetLog[] = sets
       .filter(s => s.completed)
       .map(s => ({
         workoutExerciseId: s.workoutExerciseId,
@@ -286,7 +286,7 @@ export default function GymSessionScreen() {
     finishSession({
       assignedWorkoutId: session!.assignedWorkoutId,
       dayOfWeek: (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })(),
-      setLogs,
+      sets: completedSets,
       durationMin,
       rpe,
       notes: notes.trim() || undefined,
