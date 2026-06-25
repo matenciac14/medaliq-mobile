@@ -140,6 +140,14 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Mensajes */}
+      <View>
+        <Text style={sectionTitleStyle}>Coach</Text>
+        <View style={cardStyle}>
+          <MenuItem icon="chatbubble-ellipses-outline" label="Mensajes" onPress={() => router.push('/(app)/messages' as any)} />
+        </View>
+      </View>
+
       {/* Soporte */}
       <View>
         <Text style={sectionTitleStyle}>Soporte</Text>
