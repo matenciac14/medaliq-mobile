@@ -19,6 +19,13 @@ export async function assignTemplate(templateId: string) {
   return apiFetch('/api/gym/assign', { method: 'POST', body: { templateId } })
 }
 
+export type RunningSession = {
+  type: string
+  durationMin: number | null
+  zoneTarget: string | null
+  intensity: string
+}
+
 export type GymDayDetail = {
   dow: number
   dateNum: number
@@ -28,6 +35,7 @@ export type GymDayDetail = {
   hasSession: boolean
   label: string | null
   muscleGroup: string | null
+  runningSession: RunningSession | null
 }
 
 export type GymWeekDetail =

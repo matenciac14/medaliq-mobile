@@ -5,12 +5,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, type PublicTemplate, type GymDayDetail, type GymWeekDetail } from '../../../src/api/gym'
+import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, type PublicTemplate, type GymDayDetail, type GymWeekDetail, type RunningSession } from '../../../src/api/gym'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
 const DOW_LABELS = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D']
 const MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+const HARD_SESSIONS = new Set(['TEMPO', 'INTERVALOS', 'TIRADA_LARGA', 'FARTLEK', 'TEST', 'SIMULACRO'])
 
 function formatWeekRange(mondayIso: string): string {
   const monday = new Date(mondayIso)
@@ -124,6 +125,9 @@ function GymCalendarStrip({ days, isCurrentWeek, selectedDow, onSelectDow }: {
               <Text style={{ fontSize: 8, fontFamily: 'Inter_600SemiBold', color: isSelected ? 'rgba(255,255,255,0.8)' : d.isRest ? '#9ca3af' : '#6b7280', marginTop: 2, textAlign: 'center' }}>
                 {d.isRest ? 'Desc.' : (d.muscleGroup?.slice(0, 4) ?? '—')}
               </Text>
+              {d.hasSession && d.runningSession && HARD_SESSIONS.has(d.runningSession.type) && (
+                <Text style={{ fontSize: 7, marginTop: 1 }}>⚡</Text>
+              )}
             </TouchableOpacity>
           )
         })}
@@ -132,8 +136,30 @@ function GymCalendarStrip({ days, isCurrentWeek, selectedDow, onSelectDow }: {
   )
 }
 
+// ── Running session chip shown inside day detail ─────────────────
+function RunningChip({ session }: { session: RunningSession }) {
+  const isHard = HARD_SESSIONS.has(session.type)
+  const bg = isHard ? '#fff7ed' : '#f0f9ff'
+  const border = isHard ? '#fed7aa' : '#bae6fd'
+  const color = isHard ? '#c2410c' : '#0369a1'
+  const label = session.type.replace(/_/g, ' ')
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: bg, borderRadius: 10, borderWidth: 1, borderColor: border, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 14, marginBottom: 10 }}>
+      <Text style={{ fontSize: 14 }}>{isHard ? '⚡' : '🏃'}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          {isHard ? 'Doble carga hoy' : 'Running + Gym hoy'}
+        </Text>
+        <Text style={{ fontSize: 11, color, fontFamily: 'Inter_500Medium', marginTop: 1 }}>
+          {label}{session.durationMin ? ` · ${session.durationMin}min` : ''}{session.zoneTarget ? ` · ${session.zoneTarget}` : ''}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 // ── Day Detail Panel ─────────────────────────────────────────────
-function DayDetailPanel({ detail, dayLabel }: { detail: GymWeekDetail; dayLabel: string }) {
+function DayDetailPanel({ detail, dayLabel, runningSession }: { detail: GymWeekDetail; dayLabel: string; runningSession?: RunningSession | null }) {
   if (detail.type === 'rest') {
     return (
       <View style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -193,6 +219,7 @@ function DayDetailPanel({ detail, dayLabel }: { detail: GymWeekDetail; dayLabel:
             <Text style={{ fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>{s.notes}</Text>
           </View>
         )}
+        {runningSession && <View style={{ paddingBottom: 2 }}><RunningChip session={runningSession} /></View>}
       </View>
     )
   }
@@ -204,6 +231,7 @@ function DayDetailPanel({ detail, dayLabel }: { detail: GymWeekDetail; dayLabel:
           <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8 }}>Planificado</Text>
           <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f', marginTop: 2 }}>{dayLabel}</Text>
         </View>
+        {runningSession && <View style={{ paddingTop: 10 }}><RunningChip session={runningSession} /></View>}
         {detail.planned.exercises.map((ex, i) => (
           <View key={i} style={{ paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: i < detail.planned!.exercises.length - 1 ? 1 : 0, borderBottomColor: '#f9fafb' }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#1f2937', flex: 1 }}>{ex.name}</Text>
@@ -266,7 +294,11 @@ function ThisWeekSection({ todayDow, isCurrentWeek: _isCurrentWeek }: { todayDow
       />
 
       {selectedDow >= 1 && data.selectedDetail && (
-        <DayDetailPanel detail={data.selectedDetail} dayLabel={dayLabel} />
+        <DayDetailPanel
+          detail={data.selectedDetail}
+          dayLabel={dayLabel}
+          runningSession={selectedDay?.runningSession}
+        />
       )}
     </View>
   )
