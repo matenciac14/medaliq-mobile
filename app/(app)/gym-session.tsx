@@ -284,7 +284,9 @@ export default function GymSessionScreen() {
         completed: true,
       }))
     finishSession({
-      assignedWorkoutId: session!.assignedWorkoutId,
+      ...(session!.plannedSessionId
+        ? { plannedSessionId: session!.plannedSessionId }
+        : { assignedWorkoutId: session!.assignedWorkoutId! }),
       dayOfWeek: (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })(),
       sets: completedSets,
       durationMin,

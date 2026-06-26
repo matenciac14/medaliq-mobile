@@ -63,7 +63,8 @@ export async function getGymWeek(weekOffset: number, selectedDow?: number): Prom
 }
 
 export type GymSessionData = {
-  assignedWorkoutId: string
+  assignedWorkoutId: string | null
+  plannedSessionId: string | null
   templateName: string
   workoutDay: {
     id: string
@@ -102,7 +103,8 @@ export type SetLog = {
 }
 
 export type CompleteSessionPayload = {
-  assignedWorkoutId: string
+  assignedWorkoutId?: string
+  plannedSessionId?: string
   dayOfWeek: number
   sets: SetLog[]
   rpe?: number
