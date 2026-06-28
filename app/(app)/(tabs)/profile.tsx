@@ -141,11 +141,23 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Mensajes */}
+      {/* Mensajes / Coach inbox */}
       <View>
-        <Text style={sectionTitleStyle}>Coach</Text>
+        <Text style={sectionTitleStyle}>{user?.role === 'COACH' ? 'Atletas' : 'Coach'}</Text>
         <View style={cardStyle}>
-          <MenuItem icon="chatbubble-ellipses-outline" label="Mensajes" onPress={() => router.push('/(app)/messages' as any)} />
+          {user?.role === 'COACH' ? (
+            <MenuItem
+              icon="people-outline"
+              label="Mis atletas"
+              onPress={() => router.push('/(app)/coach-inbox' as any)}
+            />
+          ) : (
+            <MenuItem
+              icon="chatbubble-ellipses-outline"
+              label="Mensajes"
+              onPress={() => router.push('/(app)/messages' as any)}
+            />
+          )}
         </View>
       </View>
 
