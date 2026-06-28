@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -10,8 +10,12 @@ import {
   Alert,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { login } from '../../src/api/auth'
+import * as WebBrowser from 'expo-web-browser'
+import * as Google from 'expo-auth-session/providers/google'
+import { login, googleLogin } from '../../src/api/auth'
 import { useAuthStore } from '../../src/store/auth'
+
+WebBrowser.maybeCompleteAuthSession()
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -19,6 +23,48 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  })
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const idToken = response.params.id_token
+      if (idToken) handleGoogleToken(idToken)
+    } else if (response?.type === 'error') {
+      setGoogleLoading(false)
+      Alert.alert('Error', 'No se pudo iniciar sesión con Google.')
+    } else if (response?.type === 'dismiss') {
+      setGoogleLoading(false)
+    }
+  }, [response])
+
+  async function handleGoogleToken(idToken: string) {
+    try {
+      const { user, needsRoleSelection } = await googleLogin(idToken)
+      setUser(user)
+      if (needsRoleSelection) {
+        router.replace('/(auth)/select-role' as any)
+      } else if (!user.onboardingCompleted) {
+        router.replace('/(auth)/onboarding')
+      } else {
+        router.replace('/(app)/(tabs)/dashboard')
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'No se pudo iniciar sesión con Google.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  async function handleGooglePress() {
+    setGoogleLoading(true)
+    promptAsync()
+  }
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -123,6 +169,40 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
         </View>
+
+        {/* Divisor */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontFamily: 'Inter_400Regular' }}>o continúa con</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+        </View>
+
+        {/* Google */}
+        <TouchableOpacity
+          onPress={handleGooglePress}
+          disabled={!request || googleLoading || loading}
+          activeOpacity={0.85}
+          style={{
+            backgroundColor: 'white',
+            borderRadius: 14,
+            paddingVertical: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            opacity: (!request || googleLoading || loading) ? 0.7 : 1,
+          }}
+        >
+          {googleLoading
+            ? <ActivityIndicator color="#1e3a5f" />
+            : <>
+                <Text style={{ fontSize: 18, lineHeight: 22 }}>🇬</Text>
+                <Text style={{ color: '#1e3a5f', fontSize: 15, fontFamily: 'Inter_700Bold' }}>
+                  Continuar con Google
+                </Text>
+              </>
+          }
+        </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.replace('/(auth)/register')} activeOpacity={0.7}>
           <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
