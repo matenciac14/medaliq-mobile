@@ -492,8 +492,8 @@ export default function GymScreen() {
     return <TemplatePickerScreen insets={insets} />
   }
 
-  // Rutina asignada pero hoy es descanso
-  if (!session || !session.workoutDay) {
+  // Rutina asignada pero hoy es descanso (isRestDay o sin workoutDay)
+  if (!session || session.isRestDay || !session.workoutDay) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', paddingHorizontal: 24 }}>
         <Text style={{ fontSize: 48, marginBottom: 16 }}>😴</Text>

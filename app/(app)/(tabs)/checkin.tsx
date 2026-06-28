@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useFocusEffect } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { submitCheckin } from '../../../src/api/checkin'
+import { getCheckinStatus, submitCheckin } from '../../../src/api/checkin'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
@@ -71,6 +72,14 @@ export default function CheckinScreen() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const { data: statusData, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
+    queryKey: ['checkin-status'],
+    queryFn: getCheckinStatus,
+    enabled: !!(user?.features?.checkin),
+  })
+
+  useFocusEffect(useCallback(() => { refetchStatus() }, [refetchStatus]))
+
   if (!user?.features?.checkin) {
     return <UpgradeWall icon="📋" title="Check-in semanal" description="Registra tu evolución semanal y recibe ajustes automáticos en tu plan con el plan Pro." />
   }
@@ -95,6 +104,7 @@ export default function CheckinScreen() {
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      refetchStatus()
       Alert.alert('¡Listo!', 'Check-in registrado. Tu plan se ajustará esta semana.')
       // Reset
       setWeight(''); setHrResting(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setMotivation(0); setHasPain(false); setNotes('')
@@ -103,6 +113,74 @@ export default function CheckinScreen() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Submitted state ─────────────────────────────────────────────
+  if (statusLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
+        <ActivityIndicator color="#f97316" size="large" />
+      </View>
+    )
+  }
+
+  if (statusData?.submitted && statusData.data) {
+    const d = statusData.data
+    const submittedAt = new Date(d.recordedAt).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
+    const items = [
+      { label: 'Energía',      value: d.energyLevel != null ? `${d.energyLevel}/10` : null },
+      { label: 'Estrés',       value: d.stressLevel != null ? `${d.stressLevel}/10` : null },
+      { label: 'RPE semana',   value: d.hardestSessionRpe != null ? `${d.hardestSessionRpe}/10` : null },
+      { label: 'Motivación',   value: d.motivationLevel != null ? `${d.motivationLevel}/10` : null },
+      { label: 'Sueño',        value: d.sleepHours != null ? `${d.sleepHours} h` : null },
+      { label: 'Peso',         value: d.weightKg != null ? `${d.weightKg} kg` : null },
+      { label: 'FC reposo',    value: d.hrResting != null ? `${d.hrResting} bpm` : null },
+    ].filter(i => i.value != null) as { label: string; value: string }[]
+
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+        contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 40, paddingHorizontal: 16, gap: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View>
+          <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>Check-in</Text>
+          <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Semana {statusData.weekNumber}</Text>
+        </View>
+
+        <View style={{ backgroundColor: '#f0fdf4', borderRadius: 20, borderWidth: 1, borderColor: '#bbf7d0', padding: 20, alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 32 }}>✅</Text>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#14532d' }}>Check-in enviado</Text>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#4ade80' }}>{submittedAt}</Text>
+        </View>
+
+        {items.length > 0 && (
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 2, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+              Datos registrados
+            </Text>
+            {items.map((item, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#374151' }}>{item.label}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{item.value}</Text>
+              </View>
+            ))}
+            {d.notes && (
+              <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280', marginBottom: 4 }}>Notas</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', lineHeight: 20 }}>{d.notes}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={{ backgroundColor: '#f0f9ff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#bae6fd' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#0c4a6e', lineHeight: 20 }}>
+            Tu plan se ajustará automáticamente basándose en estos datos. Vuelve el viernes de la próxima semana para el siguiente check-in.
+          </Text>
+        </View>
+      </ScrollView>
+    )
   }
 
   return (

@@ -61,6 +61,15 @@ export type DashboardData = {
     fatG: number
     label: string
   } | null
+  mode: 'TRAINING' | 'RECOVERY' | 'FREE'
+  recoveryDaysLeft: number | null
+  completedPlanName: string | null
+  recentActivity: {
+    type: string
+    completedAt: string
+    durationMin: number | null
+    rpe: number | null
+  }[]
 }
 
 export async function getDashboard(): Promise<DashboardData> {

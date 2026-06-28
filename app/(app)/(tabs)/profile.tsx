@@ -74,6 +74,7 @@ export default function ProfileScreen() {
   const plan = (user as any)?.userPlan ?? 'INACTIVE'
   const planLabel: Record<string, string> = {
     INACTIVE: 'Inactivo',
+    FREE: 'Gratis',
     TRIAL: 'Trial 30 días',
     PRO: 'Pro',
   }

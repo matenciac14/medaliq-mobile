@@ -66,10 +66,15 @@ export type GymSessionData = {
   assignedWorkoutId: string | null
   plannedSessionId: string | null
   templateName: string
+  dayOfWeek: number
+  isRestDay: boolean
+  hasCoach: boolean
   workoutDay: {
     id: string
     label: string
     muscleGroups: string[]
+    warmupNotes: string | null
+    cardioNotes: string | null
   } | null
   exercises: {
     id: string
@@ -77,6 +82,7 @@ export type GymSessionData = {
     sets: number
     repsScheme: string
     restSeconds: number | null
+    notes: string | null
     setType: string
     supersetWith: string | null
     exercise: {
@@ -84,6 +90,8 @@ export type GymSessionData = {
       name: string
       muscleGroups: string[]
       equipment: string
+      category: string | null
+      description: string | null
       tips: string | null
     }
     previousLogs: {
@@ -116,6 +124,11 @@ export async function getTodayGymSession(): Promise<GymSessionData | null> {
   return apiFetch<GymSessionData | null>('/api/gym/session/today')
 }
 
-export async function completeGymSession(payload: CompleteSessionPayload) {
-  return apiFetch('/api/gym/session/complete', { method: 'POST', body: payload })
+export type PRResult = {
+  exerciseName: string | null
+  weightKg: number | null
+}
+
+export async function completeGymSession(payload: CompleteSessionPayload): Promise<{ sessionId: string; newPRs: PRResult[] }> {
+  return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/gym/session/complete', { method: 'POST', body: payload })
 }

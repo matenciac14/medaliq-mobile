@@ -9,13 +9,20 @@ import { getDashboard, getWeekSessions, type WeekSession } from '../../../src/ap
 import { useAuthStore } from '../../../src/store/auth'
 
 const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴',
+  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃', TEMPO: '🏃', INTERVALOS: '🏃',
+  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
 }
 
+// Código corto para celdas de 28×28px en WeeklyStrip — NO cambiar a palabras largas
 const SESSION_SHORT: Record<string, string> = {
-  RODAJE_Z2: 'Z2', FARTLEK: 'FK', TIRADA_LARGA: 'TL',
-  CICLA: 'CIC', NATACION: 'NAT', FUERZA: 'FZA', DESCANSO: '·',
+  RODAJE_Z2: 'Z2', FARTLEK: 'FK', TIRADA_LARGA: 'TL', TEMPO: 'TMP', INTERVALOS: 'INT',
+  CICLA: 'CIC', NATACION: 'NAT', FUERZA: 'FZA', DESCANSO: '·', OTRO: '?',
+}
+
+// Nombre legible para listas (actividad reciente, historial)
+const SESSION_LABEL: Record<string, string> = {
+  RODAJE_Z2: 'Correr Z2', FARTLEK: 'Fartlek', TIRADA_LARGA: 'Long run', TEMPO: 'Tempo', INTERVALOS: 'Intervalos',
+  CICLA: 'Ciclismo', NATACION: 'Natación', FUERZA: 'Fuerza', DESCANSO: 'Descanso', OTRO: 'Actividad',
 }
 
 const SESSION_COLORS: Record<string, string> = {
@@ -211,7 +218,7 @@ function HeroForma({ formStatus, formMessage, lastCheckIn, hrResting }: {
             {lastCheckIn.energyLevel != null && (
               <View style={{ backgroundColor: c.chip, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>
-                  Energía {lastCheckIn.energyLevel}/5
+                  Energía {lastCheckIn.energyLevel}/10
                 </Text>
               </View>
             )}
@@ -556,6 +563,39 @@ export default function DashboardScreen() {
               </View>
             )}
           </View>
+        ) : d.mode === 'FREE' ? (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/(app)/log', params: {} })}
+            activeOpacity={0.85}
+            style={{ backgroundColor: '#1e3a5f', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}
+          >
+            <Text style={{ fontSize: 28 }}>➕</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Registrar actividad</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Sin plan activo — registra libremente</Text>
+            </View>
+            <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)' }}>→</Text>
+          </TouchableOpacity>
+        ) : d.mode === 'RECOVERY' ? (
+          <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+            <View style={{ height: 3, backgroundColor: '#22c55e' }} />
+            <View style={{ backgroundColor: '#f0fdf4', padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Text style={{ fontSize: 32 }}>🏆</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#16a34a', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
+                  Plan completado
+                </Text>
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#14532d' }}>
+                  {d.completedPlanName ?? 'Plan terminado'}
+                </Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#4ade80', marginTop: 3 }}>
+                  {d.recoveryDaysLeft != null && d.recoveryDaysLeft > 0
+                    ? `Recuperación activa · ${d.recoveryDaysLeft} días restantes`
+                    : 'Listo para un nuevo plan'}
+                </Text>
+              </View>
+            </View>
+          </View>
         ) : (
           <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}>
             <Text style={{ fontSize: 28 }}>😴</Text>
@@ -582,6 +622,49 @@ export default function DashboardScreen() {
               })
             }}
           />
+        )}
+
+        {/* ── Actividad reciente (modo FREE) ────────────────── */}
+        {d.mode === 'FREE' && (d.recentActivity?.length ?? 0) > 0 && (
+          <View style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
+            <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                Actividad reciente
+              </Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#f97316' }}>🔥 {d.streakDays > 0 ? `${d.streakDays} días de racha` : ''}</Text>
+            </View>
+            {(d.recentActivity ?? []).map((a, i) => (
+              <View
+                key={i}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#f3f4f6' }}
+              >
+                <Text style={{ fontSize: 22 }}>{SESSION_ICONS[a.type] ?? '🏅'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+                    {SESSION_LABEL[a.type] ?? a.type.toLowerCase().replace(/_/g, ' ')}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 1 }}>
+                    {new Date(a.completedAt).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {a.durationMin ? `  ·  ${a.durationMin} min` : ''}
+                  </Text>
+                </View>
+                {a.rpe != null && (
+                  <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>RPE {a.rpe}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+            <View style={{ paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 }}>
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: '/(app)/log', params: {} })}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>+ Registrar actividad</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* ── Check-in pendiente ────────────────────────────── */}

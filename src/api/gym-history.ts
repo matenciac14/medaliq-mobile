@@ -12,6 +12,7 @@ export type GymSessionSummary = {
   notes: string | null
   completedSets: number
   volumeKg: number
+  isFree?: boolean
   exercises: {
     name: string
     sets: {
@@ -19,6 +20,7 @@ export type GymSessionSummary = {
       weightKg: number | null
       repsCompleted: number | null
       completed: boolean
+      isPR: boolean
     }[]
   }[]
 }

@@ -4,6 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getNutrition, getFoodLogs } from '../../../src/api/nutrition'
+
+function getLocalDateString(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
@@ -208,7 +213,7 @@ function TrackingSection({ onAdd }: { onAdd: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const { data, isLoading } = useQuery({
     queryKey: ['nutrition-log'],
-    queryFn: () => getFoodLogs(),
+    queryFn: () => getFoodLogs(getLocalDateString()),
     staleTime: 30_000,
   })
 
@@ -476,7 +481,7 @@ export default function NutritionScreen() {
       )}
 
       <FoodSetupFlow visible={showSetup} onClose={() => setShowSetup(false)} />
-      <LogFoodModal visible={showLogFood} onClose={() => setShowLogFood(false)} />
+      <LogFoodModal visible={showLogFood} onClose={() => setShowLogFood(false)} date={getLocalDateString()} />
     </View>
   )
 }
