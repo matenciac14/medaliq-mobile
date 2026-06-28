@@ -54,6 +54,7 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
 - `nutrition.ts` — getNutrition · logFood
 - `progress.ts` — getProgress
 - `messages.ts` — getMessages · sendMessage · markRead · getUnreadCount
+- `coach.ts` — getCoachAthletes (solo COACH)
 
 ---
 
@@ -86,7 +87,9 @@ app/
     edit-session.tsx
     progress.tsx
     upgrade.tsx
-    messages.tsx                  ← chat coach-atleta, polling 5s
+    messages.tsx                  ← chat atleta→coach, polling 5s
+    coach-inbox.tsx               ← lista de atletas del coach con badge unread, polling 30s
+    coach-chat.tsx                ← chat coach→atleta (params: athleteId, athleteName)
 ```
 
 ---
@@ -116,6 +119,7 @@ GET   /api/mobile/messages
 POST  /api/mobile/messages
 POST  /api/mobile/messages/read
 GET   /api/mobile/messages/unread-count
+GET   /api/mobile/coach/athletes          ← lista atletas del coach + unread count (COACH only)
 ```
 
 ---
@@ -164,6 +168,7 @@ Submit:    eas submit
 - Log sesión resistencia
 - Nutrición · Progreso · Perfil
 - Mensajería coach-atleta (pantalla + badge unread en tab Perfil)
+- Panel coach mobile: lista de atletas + chat por atleta (coach-inbox + coach-chat)
 - Upgrade/paywall
 
 ### Pendiente
