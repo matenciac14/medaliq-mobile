@@ -155,7 +155,7 @@ orange:   #f97316
 - Bluetooth HRM (react-native-ble-plx)
 - Integraciones: Strava, Garmin
 - Feature gating mobile (P0 en BACKLOG.md)
-- Mensajeria coach-atleta mobile (Paridad Pulsefit)
+- Mensajeria coach-atleta mobile ✅ — pantalla completa + badge no leídos en tab Perfil
 
 ## Reglas
 - JWT en SecureStore — nunca en AsyncStorage para auth

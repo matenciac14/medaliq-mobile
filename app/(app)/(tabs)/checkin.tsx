@@ -84,6 +84,22 @@ export default function CheckinScreen() {
     return <UpgradeWall icon="📋" title="Check-in semanal" description="Registra tu evolución semanal y recibe ajustes automáticos en tu plan con el plan Pro." />
   }
 
+  async function handleQuickSubmit() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setLoading(true)
+    try {
+      await submitCheckin({ energyLevel: 4, muscleSoreness: 2, stressLevel: 2, painLevel: 0 })
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      refetchStatus()
+      Alert.alert('¡Listo!', 'Check-in registrado. Tu plan se ajustará esta semana.')
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleSubmit() {
     if (energy === 0 || soreness === 0 || stress === 0) {
       Alert.alert('Faltan datos', 'Completa los tres indicadores antes de enviar.')
@@ -202,6 +218,37 @@ export default function CheckinScreen() {
             Cómo vas esta semana · 2 min
           </Text>
         </View>
+
+        {/* Check-in rápido */}
+        <TouchableOpacity
+          onPress={handleQuickSubmit}
+          disabled={loading}
+          activeOpacity={0.85}
+          style={{
+            backgroundColor: '#f0fdf4', borderRadius: 16, padding: 16,
+            borderWidth: 1.5, borderColor: '#bbf7d0',
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#14532d' }}>
+              ¿Semana sin novedades?
+            </Text>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#16a34a' }}>
+              Energía normal, sin dolores, cumpliste el plan.
+            </Text>
+          </View>
+          {loading
+            ? <ActivityIndicator color="#16a34a" />
+            : <View style={{
+                backgroundColor: '#16a34a', borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 8, marginLeft: 12,
+              }}>
+                <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Todo bien →</Text>
+              </View>
+          }
+        </TouchableOpacity>
 
         {/* Métricas físicas */}
         <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
