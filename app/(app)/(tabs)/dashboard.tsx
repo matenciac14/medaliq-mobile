@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getDashboard, getWeekSessions, type WeekSession } from '../../../src/api/dashboard'
+import { Ionicons } from '@expo/vector-icons'
+import { getDashboard, getWeekSessions, type WeekSession, type DashboardData } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
 
 const SESSION_ICONS: Record<string, string> = {
@@ -403,6 +404,168 @@ function AICoachTeaser({ message, onPress }: { message: string; onPress: () => v
   )
 }
 
+const RUN_TYPE_LABELS: Record<string, string> = {
+  RODAJE_Z2: 'Rodaje Z2', FARTLEK: 'Fartlek', TEMPO: 'Tempo',
+  INTERVALOS: 'Intervalos', TIRADA_LARGA: 'Tirada larga', OTRO: 'Sesion libre',
+}
+
+function FreeTodayCard({ data, router }: { data: DashboardData; router: ReturnType<typeof useRouter> }) {
+  const routine = data.weeklyRoutine ?? null
+
+  // JS getDay(): 0=Sun, 1=Mon...6=Sat → convert to 1=Mon...7=Sun
+  const jsDay = new Date().getDay()
+  const todayDow = jsDay === 0 ? 7 : jsDay
+
+  const todayRoutineDay = routine?.days.find(d => d.dow === todayDow) ?? null
+
+  // Count unique active days this week from recentActivity
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() - (todayDow - 1))
+  const weekSessionCount = new Set(
+    (data.recentActivity ?? [])
+      .filter(a => new Date(a.completedAt) >= weekStart)
+      .map(a => new Date(a.completedAt).toDateString())
+  ).size
+  const targetDays = routine?.daysPerWeek ?? 4
+  const consistencyDots = Array.from({ length: targetDays }, (_, i) => i < weekSessionCount)
+
+  return (
+    <View style={{ gap: 10 }}>
+      {/* Hoy card */}
+      {todayRoutineDay && todayRoutineDay.activity === 'GYM' ? (
+        <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+          <LinearGradient
+            colors={['#1e3a5f', '#2d5a8e']}
+            style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 8 }}
+          >
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.55)', letterSpacing: 1, textTransform: 'uppercase' }}>
+              HOY
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 34 }}>💪</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
+                  Gym hoy
+                </Text>
+                {todayRoutineDay.split && (
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                    {todayRoutineDay.split.toLowerCase().replace('_', ' ')}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </LinearGradient>
+          <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/(tabs)/gym') }}
+              activeOpacity={0.85}
+              style={{ backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Empezar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : todayRoutineDay && todayRoutineDay.activity === 'RUN' ? (
+        <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+          <LinearGradient
+            colors={['#f97316', '#ea6c0a']}
+            style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 8 }}
+          >
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.55)', letterSpacing: 1, textTransform: 'uppercase' }}>
+              HOY
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 34 }}>🏃</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
+                  Correr hoy
+                </Text>
+                {todayRoutineDay.runType && (
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                    {RUN_TYPE_LABELS[todayRoutineDay.runType] ?? todayRoutineDay.runType}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </LinearGradient>
+          <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/log-run') }}
+              activeOpacity={0.85}
+              style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Registrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : todayRoutineDay && todayRoutineDay.activity === 'REST' ? (
+        <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}>
+          <Text style={{ fontSize: 28 }}>😴</Text>
+          <View>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Descanso hoy segun tu rutina</Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Recupera bien — vuelves manana</Text>
+          </View>
+        </View>
+      ) : (
+        /* Sin rutina configurada */
+        <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, gap: 12, ...SHADOW }}>
+          <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Que entrenas hoy?</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/(tabs)/gym') }}
+              activeOpacity={0.85}
+              style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center', gap: 4 }}
+            >
+              <Text style={{ fontSize: 22 }}>💪</Text>
+              <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Gym</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/log-run') }}
+              activeOpacity={0.85}
+              style={{ flex: 1, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center', gap: 4 }}
+            >
+              <Text style={{ fontSize: 22 }}>🏃</Text>
+              <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Correr</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Consistencia semanal */}
+      <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, gap: 10, ...SHADOW }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            Consistencia esta semana
+          </Text>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>
+            {weekSessionCount}/{targetDays}
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {consistencyDots.map((done, i) => (
+            <View
+              key={i}
+              style={{
+                flex: 1, height: 6, borderRadius: 3,
+                backgroundColor: done ? '#22c55e' : '#e5e7eb',
+              }}
+            />
+          ))}
+        </View>
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); router.push('/(app)/routine-edit') }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="pencil-outline" size={12} color="#9ca3af" />
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Editar rutina</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+}
+
 export default function DashboardScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -564,18 +727,7 @@ export default function DashboardScreen() {
             )}
           </View>
         ) : d.mode === 'FREE' ? (
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: '/(app)/log', params: {} })}
-            activeOpacity={0.85}
-            style={{ backgroundColor: '#1e3a5f', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}
-          >
-            <Text style={{ fontSize: 28 }}>➕</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Registrar actividad</Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Sin plan activo — registra libremente</Text>
-            </View>
-            <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)' }}>→</Text>
-          </TouchableOpacity>
+          <FreeTodayCard data={d} router={router} />
         ) : d.mode === 'RECOVERY' ? (
           <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
             <View style={{ height: 3, backgroundColor: '#22c55e' }} />

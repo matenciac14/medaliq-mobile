@@ -64,6 +64,10 @@ export type DashboardData = {
   mode: 'TRAINING' | 'RECOVERY' | 'FREE'
   recoveryDaysLeft: number | null
   completedPlanName: string | null
+  weeklyRoutine?: {
+    daysPerWeek: number
+    days: Array<{ dow: number; activity: 'GYM' | 'RUN' | 'REST'; split?: string; runType?: string }>
+  } | null
   recentActivity: {
     type: string
     completedAt: string
