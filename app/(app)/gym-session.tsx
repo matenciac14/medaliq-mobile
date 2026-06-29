@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { getTodayGymSession, completeGymSession, SetLog, GymSessionData, PRResult } from '../../src/api/gym'
+import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
@@ -261,17 +262,44 @@ export default function GymSessionScreen() {
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
   const startTimeRef = useRef(Date.now())
+  const draftRestoredRef = useRef(false)
+  const lastPayloadRef = useRef<Parameters<typeof completeGymSession>[0] | null>(null)
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['gym-today'],
     queryFn: getTodayGymSession,
   })
 
+  // Restore draft or build fresh sets when session loads
   useEffect(() => {
-    if (session) {
+    if (!session || draftRestoredRef.current) return
+    draftRestoredRef.current = true
+    const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+    loadDraft(sessionKey).then(draft => {
+      if (draft) {
+        setSets(draft.sets)
+      } else {
+        setSets(buildInitialSets(session))
+      }
+    }).catch(() => {
       setSets(buildInitialSets(session))
-    }
+    })
   }, [session])
+
+  // Check for pending sync from a previous failed submission and retry silently
+  useEffect(() => {
+    loadPendingSync().then(async pending => {
+      if (!pending) return
+      try {
+        await completeGymSession(pending.payload)
+        await clearPendingSync()
+        await clearDraft(pending.sessionKey)
+        Alert.alert('Sesión sincronizada', 'Tu sesión anterior se guardó correctamente.')
+      } catch {
+        // Still offline — keep pending sync for next time
+      }
+    }).catch(() => {})
+  }, [])
 
   // Elapsed timer
   useEffect(() => {
@@ -284,6 +312,9 @@ export default function GymSessionScreen() {
   const { mutate: finishSession, isPending: finishing } = useMutation({
     mutationFn: completeGymSession,
     onSuccess: (data) => {
+      const sessionKey = session?.assignedWorkoutId ?? session?.plannedSessionId ?? 'unknown'
+      clearDraft(sessionKey).catch(() => {})
+      clearPendingSync().catch(() => {})
       queryClient.invalidateQueries({ queryKey: ['gym-today'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['gym-history'] })
@@ -296,17 +327,43 @@ export default function GymSessionScreen() {
       }
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.message ?? 'No se pudo guardar la sesión.')
+      const isOffline = !('statusCode' in err)
+      if (isOffline && session && lastPayloadRef.current) {
+        const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        savePendingSync(sessionKey, lastPayloadRef.current).catch(() => {})
+        setShowFinishModal(false)
+        Alert.alert(
+          'Sin conexión',
+          'Tu sesión se guardó localmente y se enviará cuando vuelvas a conectarte.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        )
+      } else {
+        Alert.alert('Error', err.message ?? 'No se pudo guardar la sesión.')
+      }
     },
   })
 
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
-    setSets(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+    setSets(prev => {
+      const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
+      if (session) {
+        const key = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        saveDraft(key, next).catch(() => {})
+      }
+      return next
+    })
   }
 
   function markSetDone(idx: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    setSets(prev => prev.map((s, i) => i === idx ? { ...s, completed: true } : s))
+    setSets(prev => {
+      const next = prev.map((s, i) => i === idx ? { ...s, completed: true } : s)
+      if (session) {
+        const key = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        saveDraft(key, next).catch(() => {})
+      }
+      return next
+    })
     // Start rest timer
     const ex = session!.exercises.find(e => e.id === sets[idx].workoutExerciseId)
     const restSeconds = ex?.restSeconds ?? 90
@@ -330,7 +387,7 @@ export default function GymSessionScreen() {
       repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
       completed: s.completed,
     }))
-    finishSession({
+    const payload = {
       ...(session!.plannedSessionId
         ? { plannedSessionId: session!.plannedSessionId }
         : { assignedWorkoutId: session!.assignedWorkoutId! }),
@@ -339,7 +396,9 @@ export default function GymSessionScreen() {
       durationMin,
       rpe,
       notes: notes.trim() || undefined,
-    })
+    }
+    lastPayloadRef.current = payload
+    finishSession(payload)
   }
 
   const elapsedMins = Math.floor(elapsedSecs / 60)
