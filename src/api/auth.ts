@@ -10,7 +10,7 @@ export type SessionUser = {
   name: string
   email: string
   role: 'ATHLETE' | 'COACH' | 'ADMIN'
-  userPlan: 'INACTIVE' | 'TRIAL' | 'PRO'
+  userPlan: 'FREE' | 'TRIAL' | 'PRO' | 'INACTIVE'
   onboardingCompleted: boolean
   features: {
     plan: boolean
@@ -20,7 +20,6 @@ export type SessionUser = {
     log: boolean
     coach: boolean
     gym: boolean
-    aiCoach: boolean
   }
 }
 
@@ -39,4 +38,22 @@ export async function logout() {
 
 export async function getMe(): Promise<SessionUser> {
   return apiFetch<SessionUser>('/api/mobile/auth/me')
+}
+
+export async function googleLogin(idToken: string): Promise<{ user: SessionUser; needsRoleSelection: boolean }> {
+  const res = await apiFetch<{ token: string; user: SessionUser; needsRoleSelection: boolean }>(
+    '/api/mobile/auth/google',
+    { method: 'POST', body: { idToken }, auth: false }
+  )
+  await saveToken(res.token)
+  return { user: res.user, needsRoleSelection: res.needsRoleSelection }
+}
+
+export async function setMobileRole(role: 'ATHLETE' | 'COACH'): Promise<SessionUser> {
+  const res = await apiFetch<{ token: string; user: SessionUser }>(
+    '/api/mobile/auth/set-role',
+    { method: 'POST', body: { role } }
+  )
+  await saveToken(res.token)
+  return res.user
 }

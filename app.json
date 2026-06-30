@@ -39,6 +39,15 @@
           "image": "./assets/splash.png",
           "imageWidth": 200
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1e3a5f",
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": false
+        }
       ]
     ],
     "experiments": {

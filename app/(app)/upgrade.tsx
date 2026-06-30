@@ -13,7 +13,7 @@ const FEATURES = [
   { icon: 'nutrition-outline', text: 'Nutrición sincronizada con tu entrenamiento' },
   { icon: 'trending-up-outline', text: 'Gráficas de progreso y métricas' },
   { icon: 'barbell-outline', text: 'Gym tracker con progresión de cargas' },
-  { icon: 'flash-outline', text: 'AI Coach — 100 mensajes/mes' },
+  { icon: 'flash-outline', text: 'Soporte por chat incluido' },
 ]
 
 export default function UpgradeScreen() {

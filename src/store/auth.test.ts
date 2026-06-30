@@ -20,7 +20,6 @@ const mockUser: SessionUser = {
     log: true,
     coach: false,
     gym: true,
-    aiCoach: true,
   },
 }
 
@@ -69,7 +68,7 @@ describe('useAuthStore — setUser', () => {
     expect(features?.plan).toBe(true)
     expect(features?.gym).toBe(true)
     expect(features?.coach).toBe(false)
-    expect(features?.aiCoach).toBe(true)
+    expect(features?.gym).toBe(true)
   })
 
   it('setUser(null) limpia el usuario', () => {

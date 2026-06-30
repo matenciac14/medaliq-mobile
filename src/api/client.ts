@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
+import { useAuthStore } from '../store/auth'
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000'
 
@@ -16,6 +17,15 @@ export async function getToken(): Promise<string | null> {
 
 export async function clearToken() {
   await SecureStore.deleteItemAsync(TOKEN_KEY)
+}
+
+// ── Error ──────────────────────────────────────────────────────────────────
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message)
+    this.name = 'ApiError'
+  }
 }
 
 // ── Base fetch ─────────────────────────────────────────────────────────────
@@ -50,7 +60,14 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}))
-    throw new Error(error.error ?? error.message ?? `HTTP ${res.status}`)
+
+    // 401 — token expirado o inválido: limpiar sesión para forzar re-login
+    if (res.status === 401) {
+      await clearToken()
+      useAuthStore.getState().setUser(null)
+    }
+
+    throw new ApiError(error.error ?? error.message ?? `HTTP ${res.status}`, res.status)
   }
 
   return res.json() as Promise<T>

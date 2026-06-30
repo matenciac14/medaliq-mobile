@@ -14,6 +14,9 @@ export type WeekSession = {
   type: string | null
   done: boolean
   isToday: boolean
+  id: string | null
+  durationMin: number | null
+  zoneTarget: string | null
 }
 
 export type DashboardData = {
@@ -32,13 +35,60 @@ export type DashboardData = {
     sleepHours: number | null
   }
   weekSessions: WeekSession[]
-  kcalTarget: number | null
   completedCount: number
   totalTraining: number
   checkinPending: boolean
   trialDaysLeft: number | null
+  // hero cards
+  streakDays: number
+  raceDays: number | null
+  isRecomp: boolean
+  formStatus: 'good' | 'moderate' | 'rest'
+  formMessage: string
+  lastCheckIn: {
+    energyLevel: number | null
+    hardestSessionRpe: number | null
+    sleepHours: number | null
+  } | null
+  weeklyWeightChange: number | null
+  weightProgressPct: number | null
+  currentVolume: number | null
+  volumeDeltaPct: number | null
+  nutritionTarget: {
+    kcal: number
+    proteinG: number
+    carbsG: number
+    fatG: number
+    label: string
+  } | null
+  mode: 'TRAINING' | 'RECOVERY' | 'FREE'
+  recoveryDaysLeft: number | null
+  completedPlanName: string | null
+  weeklyRoutine?: {
+    daysPerWeek: number
+    days: Array<{ dow: number; activity: 'GYM' | 'RUN' | 'REST'; split?: string; runType?: string }>
+  } | null
+  recentActivity: {
+    type: string
+    completedAt: string
+    durationMin: number | null
+    rpe: number | null
+  }[]
 }
 
 export async function getDashboard(): Promise<DashboardData> {
   return apiFetch<DashboardData>('/api/mobile/dashboard')
+}
+
+export type WeekSessionsData = {
+  weekSessions: WeekSession[]
+  completedCount: number
+  totalTraining: number
+  weekLabel: string | null
+  weekOffset: number
+  isCurrentWeek: boolean
+}
+
+export async function getWeekSessions(weekOffset: number): Promise<WeekSessionsData> {
+  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}`)
 }

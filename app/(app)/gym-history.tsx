@@ -28,24 +28,32 @@ function formatVolume(kg: number): string {
 function SessionCard({ session }: { session: GymSessionSummary }) {
   const [expanded, setExpanded] = useState(false)
   const rpe = rpeStyle(session.rpe)
+  const canExpand = !session.isFree || !!session.notes
 
   return (
-    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden', marginBottom: 10 }}>
+    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: session.isFree ? '#ede9fe' : '#e5e7eb', overflow: 'hidden', marginBottom: 10 }}>
       <TouchableOpacity
-        onPress={() => setExpanded(e => !e)}
-        activeOpacity={0.8}
+        onPress={() => canExpand && setExpanded(e => !e)}
+        activeOpacity={canExpand ? 0.8 : 1}
         style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 }}
       >
-        {/* Status */}
-        <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: session.completed ? '#dcfce7' : '#f3f4f6' }}>
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: session.completed ? '#16a34a' : '#9ca3af' }}>
-            {session.completed ? '✓' : '○'}
+        {/* Status / icon */}
+        <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: session.isFree ? '#ede9fe' : (session.completed ? '#dcfce7' : '#f3f4f6') }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: session.isFree ? '#7c3aed' : (session.completed ? '#16a34a' : '#9ca3af') }}>
+            {session.isFree ? '💪' : (session.completed ? '✓' : '○')}
           </Text>
         </View>
 
         {/* Info */}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{session.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{session.label}</Text>
+            {session.isFree && (
+              <View style={{ backgroundColor: '#ede9fe', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#7c3aed' }}>LIBRE</Text>
+              </View>
+            )}
+          </View>
           <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>
             {formatDate(session.date)}
           </Text>
@@ -75,9 +83,11 @@ function SessionCard({ session }: { session: GymSessionSummary }) {
               ⚡ {formatVolume(session.volumeKg)}
             </Text>
           )}
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-            {expanded ? '▲' : '▼'}
-          </Text>
+          {canExpand && (
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+              {expanded ? '▲' : '▼'}
+            </Text>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -115,7 +125,12 @@ function SessionCard({ session }: { session: GymSessionSummary }) {
                     <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
                       {s.repsCompleted != null ? `${s.repsCompleted} reps` : '—'}
                     </Text>
-                    {s.completed && <Text style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 13 }}>✓</Text>}
+                    {s.isPR && (
+                      <View style={{ backgroundColor: '#f97316', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 'auto' }}>
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white', letterSpacing: 0.5 }}>🏆 PR</Text>
+                      </View>
+                    )}
+                    {!s.isPR && s.completed && <Text style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 13 }}>✓</Text>}
                   </View>
                 ))}
               </View>

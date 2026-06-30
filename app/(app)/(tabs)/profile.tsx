@@ -74,6 +74,7 @@ export default function ProfileScreen() {
   const plan = (user as any)?.userPlan ?? 'INACTIVE'
   const planLabel: Record<string, string> = {
     INACTIVE: 'Inactivo',
+    FREE: 'Gratis',
     TRIAL: 'Trial 30 días',
     PRO: 'Pro',
   }
@@ -123,7 +124,7 @@ export default function ProfileScreen() {
             Trial activo — acceso completo por 30 días
           </Text>
           <Text style={{ fontSize: 12, color: '#c2410c', fontFamily: 'Inter_400Regular', marginTop: 3 }}>
-            Plan, check-in, nutrición, gym y AI coach disponibles.
+            Plan, check-in, nutrición y gym disponibles.
           </Text>
         </View>
       )}
@@ -137,6 +138,26 @@ export default function ProfileScreen() {
           <MenuItem icon="mail-outline" label="Email" value={user?.email ?? ''} />
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
           <MenuItem icon="medal-outline" label="Plan" value={planLabel[plan] ?? plan} />
+        </View>
+      </View>
+
+      {/* Mensajes / Coach inbox */}
+      <View>
+        <Text style={sectionTitleStyle}>{user?.role === 'COACH' ? 'Atletas' : 'Coach'}</Text>
+        <View style={cardStyle}>
+          {user?.role === 'COACH' ? (
+            <MenuItem
+              icon="people-outline"
+              label="Mis atletas"
+              onPress={() => router.push('/(app)/coach-inbox' as any)}
+            />
+          ) : (
+            <MenuItem
+              icon="chatbubble-ellipses-outline"
+              label="Mensajes"
+              onPress={() => router.push('/(app)/messages' as any)}
+            />
+          )}
         </View>
       </View>
 

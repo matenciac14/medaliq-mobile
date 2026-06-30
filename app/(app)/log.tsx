@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -13,16 +13,26 @@ import { apiFetch } from '../../src/api/client'
 
 const SESSION_ICONS: Record<string, string> = {
   RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴',
+  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
 }
 
+const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA', 'NATACION'])
+
+const FREE_ACTIVITY_TYPES = [
+  { type: 'RODAJE_Z2', label: 'Correr', icon: '🏃' },
+  { type: 'FUERZA',    label: 'Fuerza',  icon: '💪' },
+  { type: 'OTRO',      label: 'Otro',    icon: '🏅' },
+]
+
 type LogPayload = {
-  sessionId: string
+  sessionId?: string
+  sessionType?: string
   completed: boolean
   actualDurationMin?: number
   actualZone?: string
   rpe?: number
   hrAvg?: number
+  distanceKm?: number
   notes?: string
 }
 
@@ -37,19 +47,42 @@ export default function LogScreen() {
     zone: string
   }>()
 
+  // modo libre: cuando no hay sessionId, el atleta elige el tipo de actividad
+  const isFreeMode = !sessionId
+  const [freeType, setFreeType] = useState<string | null>(type ?? null)
+
+  const activeType = isFreeMode ? freeType : (type ?? '')
+
   const [completed, setCompleted] = useState<boolean | null>(null)
   const [actualDuration, setActualDuration] = useState(duration ?? '')
   const [rpe, setRpe] = useState(0)
   const [hrAvg, setHrAvg] = useState('')
+  const [distanceKm, setDistanceKm] = useState('')
   const [notes, setNotes] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+
+  const isDistanceType = DISTANCE_TYPES.has(activeType ?? '')
+
+  useEffect(() => {
+    if (showSuccess) {
+      const timer = setTimeout(async () => {
+        // Await refetch so plan screen shows updated state immediately
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ['plan'] }),
+          queryClient.refetchQueries({ queryKey: ['dashboard'] }),
+        ])
+        router.back()
+      }, 1800)
+      return () => clearTimeout(timer)
+    }
+  }, [showSuccess])
 
   const { mutate: submitLog, isPending } = useMutation({
-    mutationFn: (payload: LogPayload) => apiFetch('/api/log/session', { method: 'POST', body: payload }),
-    onSuccess: () => {
+    mutationFn: (payload: LogPayload) => apiFetch<{ ok: boolean; skipped?: boolean }>('/api/mobile/log/session', { method: 'POST', body: payload }),
+    onSuccess: (res) => {
+      if (res.skipped) { router.back(); return }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      queryClient.invalidateQueries({ queryKey: ['plan'] })
-      router.back()
+      setShowSuccess(true)
     },
     onError: (err: any) => {
       Alert.alert('Error', err.message ?? 'No se pudo guardar.')
@@ -57,18 +90,48 @@ export default function LogScreen() {
   })
 
   function handleSubmit() {
+    if (isFreeMode && !freeType) {
+      Alert.alert('Falta dato', 'Elige el tipo de actividad.')
+      return
+    }
     if (completed === null) {
       Alert.alert('Falta dato', '¿Completaste la sesión?')
       return
     }
-    submitLog({
-      sessionId: sessionId!,
+    const payload: LogPayload = {
       completed,
       actualDurationMin: actualDuration ? parseInt(actualDuration) : undefined,
       rpe: rpe > 0 ? rpe : undefined,
       hrAvg: hrAvg ? parseInt(hrAvg) : undefined,
+      distanceKm: distanceKm ? parseFloat(distanceKm) : undefined,
       notes: notes.trim() || undefined,
-    })
+    }
+    if (isFreeMode) {
+      payload.sessionType = freeType!
+    } else {
+      payload.sessionId = sessionId
+    }
+    submitLog(payload)
+  }
+
+  if (showSuccess) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 }}>
+        <View style={{
+          width: 88, height: 88, borderRadius: 44,
+          backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Ionicons name="checkmark" size={48} color="white" />
+        </View>
+        <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center' }}>
+          ¡Sesión registrada!
+        </Text>
+        <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+          Tu entrenamiento ha sido guardado correctamente.
+        </Text>
+        <ActivityIndicator color="#22c55e" style={{ marginTop: 8 }} />
+      </View>
+    )
   }
 
   return (
@@ -85,16 +148,22 @@ export default function LogScreen() {
           <Ionicons name="chevron-back" size={24} color="rgba(255,255,255,0.8)" />
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Text style={{ fontSize: 36 }}>{SESSION_ICONS[type ?? ''] ?? '🏅'}</Text>
+          <Text style={{ fontSize: 36 }}>{SESSION_ICONS[activeType ?? ''] ?? '🏅'}</Text>
           <View>
             <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Registrar sesión
+              {isFreeMode ? 'Registro libre' : 'Registrar sesión'}
             </Text>
-            <Text style={{ color: 'white', fontSize: 20, fontFamily: 'Inter_900Black', letterSpacing: -0.3, marginTop: 2 }}>
-              {duration} min · Zona {zone}
-            </Text>
+            {isFreeMode ? (
+              <Text style={{ color: 'white', fontSize: 20, fontFamily: 'Inter_900Black', letterSpacing: -0.3, marginTop: 2 }}>
+                {freeType ? FREE_ACTIVITY_TYPES.find(a => a.type === freeType)?.label ?? 'Actividad' : 'Elige actividad'}
+              </Text>
+            ) : (
+              <Text style={{ color: 'white', fontSize: 20, fontFamily: 'Inter_900Black', letterSpacing: -0.3, marginTop: 2 }}>
+                {duration} min{zone && zone !== '—' && zone !== '' ? ` · Zona ${zone}` : ''}
+              </Text>
+            )}
             <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-              {(type ?? '').toLowerCase().replace(/_/g, ' ')}
+              {isFreeMode ? 'Sin plan asignado' : (activeType ?? '').toLowerCase().replace(/_/g, ' ')}
             </Text>
           </View>
         </View>
@@ -105,6 +174,35 @@ export default function LogScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Selector de tipo — solo en modo libre */}
+        {isFreeMode && (
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 12 }}>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+              ¿Qué tipo de actividad?
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {FREE_ACTIVITY_TYPES.map(a => (
+                <TouchableOpacity
+                  key={a.type}
+                  onPress={() => { Haptics.selectionAsync(); setFreeType(a.type) }}
+                  activeOpacity={0.8}
+                  style={{
+                    flex: 1, paddingVertical: 14, borderRadius: 12,
+                    alignItems: 'center', gap: 4,
+                    backgroundColor: freeType === a.type ? '#1e3a5f' : 'white',
+                    borderWidth: 2, borderColor: freeType === a.type ? '#1e3a5f' : '#e5e7eb',
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>{a.icon}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: freeType === a.type ? 'white' : '#374151' }}>
+                    {a.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* ¿La completaste? */}
         <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 12 }}>
           <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
@@ -181,6 +279,24 @@ export default function LogScreen() {
                   />
                 </View>
               </View>
+              {isDistanceType && (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Distancia (km)</Text>
+                  <TextInput
+                    value={distanceKm}
+                    onChangeText={setDistanceKm}
+                    placeholder="12.5"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+              )}
             </View>
 
             {/* RPE */}

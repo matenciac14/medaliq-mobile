@@ -1,12 +1,21 @@
 import { Tabs } from 'expo-router'
-import { Platform } from 'react-native'
+import { useEffect, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-// Lucide-compatible icons via expo vector icons
 import { Ionicons } from '@expo/vector-icons'
+import { getUnreadCount } from '../../../src/api/messages'
+
+const POLL_INTERVAL = 30_000
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets()
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    const poll = () => getUnreadCount().then(r => setUnread(r.count)).catch(() => {})
+    poll()
+    const id = setInterval(poll, POLL_INTERVAL)
+    return () => clearInterval(id)
+  }, [])
 
   return (
     <Tabs
@@ -64,20 +73,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="ai-coach"
+        name="nutrition"
         options={{
-          title: 'AI Coach',
+          title: 'Nutrición',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="flash-outline" size={22} color={color} />
+            <Ionicons name="nutrition-outline" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="checkin"
+        name="progress"
         options={{
-          title: 'Check-in',
+          title: 'Progreso',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="checkmark-circle-outline" size={22} color={color} />
+            <Ionicons name="trending-up-outline" size={22} color={color} />
           ),
         }}
       />
@@ -88,8 +97,12 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={22} color={color} />
           ),
+          tabBarBadge: unread > 0 ? unread : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#f97316', fontSize: 10 },
         }}
       />
+      {/* Tabs ocultos del nav pero rutas accesibles */}
+      <Tabs.Screen name="checkin" options={{ href: null }} />
     </Tabs>
   )
 }

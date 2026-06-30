@@ -4,7 +4,7 @@ App nativa iOS + Android para [Medaliq](https://medaliq.com) — coaching deport
 
 ## Stack
 
-- **React Native + Expo** (managed workflow ~52)
+- **React Native + Expo** (managed workflow ~54)
 - **Expo Router v4** — file-based routing
 - **NativeWind v4** — Tailwind en React Native
 - **TanStack Query v5** — server state
@@ -50,9 +50,16 @@ app/
       checkin.tsx              ← check-in semanal
       profile.tsx              ← perfil y logout
     gym-session.tsx            ← tracker activo de gym
+    gym-history.tsx            ← historial de sesiones gym
     log.tsx                    ← log sesión de resistencia
+    edit-session.tsx           ← editar sesión planificada
+    progress.tsx               ← gráficas peso/FC/adherencia
+    upgrade.tsx                ← paywall / upgrade a Pro
+    messages.tsx               ← chat atleta→coach
+    coach-inbox.tsx            ← lista atletas del coach (solo COACH)
+    coach-chat.tsx             ← chat coach→atleta (solo COACH)
 src/
-  api/                         ← fetch wrappers (client, auth, dashboard, gym, plan, checkin)
+  api/                         ← fetch wrappers (client, auth, dashboard, gym, plan, checkin, messages, coach)
   store/                       ← Zustand (auth)
   hooks/                       ← useAuth, useBootstrap
 ```

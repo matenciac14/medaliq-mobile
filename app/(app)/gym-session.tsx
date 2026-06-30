@@ -9,7 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getTodayGymSession, completeGymSession, SetLog, GymSessionData } from '../../src/api/gym'
+import { getTodayGymSession, completeGymSession, SetLog, GymSessionData, PRResult } from '../../src/api/gym'
+import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
+
+const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
+  BISERIE:  { bg: '#e0e7ff', text: '#4338ca', label: 'Biserie'  },
+  DROPSET:  { bg: '#ffe4e6', text: '#e11d48', label: 'Drop Set' },
+}
 
 type LocalSet = {
   workoutExerciseId: string
@@ -34,6 +41,122 @@ function buildInitialSets(data: GymSessionData): LocalSet[] {
     }
   }
   return sets
+}
+
+// Finish Session Modal
+function FinishModal({
+  visible,
+  completedCount,
+  defaultDuration,
+  onConfirm,
+  onClose,
+  submitting,
+}: {
+  visible: boolean
+  completedCount: number
+  defaultDuration: number
+  onConfirm: (rpe: number, durationMin: number, notes: string) => void
+  onClose: () => void
+  submitting: boolean
+}) {
+  const [rpe, setRpe] = useState(7)
+  const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+  const [notes, setNotes] = useState('')
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
+          <View>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Finalizar sesión</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>
+              {completedCount} series completadas
+            </Text>
+          </View>
+
+          {/* RPE */}
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Esfuerzo (RPE)</Text>
+              <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#f97316' }}>{rpe}/10</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => setRpe(n)}
+                  style={{
+                    flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: rpe === n ? '#f97316' : '#f3f4f6',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: rpe === n ? 'white' : '#6b7280' }}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Muy fácil</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Máximo esfuerzo</Text>
+            </View>
+          </View>
+
+          {/* Duration */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Duración (minutos)</Text>
+            <TextInput
+              value={durationMin}
+              onChangeText={setDurationMin}
+              keyboardType="number-pad"
+              style={{
+                borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#111827',
+              }}
+            />
+          </View>
+
+          {/* Notes */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Notas (opcional)</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="¿Alguna observación?"
+              placeholderTextColor="#d1d5db"
+              multiline
+              numberOfLines={2}
+              style={{
+                borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 12,
+                fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827',
+                minHeight: 64, textAlignVertical: 'top',
+              }}
+            />
+          </View>
+
+          {/* Buttons */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              disabled={submitting}
+              style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onConfirm(rpe, parseInt(durationMin) || 60, notes)}
+              disabled={submitting}
+              style={{ flex: 2, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                {submitting ? 'Guardando...' : 'Guardar sesión'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
 }
 
 // Rest Timer Modal
@@ -85,6 +208,48 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
   )
 }
 
+// PR Celebration Modal
+function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
+  return (
+    <Modal visible transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16 }}>
+          <Text style={{ fontSize: 48 }}>🏆</Text>
+          <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.4, textAlign: 'center' }}>
+            ¡Nuevo récord personal!
+          </Text>
+          <View style={{ width: '100%', gap: 8 }}>
+            {prs.map((pr, i) => (
+              <View key={i} style={{ backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fed7aa', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 20 }}>💪</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#9a3412' }}>
+                    {pr.exerciseName ?? 'Ejercicio'}
+                  </Text>
+                  {pr.weightKg != null && (
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#c2410c', marginTop: 2 }}>
+                      {pr.weightKg} kg — tu mejor marca
+                    </Text>
+                  )}
+                </View>
+                <View style={{ backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: 'white', letterSpacing: 0.5 }}>PR</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, marginTop: 4 }}
+          >
+            <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>¡Genial! 🎉</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export default function GymSessionScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -94,18 +259,47 @@ export default function GymSessionScreen() {
   const [restTimer, setRestTimer] = useState<{ show: boolean; seconds: number }>({ show: false, seconds: 90 })
   const [elapsedSecs, setElapsedSecs] = useState(0)
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
+  const [showFinishModal, setShowFinishModal] = useState(false)
+  const [prResults, setPrResults] = useState<PRResult[]>([])
   const startTimeRef = useRef(Date.now())
+  const draftRestoredRef = useRef(false)
+  const lastPayloadRef = useRef<Parameters<typeof completeGymSession>[0] | null>(null)
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['gym-today'],
     queryFn: getTodayGymSession,
   })
 
+  // Restore draft or build fresh sets when session loads
   useEffect(() => {
-    if (session) {
+    if (!session || draftRestoredRef.current) return
+    draftRestoredRef.current = true
+    const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+    loadDraft(sessionKey).then(draft => {
+      if (draft) {
+        setSets(draft.sets)
+      } else {
+        setSets(buildInitialSets(session))
+      }
+    }).catch(() => {
       setSets(buildInitialSets(session))
-    }
+    })
   }, [session])
+
+  // Check for pending sync from a previous failed submission and retry silently
+  useEffect(() => {
+    loadPendingSync().then(async pending => {
+      if (!pending) return
+      try {
+        await completeGymSession(pending.payload)
+        await clearPendingSync()
+        await clearDraft(pending.sessionKey)
+        Alert.alert('Sesión sincronizada', 'Tu sesión anterior se guardó correctamente.')
+      } catch {
+        // Still offline — keep pending sync for next time
+      }
+    }).catch(() => {})
+  }, [])
 
   // Elapsed timer
   useEffect(() => {
@@ -117,24 +311,59 @@ export default function GymSessionScreen() {
 
   const { mutate: finishSession, isPending: finishing } = useMutation({
     mutationFn: completeGymSession,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const sessionKey = session?.assignedWorkoutId ?? session?.plannedSessionId ?? 'unknown'
+      clearDraft(sessionKey).catch(() => {})
+      clearPendingSync().catch(() => {})
       queryClient.invalidateQueries({ queryKey: ['gym-today'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['gym-history'] })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      router.back()
+      setShowFinishModal(false)
+      if (data.newPRs.length > 0) {
+        setPrResults(data.newPRs)
+      } else {
+        router.back()
+      }
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.message ?? 'No se pudo guardar la sesión.')
+      const isOffline = !('statusCode' in err)
+      if (isOffline && session && lastPayloadRef.current) {
+        const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        savePendingSync(sessionKey, lastPayloadRef.current).catch(() => {})
+        setShowFinishModal(false)
+        Alert.alert(
+          'Sin conexión',
+          'Tu sesión se guardó localmente y se enviará cuando vuelvas a conectarte.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        )
+      } else {
+        Alert.alert('Error', err.message ?? 'No se pudo guardar la sesión.')
+      }
     },
   })
 
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
-    setSets(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+    setSets(prev => {
+      const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
+      if (session) {
+        const key = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        saveDraft(key, next).catch(() => {})
+      }
+      return next
+    })
   }
 
   function markSetDone(idx: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    setSets(prev => prev.map((s, i) => i === idx ? { ...s, completed: true } : s))
+    setSets(prev => {
+      const next = prev.map((s, i) => i === idx ? { ...s, completed: true } : s)
+      if (session) {
+        const key = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        saveDraft(key, next).catch(() => {})
+      }
+      return next
+    })
     // Start rest timer
     const ex = session!.exercises.find(e => e.id === sets[idx].workoutExerciseId)
     const restSeconds = ex?.restSeconds ?? 90
@@ -147,30 +376,29 @@ export default function GymSessionScreen() {
       Alert.alert('Sin sets', 'Completa al menos un set antes de finalizar.')
       return
     }
+    setShowFinishModal(true)
+  }
 
-    Alert.alert('Finalizar sesión', `Completaste ${completedCount} sets. ¿Guardar?`, [
-      { text: 'Seguir', style: 'cancel' },
-      {
-        text: 'Guardar', style: 'default',
-        onPress: () => {
-          const setLogs: SetLog[] = sets
-            .filter(s => s.completed)
-            .map(s => ({
-              workoutExerciseId: s.workoutExerciseId,
-              setNumber: s.setNumber,
-              weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
-              repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
-              completed: true,
-            }))
-          finishSession({
-            assignedWorkoutId: session!.assignedWorkoutId,
-            dayOfWeek: new Date().getDay(),
-            setLogs,
-            durationMin: Math.round(elapsedSecs / 60),
-          })
-        },
-      },
-    ])
+  function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
+    const completedSets: SetLog[] = sets.map(s => ({
+      workoutExerciseId: s.workoutExerciseId,
+      setNumber: s.setNumber,
+      weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+      repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+      completed: s.completed,
+    }))
+    const payload = {
+      ...(session!.plannedSessionId
+        ? { plannedSessionId: session!.plannedSessionId }
+        : { assignedWorkoutId: session!.assignedWorkoutId! }),
+      dayOfWeek: session!.dayOfWeek,
+      sets: completedSets,
+      durationMin,
+      rpe,
+      notes: notes.trim() || undefined,
+    }
+    lastPayloadRef.current = payload
+    finishSession(payload)
   }
 
   const elapsedMins = Math.floor(elapsedSecs / 60)
@@ -185,14 +413,27 @@ export default function GymSessionScreen() {
     )
   }
 
+  const completedCount = sets.filter(s => s.completed).length
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
+      {prResults.length > 0 && (
+        <PRModal prs={prResults} onClose={() => { setPrResults([]); router.back() }} />
+      )}
       {restTimer.show && (
         <RestTimerModal
           seconds={restTimer.seconds}
           onDone={() => setRestTimer({ show: false, seconds: 90 })}
         />
       )}
+      <FinishModal
+        visible={showFinishModal}
+        completedCount={completedCount}
+        defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
+        onConfirm={handleConfirmFinish}
+        onClose={() => setShowFinishModal(false)}
+        submitting={finishing}
+      />
 
       {/* Top bar */}
       <LinearGradient
@@ -249,6 +490,9 @@ export default function GymSessionScreen() {
                   <Text style={{ fontSize: 8, color: 'white', fontFamily: 'Inter_700Bold' }}>{done}</Text>
                 </View>
               )}
+              {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].text }} />
+              )}
             </TouchableOpacity>
           )
         })}
@@ -268,6 +512,17 @@ export default function GymSessionScreen() {
 
           return (
             <View style={{ gap: 12 }}>
+              {/* Warmup note — only on first exercise */}
+              {activeExerciseIdx === 0 && session.workoutDay?.warmupNotes && (
+                <View style={{ backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fed7aa', padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 14 }}>🔥</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#c2410c', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2 }}>Calentamiento</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9a3412', lineHeight: 18 }}>{session.workoutDay.warmupNotes}</Text>
+                  </View>
+                </View>
+              )}
+
               {/* Exercise header */}
               <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 4 }}>
                 <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
@@ -286,10 +541,27 @@ export default function GymSessionScreen() {
                     ))}
                   </View>
                 )}
+                {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
+                  <View style={{ backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].bg, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 6 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: MOBILE_SUPERSET_STYLES[ex.setType].text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      ↕ {MOBILE_SUPERSET_STYLES[ex.setType].label}
+                    </Text>
+                  </View>
+                )}
+                {ex.exercise.description && (
+                  <Text style={{ fontSize: 12, color: '#4b5563', fontFamily: 'Inter_400Regular', marginTop: 4, lineHeight: 18 }}>
+                    {ex.exercise.description}
+                  </Text>
+                )}
                 {ex.exercise.tips && (
                   <Text style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Inter_400Regular', marginTop: 4, fontStyle: 'italic' }}>
                     💡 {ex.exercise.tips}
                   </Text>
+                )}
+                {ex.notes && (
+                  <View style={{ backgroundColor: '#fef9c3', borderRadius: 8, padding: 8, marginTop: 6 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#713f12' }}>📋 {ex.notes}</Text>
+                  </View>
                 )}
               </View>
 
@@ -391,6 +663,17 @@ export default function GymSessionScreen() {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Cardio note — only on last exercise */}
+              {activeExerciseIdx === session.exercises.length - 1 && session.workoutDay?.cardioNotes && (
+                <View style={{ backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 14 }}>🏃</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2 }}>Cardio post-sesión</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#1e40af', lineHeight: 18 }}>{session.workoutDay.cardioNotes}</Text>
+                  </View>
+                </View>
+              )}
             </View>
           )
         })()}
