@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
+import * as Notifications from 'expo-notifications'
 import { useAuthStore } from '../../src/store/auth'
 import { getMe } from '../../src/api/auth'
 import { registerForPushNotificationsAsync } from '../../src/lib/notifications'
@@ -43,6 +44,17 @@ export default function AppLayout() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') refreshUser()
+    })
+    return () => sub.remove()
+  }, [refreshUser])
+
+  // Escuchar notificaciones en foreground — si el coach activó features, refrescar JWT
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data as Record<string, unknown> | undefined
+      if (data?.type === 'features_updated') {
+        refreshUser()
+      }
     })
     return () => sub.remove()
   }, [refreshUser])

@@ -57,3 +57,12 @@ export async function setMobileRole(role: 'ATHLETE' | 'COACH'): Promise<SessionU
   await saveToken(res.token)
   return res.user
 }
+
+export async function refreshToken(): Promise<SessionUser['features']> {
+  const res = await apiFetch<{ token: string; features: SessionUser['features'] }>(
+    '/api/mobile/auth/refresh',
+    { method: 'POST' }
+  )
+  await saveToken(res.token)
+  return res.features
+}
