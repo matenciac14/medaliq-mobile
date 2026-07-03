@@ -66,9 +66,17 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID  # Google OAuth — client ID Android
 
 El boot (`app/index.tsx`) llama `getMe()` al arrancar: si 401 → `logout()` → `/(auth)/login`.
 
+### Refresh proactivo — features activadas por coach
+
+Cuando el coach activa features del atleta, el JWT queda stale. Auto-refresh implementado:
+1. Backend envía push con `data.type = 'features_updated'`
+2. `_layout.tsx` tiene listener → llama `refreshUser()`
+3. `refreshUser()` → `POST /api/mobile/auth/refresh` → nuevo JWT con features frescas
+4. Store se actualiza silenciosamente sin interrumpir al atleta
+
 ### Token expirado — flujo de re-login
 
-No hay refresh token. Cuando `apiFetch()` recibe 401:
+Cuando `apiFetch()` recibe 401 (token expirado, no stale por features):
 1. Llama `logout()` del store → borra token de SecureStore
 2. `router.replace('/(auth)/login')`
 3. Usuario re-autentica — obtiene nuevo JWT
@@ -244,13 +252,15 @@ Si además toca la DB o API: cargar también `prisma-development`.
 
 ### Gaps vs Web — pendientes priorizados
 
+Ver `roadmap-data.ts` como fuente canónica. Esta tabla es referencia rápida.
+
 | Prioridad | Feature | Estado web | Notas |
 |-----------|---------|-----------|-------|
-| 🔴 P0 | Bottom-nav expone Nutrición y Progreso | ✅ Web sidebar | Hoy solo deep-link — BUG-006 en `roadmap-data.ts` |
-| 🟠 P1 | Dashboard km/semana | ✅ Implementado | Falta trasladar endpoint + UI a mobile |
-| 🟠 P1 | Gym session interactiva (Strong/Hevy style) | ❌ Binario en web también | P1 retención segmento fuerza |
-| 🟡 P2 | Pantalla pending B2B | ❌ | Web tiene `/pending` — mobile no tiene equivalente. Atleta B2B sin activar no tiene flujo claro |
-| 🟡 P2 | Push notifications | ❌ | Backend `/api/mobile/push-token` YA implementado — falta frontend EAS + permisos |
+| 🟠 P1 | Medidas corporales en check-in (cintura, brazos, caderas, muslos) | ✅ Sección colapsable | API acepta los campos — falta UI en formulario mobile |
+| 🟠 P1 | Ajuste nutricional pendiente (aceptar/rechazar) | ✅ NutritionAdjustmentCard | Pantalla nutrición mobile no muestra la card ni llama endpoints |
+| 🟠 P1 | Editar perfil de salud (peso, talla, FC reposo, lesiones) | ✅ /profile editable | Profile tab mobile es solo lectura |
+| 🟡 P2 | Gráficas de circunferencias en /progress | ✅ MeasurementsChart | API devuelve measurementPoints — UI mobile no los renderiza |
+| 🟡 P2 | Push notifications (frontend) | ✅ Backend listo | `/api/mobile/push-token` implementado — falta EAS + permisos en mobile |
 | 🟡 P2 | Offline-first gym tracker | ❌ | AsyncStorage backup sin red |
 | 🟢 P3 | Integraciones Strava / Garmin | ❌ | Requiere OAuth externo |
 | 🟢 P3 | Bluetooth HRM | ❌ | react-native-ble-plx |

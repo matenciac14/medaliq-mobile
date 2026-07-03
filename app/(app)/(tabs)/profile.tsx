@@ -141,6 +141,20 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Perfil de salud — solo atletas */}
+      {user?.role === 'ATHLETE' && (
+        <View>
+          <Text style={sectionTitleStyle}>Datos físicos</Text>
+          <View style={cardStyle}>
+            <MenuItem
+              icon="body-outline"
+              label="Perfil de salud"
+              onPress={() => router.push('/(app)/edit-health-profile' as any)}
+            />
+          </View>
+        </View>
+      )}
+
       {/* Mensajes / Coach inbox */}
       <View>
         <Text style={sectionTitleStyle}>{user?.role === 'COACH' ? 'Atletas' : 'Coach'}</Text>

@@ -7,9 +7,14 @@ export type CheckinPayload = {
   energyLevel: number
   muscleSoreness: number
   stressLevel: number
-  painLevel?: number      // 1-10 (hasPain deriva server-side: painLevel >= 5)
+  painLevel?: number       // 1-10 (hasPain deriva server-side: painLevel >= 5)
   motivationLevel?: number // 1-10
   notes?: string
+  // Medidas corporales (observacionales — no disparan ajustes de plan)
+  waistCm?: number
+  armsCm?: number
+  hipsCm?: number
+  thighsCm?: number
 }
 
 export type CheckinStatus = {
@@ -34,6 +39,16 @@ export async function getCheckinStatus(): Promise<CheckinStatus> {
   return apiFetch('/api/mobile/checkin')
 }
 
-export async function submitCheckin(payload: CheckinPayload) {
+export type CheckinResult = {
+  ok: boolean
+  adjustment: {
+    severity: 'ok' | 'warning' | 'critical'
+    recommendation: string
+    adjustments: string[]
+    triggers: string[]
+  } | null
+}
+
+export async function submitCheckin(payload: CheckinPayload): Promise<CheckinResult> {
   return apiFetch('/api/mobile/checkin', { method: 'POST', body: payload })
 }

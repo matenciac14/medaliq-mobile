@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { getCheckinStatus, submitCheckin } from '../../../src/api/checkin'
+import { getCheckinStatus, submitCheckin, type CheckinResult } from '../../../src/api/checkin'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
@@ -71,6 +71,12 @@ export default function CheckinScreen() {
   const [hasPain, setHasPain] = useState(false)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<CheckinResult['adjustment'] | null>(null)
+  const [showMedidas, setShowMedidas] = useState(false)
+  const [waist, setWaist] = useState('')
+  const [arms, setArms] = useState('')
+  const [hips, setHips] = useState('')
+  const [thighs, setThighs] = useState('')
 
   const { data: statusData, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
     queryKey: ['checkin-status'],
@@ -88,11 +94,11 @@ export default function CheckinScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setLoading(true)
     try {
-      await submitCheckin({ energyLevel: 4, muscleSoreness: 2, stressLevel: 2, painLevel: 0 })
+      const data = await submitCheckin({ energyLevel: 4, muscleSoreness: 2, stressLevel: 2, painLevel: 0 })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       refetchStatus()
-      Alert.alert('¡Listo!', 'Check-in registrado. Tu plan se ajustará esta semana.')
+      setResult(data.adjustment ?? null)
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
     } finally {
@@ -107,7 +113,7 @@ export default function CheckinScreen() {
     }
     setLoading(true)
     try {
-      await submitCheckin({
+      const data = await submitCheckin({
         energyLevel: energy,
         muscleSoreness: soreness,
         stressLevel: stress,
@@ -117,18 +123,111 @@ export default function CheckinScreen() {
         hrResting: hrResting ? parseInt(hrResting) : undefined,
         sleepHours: sleep ? parseFloat(sleep) : undefined,
         notes: notes.trim() || undefined,
+        waistCm: waist ? parseFloat(waist) : undefined,
+        armsCm: arms ? parseFloat(arms) : undefined,
+        hipsCm: hips ? parseFloat(hips) : undefined,
+        thighsCm: thighs ? parseFloat(thighs) : undefined,
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       refetchStatus()
-      Alert.alert('¡Listo!', 'Check-in registrado. Tu plan se ajustará esta semana.')
-      // Reset
       setWeight(''); setHrResting(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setMotivation(0); setHasPain(false); setNotes('')
+      setWaist(''); setArms(''); setHips(''); setThighs(''); setShowMedidas(false)
+      setResult(data.adjustment ?? null)
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Resultado inmediato post-envío ───────────────────────────────
+  const TRIGGER_LABELS: Record<string, string> = {
+    fc_alta:             'FC reposo elevada',
+    sueno_bajo:          'Sueño insuficiente',
+    rpe_excesivo:        'RPE alto en fase BASE',
+    dolor_activo:        'Dolor / molestias activas',
+    energia_baja:        'Energía baja',
+    estres_alto:         'Estrés elevado',
+    motivacion_baja:     'Motivación muy baja',
+    nutricion_baja:      'Adherencia nutricional baja',
+    perdida_peso_rapida: 'Pérdida de peso acelerada',
+    fatiga_acumulada:    'Fatiga acumulada (múltiples señales)',
+  }
+
+  if (result) {
+    const hasIssues = result.triggers.length > 0
+    const detectedLabels = result.triggers
+      .filter(t => t !== 'fatiga_acumulada')
+      .map(t => TRIGGER_LABELS[t] ?? t)
+    const bannerBg = result.severity === 'critical' ? '#fef2f2' : result.severity === 'warning' ? '#fffbeb' : '#f0fdf4'
+    const bannerBorder = result.severity === 'critical' ? '#fecaca' : result.severity === 'warning' ? '#fde68a' : '#bbf7d0'
+    const bannerText = result.severity === 'critical' ? '#991b1b' : result.severity === 'warning' ? '#92400e' : '#14532d'
+    const icon = result.severity === 'critical' ? '🚨' : result.severity === 'warning' ? '⚠️' : '✅'
+
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 40, paddingHorizontal: 16, gap: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={{ alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 40 }}>{icon}</Text>
+          <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
+            Check-in guardado
+          </Text>
+        </View>
+
+        {!hasIssues ? (
+          <View style={{ backgroundColor: bannerBg, borderRadius: 16, borderWidth: 1, borderColor: bannerBorder, padding: 18, gap: 4 }}>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: bannerText }}>Todo en orden</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: bannerText, lineHeight: 20 }}>
+              Sigue el plan como está — tus métricas están en rango óptimo.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Lo que detectamos */}
+            <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 10 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Lo que detectamos
+              </Text>
+              {detectedLabels.map((label, i) => (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                  <Text style={{ color: '#f59e0b', fontSize: 16, lineHeight: 20 }}>·</Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#374151', flex: 1, lineHeight: 20 }}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Lo que ajustamos */}
+            {result.adjustments.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
+                  Lo que ajustamos en tu plan
+                </Text>
+                {result.adjustments.map((adj, i) => (
+                  <View key={i} style={{ backgroundColor: bannerBg, borderRadius: 12, borderWidth: 1, borderColor: bannerBorder, padding: 14, flexDirection: 'row', gap: 8 }}>
+                    <Text style={{ color: bannerText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>→</Text>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: bannerText, flex: 1, lineHeight: 20 }}>{adj}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* CTA */}
+        <TouchableOpacity
+          onPress={() => setResult(null)}
+          activeOpacity={0.85}
+          style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 18, alignItems: 'center' }}
+        >
+          <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Volver</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    )
   }
 
   // ── Submitted state ─────────────────────────────────────────────
@@ -308,6 +407,98 @@ export default function CheckinScreen() {
             </View>
             <View style={{ flex: 1 }} />
           </View>
+        </View>
+
+        {/* Medidas corporales */}
+        <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setShowMedidas(v => !v) }}
+            activeOpacity={0.8}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+          >
+            <View>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Medidas corporales
+              </Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+                Opcional · para seguimiento de progreso
+              </Text>
+            </View>
+            <Text style={{ fontSize: 18, color: '#9ca3af' }}>{showMedidas ? '−' : '+'}</Text>
+          </TouchableOpacity>
+          {showMedidas && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}>
+              <View style={{ height: 1, backgroundColor: '#f3f4f6', marginBottom: 4 }} />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Cintura (cm)</Text>
+                  <TextInput
+                    value={waist}
+                    onChangeText={setWaist}
+                    placeholder="80"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Brazos (cm)</Text>
+                  <TextInput
+                    value={arms}
+                    onChangeText={setArms}
+                    placeholder="35"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Caderas (cm)</Text>
+                  <TextInput
+                    value={hips}
+                    onChangeText={setHips}
+                    placeholder="95"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Muslos (cm)</Text>
+                  <TextInput
+                    value={thighs}
+                    onChangeText={setThighs}
+                    placeholder="55"
+                    placeholderTextColor="#d1d5db"
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    style={{
+                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
+                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Escalas */}

@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useAuthStore } from './auth'
 import type { SessionUser } from '../api/auth'
+
+vi.mock('../api/auth', () => ({
+  refreshToken: vi.fn(),
+}))
 
 // ---------------------------------------------------------------------------
 // Fixture
@@ -109,6 +113,45 @@ describe('useAuthStore — setLoading', () => {
     useAuthStore.getState().setUser(mockUser)
     useAuthStore.getState().setLoading(false)
     expect(useAuthStore.getState().user).toEqual(mockUser)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// refreshUser
+// ---------------------------------------------------------------------------
+describe('useAuthStore — refreshUser', () => {
+  let refreshToken: ReturnType<typeof vi.fn>
+
+  beforeEach(async () => {
+    const mod = await import('../api/auth')
+    refreshToken = vi.mocked(mod.refreshToken)
+    refreshToken.mockReset()
+    useAuthStore.setState({ user: mockUser, isLoading: false })
+  })
+
+  it('actualiza features cuando refreshToken resuelve correctamente', async () => {
+    const newFeatures: SessionUser['features'] = {
+      plan: true, checkin: true, nutrition: true,
+      progress: true, log: true, coach: false, gym: true,
+    }
+    refreshToken.mockResolvedValue(newFeatures)
+    await useAuthStore.getState().refreshUser()
+    expect(useAuthStore.getState().user?.features).toEqual(newFeatures)
+    // Preserva el resto del usuario
+    expect(useAuthStore.getState().user?.id).toBe('user-123')
+  })
+
+  it('no hace nada si user es null', async () => {
+    useAuthStore.setState({ user: null })
+    await useAuthStore.getState().refreshUser()
+    expect(refreshToken).not.toHaveBeenCalled()
+  })
+
+  it('no lanza error si refreshToken falla (silencioso)', async () => {
+    refreshToken.mockRejectedValue(new Error('network error'))
+    await expect(useAuthStore.getState().refreshUser()).resolves.toBeUndefined()
+    // Features anteriores se mantienen sin cambio
+    expect(useAuthStore.getState().user?.features).toEqual(mockUser.features)
   })
 })
 
