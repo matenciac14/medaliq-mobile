@@ -12,7 +12,10 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getFoods, logFood, FoodItem } from '../api/nutrition'
+import {
+  getFoods, logFood, FoodItem,
+  getMealTemplates, createMealTemplate, deleteMealTemplate, MealTemplate,
+} from '../api/nutrition'
 
 const MEAL_TYPES = [
   { key: 'BREAKFAST',    label: 'Desayuno',     emoji: '🌅' },
@@ -33,7 +36,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   LEGUME: '🫘 Legumbres',
 }
 
-type Step = 'search' | 'detail'
+type Step = 'search' | 'detail' | 'save-template'
+
+function calcTemplateKcal(t: MealTemplate) {
+  return t.items.reduce((sum, i) => sum + Math.round(i.food.kcalPer100g * i.grams / 100), 0)
+}
 
 type Props = {
   visible: boolean
@@ -50,11 +57,29 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null)
   const [grams, setGrams] = useState('')
   const [mealType, setMealType] = useState('BREAKFAST')
+  const [templateName, setTemplateName] = useState('')
+  const [loggingTemplateId, setLoggingTemplateId] = useState<string | null>(null)
 
   const { data: foods = [], isLoading: loadingFoods } = useQuery({
     queryKey: ['foods'],
     queryFn: getFoods,
-    staleTime: 10 * 60 * 1000, // 10 min — la librería no cambia seguido
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const { data: templatesData, refetch: refetchTemplates } = useQuery({
+    queryKey: ['meal-templates'],
+    queryFn: getMealTemplates,
+    staleTime: 2 * 60 * 1000,
+  })
+  const templates = templatesData?.templates ?? []
+
+  const { mutate: saveTemplate, isPending: savingTemplate } = useMutation({
+    mutationFn: createMealTemplate,
+    onSuccess: () => {
+      refetchTemplates()
+      setStep('detail')
+      setTemplateName('')
+    },
   })
 
   const filtered = useMemo(() => {
@@ -84,12 +109,42 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     submitLog({ foodId: selectedFood.id, grams: g, mealType, date })
   }
 
+  async function handleLogTemplate(t: MealTemplate) {
+    setLoggingTemplateId(t.id)
+    try {
+      await Promise.all(
+        t.items.map(item =>
+          logFood({ foodId: item.foodId, grams: item.grams, mealType, date })
+        )
+      )
+      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      handleClose()
+    } finally {
+      setLoggingTemplateId(null)
+    }
+  }
+
+  function handleSaveTemplate() {
+    if (!selectedFood || !grams || !templateName.trim()) return
+    saveTemplate({
+      name: templateName.trim(),
+      mealType,
+      items: [{ foodId: selectedFood.id, grams: Number(grams) }],
+    })
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    await deleteMealTemplate(id)
+    refetchTemplates()
+  }
+
   function handleClose() {
     setStep('search')
     setQuery('')
     setSelectedFood(null)
     setGrams('')
     setMealType('BREAKFAST')
+    setTemplateName('')
     onClose()
   }
 
@@ -118,13 +173,16 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
             borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {step === 'detail' && (
-                <TouchableOpacity onPress={() => setStep('search')} style={{ padding: 4 }}>
+              {(step === 'detail' || step === 'save-template') && (
+                <TouchableOpacity
+                  onPress={() => step === 'save-template' ? setStep('detail') : setStep('search')}
+                  style={{ padding: 4 }}
+                >
                   <Text style={{ fontSize: 18, color: '#6b7280' }}>←</Text>
                 </TouchableOpacity>
               )}
               <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#111827' }}>
-                {step === 'search' ? 'Registrar comida' : selectedFood?.name ?? ''}
+                {step === 'search' ? 'Registrar comida' : step === 'save-template' ? 'Guardar plantilla' : selectedFood?.name ?? ''}
               </Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={{ padding: 4 }}>
@@ -168,6 +226,59 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                   contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
                   keyboardShouldPersistTaps="handled"
                 >
+                  {/* Mis comidas (plantillas) — solo cuando no hay búsqueda */}
+                  {!query.trim() && templates.length > 0 && (
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                        Mis comidas
+                      </Text>
+                      {templates.map(t => {
+                        const kcal = calcTemplateKcal(t)
+                        return (
+                          <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <TouchableOpacity
+                              onPress={() => handleLogTemplate(t)}
+                              disabled={loggingTemplateId === t.id}
+                              style={{
+                                flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                paddingHorizontal: 14, paddingVertical: 12,
+                                borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb',
+                                opacity: loggingTemplateId === t.id ? 0.6 : 1,
+                              }}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+                                  {t.name}
+                                </Text>
+                                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+                                  {t.items.length} {t.items.length === 1 ? 'alimento' : 'alimentos'}
+                                  {t.mealType ? ` · ${MEAL_TYPES.find(m => m.key === t.mealType)?.label ?? t.mealType}` : ''}
+                                </Text>
+                              </View>
+                              <View style={{ alignItems: 'flex-end' }}>
+                                {loggingTemplateId === t.id ? (
+                                  <ActivityIndicator size="small" color="#1e3a5f" />
+                                ) : (
+                                  <>
+                                    <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#f97316' }}>{kcal} kcal</Text>
+                                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Registrar todo</Text>
+                                  </>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => handleDeleteTemplate(t.id)}
+                              style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <Text style={{ fontSize: 16, color: '#d1d5db' }}>🗑</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )
+                      })}
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4, marginBottom: 12 }} />
+                    </View>
+                  )}
+
                   {filtered.length === 0 ? (
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center', marginTop: 40 }}>
                       Sin resultados para "{query}"
@@ -315,13 +426,14 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
             </ScrollView>
           )}
 
-          {/* Footer — solo en detail */}
+          {/* Footer — detail */}
           {step === 'detail' && (
             <View style={{
               paddingHorizontal: 20, paddingTop: 12,
               paddingBottom: insets.bottom + 12,
               borderTopWidth: 1, borderTopColor: '#f3f4f6',
               backgroundColor: 'white',
+              gap: 8,
             }}>
               <TouchableOpacity
                 onPress={handleSubmit}
@@ -339,7 +451,114 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                   </Text>
                 )}
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setStep('save-template')}
+                disabled={!grams || Number(grams) <= 0}
+                style={{ paddingVertical: 10, alignItems: 'center', opacity: !grams || Number(grams) <= 0 ? 0.4 : 1 }}
+              >
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>
+                  + Guardar como plantilla
+                </Text>
+              </TouchableOpacity>
             </View>
+          )}
+
+          {/* STEP: save-template */}
+          {step === 'save-template' && selectedFood && (
+            <>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32, gap: 20 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>
+                    Alimento
+                  </Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+                    {selectedFood.name}
+                  </Text>
+                  {preview && (
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+                      {grams}g · {preview.kcal} kcal · P {preview.proteinG}g
+                    </Text>
+                  )}
+                </View>
+
+                <View>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                    Nombre de la plantilla
+                  </Text>
+                  <TextInput
+                    value={templateName}
+                    onChangeText={setTemplateName}
+                    placeholder="Ej: Desayuno proteico, Snack post-entreno..."
+                    placeholderTextColor="#9ca3af"
+                    maxLength={100}
+                    autoFocus
+                    style={{
+                      borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
+                      paddingHorizontal: 14, paddingVertical: 12,
+                      fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827',
+                    }}
+                  />
+                </View>
+
+                <View>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                    Momento del día (opcional)
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {MEAL_TYPES.map(mt => (
+                      <TouchableOpacity
+                        key={mt.key}
+                        onPress={() => setMealType(mt.key)}
+                        style={{
+                          paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1,
+                          backgroundColor: mealType === mt.key ? '#1e3a5f' : 'white',
+                          borderColor: mealType === mt.key ? '#1e3a5f' : '#e5e7eb',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: mealType === mt.key ? 'white' : '#374151' }}>
+                          {mt.emoji} {mt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View style={{
+                paddingHorizontal: 20, paddingTop: 12,
+                paddingBottom: insets.bottom + 12,
+                borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                backgroundColor: 'white',
+                gap: 8,
+              }}>
+                <TouchableOpacity
+                  onPress={handleSaveTemplate}
+                  disabled={savingTemplate || !templateName.trim()}
+                  style={{
+                    backgroundColor: savingTemplate || !templateName.trim() ? '#e5e7eb' : '#1e3a5f',
+                    borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+                  }}
+                >
+                  {savingTemplate ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{ color: !templateName.trim() ? '#9ca3af' : 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>
+                      Guardar plantilla
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setStep('detail')}
+                  style={{ paddingVertical: 10, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>Cancelar</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
       </KeyboardAvoidingView>

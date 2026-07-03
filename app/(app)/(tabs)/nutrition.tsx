@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native'
-import { useQuery } from '@tanstack/react-query'
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
-import { getNutrition, getFoodLogs } from '../../../src/api/nutrition'
+import * as Haptics from 'expo-haptics'
+import { getNutrition, getFoodLogs, acceptNutritionAdjustment, rejectNutritionAdjustment, type PendingNutritionAdjustment } from '../../../src/api/nutrition'
 
 function getLocalDateString(): string {
   const d = new Date()
@@ -330,11 +331,88 @@ function TrackingSection({ onAdd }: { onAdd: () => void }) {
   )
 }
 
+// ─── NutritionAdjustmentCard ─────────────────────────────────────────────────
+
+function NutritionAdjustmentCard({ adj, onAction }: { adj: PendingNutritionAdjustment; onAction: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const deltaSign = adj.deltaKcal >= 0 ? '+' : ''
+
+  async function handle(action: 'accept' | 'reject') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setLoading(true)
+    try {
+      if (action === 'accept') {
+        await acceptNutritionAdjustment(adj.id)
+      } else {
+        await rejectNutritionAdjustment(adj.id)
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      onAction()
+    } catch {
+      Alert.alert('Error', 'No se pudo procesar el ajuste. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <View style={{ backgroundColor: '#fffbeb', borderRadius: 16, borderWidth: 1.5, borderColor: '#fcd34d', padding: 16, gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        <Text style={{ fontSize: 20 }}>⚡</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#92400e' }}>
+            Ajuste nutricional sugerido
+          </Text>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#b45309', marginTop: 2, lineHeight: 18 }}>
+            Tu sesión de hoy fue más{adj.deltaKcal > 0 ? ' intensa' : ' suave'} de lo planificado.
+          </Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: '#fef9c3', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#854d0e' }}>
+            {deltaSign}{adj.deltaKcal} kcal
+          </Text>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#a16207', marginTop: 2 }}>ajuste calorías</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#fef9c3', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#854d0e' }}>
+            {deltaSign}{adj.deltaCarbsG}g
+          </Text>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#a16207', marginTop: 2 }}>ajuste carbos</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => handle('reject')}
+          disabled={loading}
+          activeOpacity={0.8}
+          style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1.5, borderColor: '#d1d5db', backgroundColor: 'white' }}
+        >
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Ignorar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handle('accept')}
+          disabled={loading}
+          activeOpacity={0.85}
+          style={{ flex: 2, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#f97316' }}
+        >
+          {loading
+            ? <ActivityIndicator color="white" size="small" />
+            : <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>Aceptar ajuste →</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function NutritionScreen() {
   const { user } = useAuthStore()
   const insets = useSafeAreaInsets()
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['nutrition'], queryFn: getNutrition })
   const [showSetup, setShowSetup]   = useState(false)
   const [showLogFood, setShowLogFood] = useState(false)
@@ -397,14 +475,24 @@ export default function NutritionScreen() {
             </View>
           )}
 
+          {/* Ajuste nutricional pendiente */}
+          {data?.pendingAdjustment && (
+            <NutritionAdjustmentCard
+              adj={data.pendingAdjustment}
+              onAction={() => queryClient.invalidateQueries({ queryKey: ['nutrition'] })}
+            />
+          )}
+
           {data?.hasNutritionPlan && macros && (
             <>
-              {/* ── 1. Hero: objetivo del día ── */}
+              {/* ── 1. Hero: progreso del día (kcal consumidas vs target) ── */}
+              <TrackingSection onAdd={() => setShowLogFood(true)} />
+
+              {/* ── 2. Objetivo de macros del día ── */}
               <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
                   Tu objetivo de hoy
                 </Text>
-                {/* Kcal grande */}
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 14 }}>
                   <Text style={{ fontSize: 42, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1.5 }}>
                     {macros.kcal.toLocaleString()}
@@ -413,7 +501,6 @@ export default function NutritionScreen() {
                     kcal
                   </Text>
                 </View>
-                {/* Macro pills en fila */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {[
                     { label: 'Proteína', value: macros.proteinG, unit: 'g', color: '#3b82f6', bg: '#dbeafe' },
@@ -435,7 +522,7 @@ export default function NutritionScreen() {
                 </Text>
               </View>
 
-              {/* ── 2. Mis comidas ── */}
+              {/* ── 3. Mis comidas ── */}
               {data.mealPlan ? (
                 <>
                   <MealList mealPlan={data.mealPlan} dayType={dayType} />
@@ -473,8 +560,7 @@ export default function NutritionScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* ── 6. Lo que comí ── */}
-              <TrackingSection onAdd={() => setShowLogFood(true)} />
+              {/* TrackingSection movido al top como hero */}
             </>
           )}
         </ScrollView>
