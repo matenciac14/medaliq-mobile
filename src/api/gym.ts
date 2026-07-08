@@ -108,6 +108,7 @@ export type SetLog = {
   weightKg: number | null
   repsCompleted: number | null
   completed: boolean
+  setLogType?: 'WORK' | 'WARMUP' | 'DROPSET'
 }
 
 export type CompleteSessionPayload = {

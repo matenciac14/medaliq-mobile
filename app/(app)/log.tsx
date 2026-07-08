@@ -19,9 +19,10 @@ const SESSION_ICONS: Record<string, string> = {
 const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA', 'NATACION'])
 
 const FREE_ACTIVITY_TYPES = [
-  { type: 'RODAJE_Z2', label: 'Correr', icon: '🏃' },
-  { type: 'FUERZA',    label: 'Fuerza',  icon: '💪' },
-  { type: 'OTRO',      label: 'Otro',    icon: '🏅' },
+  { type: 'RODAJE_Z2', label: 'Correr',      icon: '🏃' },
+  { type: 'FUERZA',    label: 'Gym',          icon: '💪' },
+  { type: 'OTRO',      label: 'Funcional',   icon: '🤸' },
+  { type: 'DESCANSO',  label: 'Descanso',    icon: '😴' },
 ]
 
 type LogPayload = {
@@ -52,6 +53,9 @@ export default function LogScreen() {
   const [freeType, setFreeType] = useState<string | null>(type ?? null)
 
   const activeType = isFreeMode ? freeType : (type ?? '')
+
+  // EJ-04: día de descanso deliberado — completed automático, sin campos de actividad
+  const isDescanso = activeType === 'DESCANSO'
 
   const [completed, setCompleted] = useState<boolean | null>(null)
   const [actualDuration, setActualDuration] = useState(duration ?? '')
@@ -94,16 +98,17 @@ export default function LogScreen() {
       Alert.alert('Falta dato', 'Elige el tipo de actividad.')
       return
     }
-    if (completed === null) {
+    // Descanso: siempre completed=true, sin validación de campos
+    if (!isDescanso && completed === null) {
       Alert.alert('Falta dato', '¿Completaste la sesión?')
       return
     }
     const payload: LogPayload = {
-      completed,
-      actualDurationMin: actualDuration ? parseInt(actualDuration) : undefined,
-      rpe: rpe > 0 ? rpe : undefined,
-      hrAvg: hrAvg ? parseInt(hrAvg) : undefined,
-      distanceKm: distanceKm ? parseFloat(distanceKm) : undefined,
+      completed: isDescanso ? true : completed!,
+      actualDurationMin: !isDescanso && actualDuration ? parseInt(actualDuration) : undefined,
+      rpe: !isDescanso && rpe > 0 ? rpe : undefined,
+      hrAvg: !isDescanso && hrAvg ? parseInt(hrAvg) : undefined,
+      distanceKm: !isDescanso && distanceKm ? parseFloat(distanceKm) : undefined,
       notes: notes.trim() || undefined,
     }
     if (isFreeMode) {
@@ -174,37 +179,71 @@ export default function LogScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Selector de tipo — solo en modo libre */}
+        {/* Selector de tipo — solo en modo libre (EJ-03) */}
         {isFreeMode && (
           <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 12 }}>
             <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
               ¿Qué tipo de actividad?
             </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {FREE_ACTIVITY_TYPES.map(a => (
-                <TouchableOpacity
-                  key={a.type}
-                  onPress={() => { Haptics.selectionAsync(); setFreeType(a.type) }}
-                  activeOpacity={0.8}
-                  style={{
-                    flex: 1, paddingVertical: 14, borderRadius: 12,
-                    alignItems: 'center', gap: 4,
-                    backgroundColor: freeType === a.type ? '#1e3a5f' : 'white',
-                    borderWidth: 2, borderColor: freeType === a.type ? '#1e3a5f' : '#e5e7eb',
-                  }}
-                >
-                  <Text style={{ fontSize: 22 }}>{a.icon}</Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: freeType === a.type ? 'white' : '#374151' }}>
-                    {a.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* 2×2 grid para las 4 opciones */}
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {FREE_ACTIVITY_TYPES.slice(0, 2).map(a => (
+                  <TouchableOpacity
+                    key={a.type}
+                    onPress={() => { Haptics.selectionAsync(); setFreeType(a.type) }}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1, paddingVertical: 14, borderRadius: 12,
+                      alignItems: 'center', gap: 4,
+                      backgroundColor: freeType === a.type ? '#1e3a5f' : 'white',
+                      borderWidth: 2, borderColor: freeType === a.type ? '#1e3a5f' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{a.icon}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: freeType === a.type ? 'white' : '#374151' }}>
+                      {a.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {FREE_ACTIVITY_TYPES.slice(2, 4).map(a => (
+                  <TouchableOpacity
+                    key={a.type}
+                    onPress={() => { Haptics.selectionAsync(); setFreeType(a.type) }}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1, paddingVertical: 14, borderRadius: 12,
+                      alignItems: 'center', gap: 4,
+                      backgroundColor: freeType === a.type ? '#1e3a5f' : 'white',
+                      borderWidth: 2, borderColor: freeType === a.type
+                        ? (a.type === 'DESCANSO' ? '#6b7280' : '#1e3a5f')
+                        : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{a.icon}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: freeType === a.type ? 'white' : '#374151' }}>
+                      {a.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
+            {/* EJ-04: info contextual para Descanso */}
+            {isDescanso && (
+              <View style={{ backgroundColor: '#f9fafb', borderRadius: 10, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 16 }}>😴</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', flex: 1, lineHeight: 18 }}>
+                  Día de recuperación deliberada. Cuenta para tu racha y consistencia — el descanso también es entrenamiento.
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
-        {/* ¿La completaste? */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 12 }}>
+        {/* ¿La completaste? — oculto para Descanso (EJ-04: completed=true automático) */}
+        {!isDescanso && <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 12 }}>
           <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
             ¿Completaste la sesión?
           </Text>
@@ -236,9 +275,9 @@ export default function LogScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </View>}
 
-        {completed && (
+        {!isDescanso && completed && (
           <>
             {/* Duración real */}
             <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 }}>
@@ -365,7 +404,9 @@ export default function LogScreen() {
         >
           {isPending
             ? <ActivityIndicator color="white" />
-            : <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Guardar sesión</Text>
+            : <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>
+                {isDescanso ? 'Registrar descanso' : 'Guardar sesión'}
+              </Text>
           }
         </TouchableOpacity>
       </ScrollView>
