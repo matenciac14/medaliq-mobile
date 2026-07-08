@@ -111,6 +111,13 @@ export type SetLog = {
   setLogType?: 'WORK' | 'WARMUP' | 'DROPSET'
 }
 
+export type ExerciseOverride = {
+  originalWorkoutExerciseId: string
+  replacedWithExerciseId: string
+  replacedExerciseName: string
+  reason?: string
+}
+
 export type CompleteSessionPayload = {
   assignedWorkoutId?: string
   plannedSessionId?: string
@@ -119,6 +126,31 @@ export type CompleteSessionPayload = {
   rpe?: number
   durationMin?: number
   notes?: string
+  exerciseOverrides?: ExerciseOverride[]
+}
+
+export type ExerciseSearchResult = {
+  id: string
+  name: string
+  nameEs?: string
+  bodyPart: string
+  target: string
+  equipment: string
+}
+
+export async function searchExercises(params: {
+  q?: string
+  bodyPart?: string
+  limit?: number
+}): Promise<ExerciseSearchResult[]> {
+  const sp = new URLSearchParams()
+  if (params.q) sp.set('q', params.q)
+  if (params.bodyPart) sp.set('bodyPart', params.bodyPart)
+  sp.set('limit', String(params.limit ?? 20))
+  const res = await apiFetch<{ exercises: ExerciseSearchResult[]; total: number }>(
+    `/api/mobile/exercises?${sp}`
+  )
+  return res.exercises
 }
 
 export async function getTodayGymSession(): Promise<GymSessionData | null> {

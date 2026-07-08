@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Modal, Animated, Vibration,
+  Alert, Modal, Vibration, ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -9,7 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getTodayGymSession, completeGymSession, SetLog, GymSessionData, PRResult } from '../../src/api/gym'
+import {
+  getTodayGymSession, completeGymSession, searchExercises,
+  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
+} from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -49,6 +52,124 @@ function buildInitialSets(data: GymSessionData): LocalSet[] {
     }
   }
   return sets
+}
+
+// Exercise Swap Modal
+function SwapModal({
+  visible,
+  originalName,
+  defaultBodyPart,
+  onSwap,
+  onClose,
+}: {
+  visible: boolean
+  originalName: string
+  defaultBodyPart: string
+  onSwap: (result: ExerciseSearchResult) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<ExerciseSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Reset on close
+  useEffect(() => {
+    if (!visible) { setQ(''); setResults([]) }
+  }, [visible])
+
+  // Debounced search
+  useEffect(() => {
+    if (!visible) return
+    setLoading(true)
+    const timer = setTimeout(() => {
+      searchExercises({ q: q || undefined, bodyPart: defaultBodyPart || undefined, limit: 25 })
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, visible, defaultBodyPart])
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' }}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>Sustituir ejercicio</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }} numberOfLines={1}>
+                Reemplazando: {originalName}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search input */}
+          <View style={{ padding: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+              <Ionicons name="search" size={16} color="#9ca3af" />
+              <TextInput
+                value={q}
+                onChangeText={setQ}
+                placeholder="Buscar ejercicio..."
+                placeholderTextColor="#9ca3af"
+                autoFocus
+                style={{ flex: 1, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#111827' }}
+              />
+              {q.length > 0 && (
+                <TouchableOpacity onPress={() => setQ('')}>
+                  <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Results */}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ paddingHorizontal: 16 }}
+            contentContainerStyle={{ paddingBottom: 32, gap: 8 }}
+          >
+            {loading && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <ActivityIndicator color="#f97316" />
+              </View>
+            )}
+            {!loading && results.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Sin resultados</Text>
+              </View>
+            )}
+            {results.map(r => (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => onSwap(r)}
+                style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#e5e7eb', gap: 4, marginBottom: 8 }}
+              >
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{r.nameEs ?? r.name}</Text>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                  <View style={{ backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#3b82f6' }}>{r.bodyPart}</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#16a34a' }}>{r.target}</Text>
+                  </View>
+                  {r.equipment && (
+                    <View style={{ backgroundColor: '#faf5ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#7c3aed' }}>{r.equipment}</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
 }
 
 // Finish Session Modal
@@ -288,6 +409,8 @@ export default function GymSessionScreen() {
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
+  const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; bodyPart: string; originalName: string } | null>(null)
+  const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
   const startTimeRef = useRef(Date.now())
   const draftRestoredRef = useRef(false)
   const lastPayloadRef = useRef<Parameters<typeof completeGymSession>[0] | null>(null)
@@ -386,6 +509,17 @@ export default function GymSessionScreen() {
     })
   }
 
+  function handleSwap(result: ExerciseSearchResult) {
+    if (!swapTarget) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setExerciseOverrides(prev => {
+      const next = new Map(prev)
+      next.set(swapTarget.workoutExerciseId, { id: result.id, name: result.nameEs ?? result.name })
+      return next
+    })
+    setSwapTarget(null)
+  }
+
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
     setSets(prev => {
       const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
@@ -431,6 +565,16 @@ export default function GymSessionScreen() {
       completed: s.completed,
       setLogType: s.setLogType,
     }))
+    const overridesArr: ExerciseOverride[] = session!.exercises
+      .filter(ex => exerciseOverrides.has(ex.id))
+      .map(ex => {
+        const ov = exerciseOverrides.get(ex.id)!
+        return {
+          originalWorkoutExerciseId: ex.id,
+          replacedWithExerciseId: ov.id,
+          replacedExerciseName: ov.name,
+        }
+      })
     const payload = {
       ...(session!.plannedSessionId
         ? { plannedSessionId: session!.plannedSessionId }
@@ -440,6 +584,7 @@ export default function GymSessionScreen() {
       durationMin,
       rpe,
       notes: notes.trim() || undefined,
+      exerciseOverrides: overridesArr.length > 0 ? overridesArr : undefined,
     }
     lastPayloadRef.current = payload
     finishSession(payload)
@@ -478,6 +623,15 @@ export default function GymSessionScreen() {
         onClose={() => setShowFinishModal(false)}
         submitting={finishing}
       />
+      {swapTarget && (
+        <SwapModal
+          visible
+          originalName={swapTarget.originalName}
+          defaultBodyPart={swapTarget.bodyPart}
+          onSwap={handleSwap}
+          onClose={() => setSwapTarget(null)}
+        />
+      )}
 
       {/* Top bar */}
       <LinearGradient
@@ -554,6 +708,9 @@ export default function GymSessionScreen() {
           const exSets = sets.filter(s => s.workoutExerciseId === ex.id)
           const exSetIdxOffset = sets.findIndex(s => s.workoutExerciseId === ex.id)
 
+          const swappedEx = exerciseOverrides.get(ex.id)
+          const hasCompletedSets = sets.filter(s => s.workoutExerciseId === ex.id && s.completed).length > 0
+
           return (
             <View style={{ gap: 12 }}>
               {/* Warmup note — only on first exercise */}
@@ -568,10 +725,34 @@ export default function GymSessionScreen() {
               )}
 
               {/* Exercise header */}
-              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 4 }}>
-                <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
-                  {ex.exercise.name}
-                </Text>
+              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: swappedEx ? '#bfdbfe' : '#e5e7eb', gap: 4 }}>
+                {/* Name row + Sustituir button */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
+                      {swappedEx ? swappedEx.name : ex.exercise.name}
+                    </Text>
+                    {swappedEx && (
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
+                        Antes: {ex.exercise.name}
+                      </Text>
+                    )}
+                  </View>
+                  {!hasCompletedSets && (
+                    <TouchableOpacity
+                      onPress={() => setSwapTarget({
+                        workoutExerciseId: ex.id,
+                        bodyPart: ex.exercise.muscleGroups[0] ?? '',
+                        originalName: ex.exercise.name,
+                      })}
+                      style={{ backgroundColor: '#eff6ff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Ionicons name="swap-horizontal" size={13} color="#3b82f6" />
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#3b82f6' }}>Sustituir</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular' }}>
                   {ex.sets} series · {ex.repsScheme}
                   {ex.restSeconds ? ` · ${ex.restSeconds}s descanso` : ''}
@@ -592,12 +773,12 @@ export default function GymSessionScreen() {
                     </Text>
                   </View>
                 )}
-                {ex.exercise.description && (
+                {!swappedEx && ex.exercise.description && (
                   <Text style={{ fontSize: 12, color: '#4b5563', fontFamily: 'Inter_400Regular', marginTop: 4, lineHeight: 18 }}>
                     {ex.exercise.description}
                   </Text>
                 )}
-                {ex.exercise.tips && (
+                {!swappedEx && ex.exercise.tips && (
                   <Text style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Inter_400Regular', marginTop: 4, fontStyle: 'italic' }}>
                     💡 {ex.exercise.tips}
                   </Text>
