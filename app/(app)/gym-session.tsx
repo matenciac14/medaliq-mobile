@@ -601,6 +601,29 @@ export default function GymSessionScreen() {
               {/* Sets */}
               {exSets.map((set, localIdx) => {
                 const globalIdx = exSetIdxOffset + localIdx
+                const prevLog = ex.previousLogs.find(l => l.setNumber === set.setNumber)
+
+                const currentWeight = set.weightKg !== '' ? parseFloat(set.weightKg) : null
+                const currentReps = set.repsCompleted !== '' ? parseInt(set.repsCompleted) : null
+                const weightDelta = prevLog?.weightKg != null && currentWeight != null
+                  ? Math.round((currentWeight - prevLog.weightKg) * 10) / 10
+                  : null
+                const repsDelta = prevLog?.repsCompleted != null && currentReps != null
+                  ? currentReps - prevLog.repsCompleted
+                  : null
+
+                function deltaColor(delta: number | null) {
+                  if (delta == null) return '#9ca3af'
+                  if (delta > 0) return '#22c55e'
+                  if (delta < 0) return '#ef4444'
+                  return '#9ca3af'
+                }
+                function deltaLabel(delta: number | null, prev: number | null, unit: string) {
+                  if (delta != null) return delta > 0 ? `+${delta}${unit}` : delta < 0 ? `${delta}${unit}` : `=${prev}${unit}`
+                  if (prev != null) return `ant: ${prev}${unit}`
+                  return null
+                }
+
                 return (
                   <View
                     key={`${ex.id}-${set.setNumber}`}
@@ -630,36 +653,55 @@ export default function GymSessionScreen() {
                         </Text>
                       )}
                     </TouchableOpacity>
-                    <TextInput
-                      value={set.weightKg}
-                      onChangeText={v => updateSet(globalIdx, 'weightKg', v)}
-                      placeholder="—"
-                      placeholderTextColor="#d1d5db"
-                      keyboardType="decimal-pad"
-                      inputMode="decimal"
-                      editable={!set.completed}
-                      style={{
-                        flex: 1, height: 44, textAlign: 'center', fontSize: 18,
-                        fontFamily: 'Inter_700Bold', color: '#111827',
-                        backgroundColor: set.completed ? 'transparent' : '#f9fafb',
-                        borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
-                      }}
-                    />
-                    <TextInput
-                      value={set.repsCompleted}
-                      onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)}
-                      placeholder="—"
-                      placeholderTextColor="#d1d5db"
-                      keyboardType="number-pad"
-                      inputMode="numeric"
-                      editable={!set.completed}
-                      style={{
-                        flex: 1, height: 44, textAlign: 'center', fontSize: 18,
-                        fontFamily: 'Inter_700Bold', color: '#111827',
-                        backgroundColor: set.completed ? 'transparent' : '#f9fafb',
-                        borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
-                      }}
-                    />
+
+                    {/* Kg column */}
+                    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      <TextInput
+                        value={set.weightKg}
+                        onChangeText={v => updateSet(globalIdx, 'weightKg', v)}
+                        placeholder={prevLog?.weightKg != null ? String(prevLog.weightKg) : '—'}
+                        placeholderTextColor="#d1d5db"
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        editable={!set.completed}
+                        style={{
+                          width: '100%', height: 44, textAlign: 'center', fontSize: 18,
+                          fontFamily: 'Inter_700Bold', color: '#111827',
+                          backgroundColor: set.completed ? 'transparent' : '#f9fafb',
+                          borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
+                        }}
+                      />
+                      {deltaLabel(weightDelta, prevLog?.weightKg ?? null, 'kg') && (
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: deltaColor(weightDelta) }}>
+                          {deltaLabel(weightDelta, prevLog?.weightKg ?? null, 'kg')}
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Reps column */}
+                    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      <TextInput
+                        value={set.repsCompleted}
+                        onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)}
+                        placeholder="—"
+                        placeholderTextColor="#d1d5db"
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        editable={!set.completed}
+                        style={{
+                          width: '100%', height: 44, textAlign: 'center', fontSize: 18,
+                          fontFamily: 'Inter_700Bold', color: '#111827',
+                          backgroundColor: set.completed ? 'transparent' : '#f9fafb',
+                          borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
+                        }}
+                      />
+                      {deltaLabel(repsDelta, prevLog?.repsCompleted ?? null, '') && (
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: deltaColor(repsDelta) }}>
+                          {deltaLabel(repsDelta, prevLog?.repsCompleted ?? null, '')}
+                        </Text>
+                      )}
+                    </View>
+
                     <TouchableOpacity
                       onPress={() => !set.completed && markSetDone(globalIdx)}
                       style={{
