@@ -188,7 +188,11 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
     return () => clearInterval(intervalRef.current!)
   }, [])
 
-  const progress = remaining / seconds
+  function adjustTime(delta: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setRemaining(prev => Math.max(5, prev + delta))
+  }
+
   const mins = Math.floor(remaining / 60)
   const secs = remaining % 60
 
@@ -203,6 +207,21 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
             <Text style={{ fontSize: 36, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
               {mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`}
             </Text>
+          </View>
+          {/* Adjust timer */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => adjustTime(-15)}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#374151' }}>−15s</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => adjustTime(+15)}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#374151' }}>+15s</Text>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             onPress={onDone}
