@@ -24,7 +24,14 @@ type LocalSet = {
   weightKg: string
   repsCompleted: string
   completed: boolean
+  setLogType: 'WORK' | 'WARMUP' | 'DROPSET'
 }
+
+const SET_TYPE_CONFIG = {
+  WORK:    { bg: 'transparent', text: '#374151', badge: null },
+  WARMUP:  { bg: '#fff7ed',     text: '#f97316', badge: 'W' },
+  DROPSET: { bg: '#ffe4e6',     text: '#e11d48', badge: '↓' },
+} as const
 
 function buildInitialSets(data: GymSessionData): LocalSet[] {
   const sets: LocalSet[] = []
@@ -37,6 +44,7 @@ function buildInitialSets(data: GymSessionData): LocalSet[] {
         weightKg: prev?.weightKg ? String(prev.weightKg) : '',
         repsCompleted: '',
         completed: false,
+        setLogType: 'WORK',
       })
     }
   }
@@ -277,7 +285,7 @@ export default function GymSessionScreen() {
     const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
     loadDraft(sessionKey).then(draft => {
       if (draft) {
-        setSets(draft.sets)
+        setSets(draft.sets.map(s => ({ ...s, setLogType: (s.setLogType as LocalSet['setLogType']) ?? 'WORK' })))
       } else {
         setSets(buildInitialSets(session))
       }
@@ -343,6 +351,22 @@ export default function GymSessionScreen() {
     },
   })
 
+  function cycleSetType(idx: number) {
+    const ORDER: LocalSet['setLogType'][] = ['WORK', 'WARMUP', 'DROPSET']
+    setSets(prev => {
+      const next = prev.map((s, i) => {
+        if (i !== idx) return s
+        const curr = ORDER.indexOf(s.setLogType)
+        return { ...s, setLogType: ORDER[(curr + 1) % ORDER.length] }
+      })
+      if (session) {
+        const key = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
+        saveDraft(key, next).catch(() => {})
+      }
+      return next
+    })
+  }
+
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
     setSets(prev => {
       const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
@@ -386,6 +410,7 @@ export default function GymSessionScreen() {
       weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
       repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
       completed: s.completed,
+      setLogType: s.setLogType,
     }))
     const payload = {
       ...(session!.plannedSessionId
@@ -587,11 +612,24 @@ export default function GymSessionScreen() {
                       borderColor: set.completed ? '#86efac' : '#e5e7eb',
                     }}
                   >
-                    <View style={{ width: 28, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: set.completed ? '#22c55e' : '#374151' }}>
+                    <TouchableOpacity
+                      onPress={() => !set.completed && cycleSetType(globalIdx)}
+                      disabled={set.completed}
+                      style={{
+                        width: 32, alignItems: 'center', justifyContent: 'center',
+                        backgroundColor: set.completed ? 'transparent' : SET_TYPE_CONFIG[set.setLogType].bg,
+                        borderRadius: 8, paddingVertical: 2, minHeight: 44, gap: 1,
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: set.completed ? '#22c55e' : SET_TYPE_CONFIG[set.setLogType].text }}>
                         {set.setNumber}
                       </Text>
-                    </View>
+                      {!set.completed && SET_TYPE_CONFIG[set.setLogType].badge && (
+                        <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: SET_TYPE_CONFIG[set.setLogType].text }}>
+                          {SET_TYPE_CONFIG[set.setLogType].badge}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
                     <TextInput
                       value={set.weightKg}
                       onChangeText={v => updateSet(globalIdx, 'weightKg', v)}

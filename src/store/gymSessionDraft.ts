@@ -10,6 +10,7 @@ export type GymDraftSet = {
   weightKg: string
   repsCompleted: string
   completed: boolean
+  setLogType?: string  // backward compat: old drafts sin campo → undefined → default WORK
 }
 
 export type GymDraft = {
