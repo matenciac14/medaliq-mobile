@@ -30,6 +30,15 @@ type LocalSet = {
   setLogType: 'WORK' | 'WARMUP' | 'DROPSET'
 }
 
+type FreeExercise = {
+  localId: string
+  name: string
+  gif?: string | null
+}
+
+let _nextLocalId = 1
+function newLocalId() { return `free-${_nextLocalId++}` }
+
 const SET_TYPE_CONFIG = {
   WORK:    { bg: 'transparent', text: '#374151', badge: null },
   WARMUP:  { bg: '#fff7ed',     text: '#f97316', badge: 'W' },
@@ -162,6 +171,109 @@ function SwapModal({
                       <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#7c3aed' }}>{r.equipment}</Text>
                     </View>
                   )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+// Add Exercise Modal (free session) — EX-12 / sesión auto-dirigida
+function AddExerciseModal({
+  visible,
+  onAdd,
+  onClose,
+}: {
+  visible: boolean
+  onAdd: (result: ExerciseSearchResult) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<ExerciseSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!visible) { setQ(''); setResults([]) }
+  }, [visible])
+
+  useEffect(() => {
+    if (!visible) return
+    setLoading(true)
+    const timer = setTimeout(() => {
+      searchExercises({ q: q || undefined, limit: 30 })
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, visible])
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>Agregar ejercicio</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ padding: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+              <Ionicons name="search" size={16} color="#9ca3af" />
+              <TextInput
+                value={q}
+                onChangeText={setQ}
+                placeholder="Buscar ejercicio..."
+                placeholderTextColor="#9ca3af"
+                autoFocus
+                style={{ flex: 1, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#111827' }}
+              />
+              {q.length > 0 && (
+                <TouchableOpacity onPress={() => setQ('')}>
+                  <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 32, gap: 8 }}>
+            {loading && <View style={{ padding: 24, alignItems: 'center' }}><ActivityIndicator color="#f97316" /></View>}
+            {!loading && results.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                  {q.length === 0 ? 'Escribe para buscar...' : 'Sin resultados'}
+                </Text>
+              </View>
+            )}
+            {results.map(r => (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => onAdd(r)}
+                style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 8 }}
+              >
+                {r.gif ? (
+                  <Image source={{ uri: r.gif }} style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#f3f4f6' }} resizeMode="contain" />
+                ) : (
+                  <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="barbell" size={20} color="#d1d5db" />
+                  </View>
+                )}
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{r.nameEs ?? r.name}</Text>
+                  <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                    <View style={{ backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#3b82f6' }}>{r.bodyPart}</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#16a34a' }}>{r.target}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ backgroundColor: '#f97316', borderRadius: 8, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="add" size={18} color="white" />
                 </View>
               </TouchableOpacity>
             ))}
@@ -404,6 +516,8 @@ export default function GymSessionScreen() {
   const queryClient = useQueryClient()
 
   const [sets, setSets] = useState<LocalSet[]>([])
+  const [freeExercises, setFreeExercises] = useState<FreeExercise[]>([])
+  const [showAddExercise, setShowAddExercise] = useState(false)
   const [restTimer, setRestTimer] = useState<{ show: boolean; seconds: number }>({ show: false, seconds: 90 })
   const [elapsedSecs, setElapsedSecs] = useState(0)
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
@@ -520,6 +634,38 @@ export default function GymSessionScreen() {
     setSwapTarget(null)
   }
 
+  function addFreeExercise(result: ExerciseSearchResult) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    const localId = newLocalId()
+    const fe: FreeExercise = { localId, name: result.nameEs ?? result.name, gif: result.gif ?? null }
+    setFreeExercises(prev => [...prev, fe])
+    // Pre-add one blank set for this exercise
+    setSets(prev => [...prev, {
+      workoutExerciseId: localId,
+      setNumber: 1,
+      weightKg: '',
+      repsCompleted: '',
+      completed: false,
+      setLogType: 'WORK',
+    }])
+    setActiveExerciseIdx(freeExercises.length) // focus new exercise tab
+    setShowAddExercise(false)
+  }
+
+  function addFreeSet(localId: string) {
+    setSets(prev => {
+      const existingSets = prev.filter(s => s.workoutExerciseId === localId)
+      return [...prev, {
+        workoutExerciseId: localId,
+        setNumber: existingSets.length + 1,
+        weightKg: '',
+        repsCompleted: '',
+        completed: false,
+        setLogType: 'WORK',
+      }]
+    })
+  }
+
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
     setSets(prev => {
       const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
@@ -549,6 +695,10 @@ export default function GymSessionScreen() {
 
   function handleFinish() {
     const completedCount = sets.filter(s => s.completed).length
+    if (session?.freeSession && freeExercises.length === 0) {
+      Alert.alert('Sin ejercicios', 'Agrega al menos un ejercicio antes de finalizar.')
+      return
+    }
     if (completedCount === 0) {
       Alert.alert('Sin sets', 'Completa al menos un set antes de finalizar.')
       return
@@ -557,14 +707,26 @@ export default function GymSessionScreen() {
   }
 
   function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
-    const completedSets: SetLog[] = sets.map(s => ({
-      workoutExerciseId: s.workoutExerciseId,
-      setNumber: s.setNumber,
-      weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
-      repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
-      completed: s.completed,
-      setLogType: s.setLogType,
-    }))
+    const completedSets: SetLog[] = session!.freeSession
+      ? sets.map(s => {
+          const fe = freeExercises.find(f => f.localId === s.workoutExerciseId)
+          return {
+            exerciseName: fe?.name ?? s.workoutExerciseId,
+            setNumber: s.setNumber,
+            weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+            repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+            completed: s.completed,
+            setLogType: s.setLogType,
+          }
+        })
+      : sets.map(s => ({
+          workoutExerciseId: s.workoutExerciseId,
+          setNumber: s.setNumber,
+          weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+          repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+          completed: s.completed,
+          setLogType: s.setLogType,
+        }))
     const overridesArr: ExerciseOverride[] = session!.exercises
       .filter(ex => exerciseOverrides.has(ex.id))
       .map(ex => {
@@ -632,6 +794,11 @@ export default function GymSessionScreen() {
           onClose={() => setSwapTarget(null)}
         />
       )}
+      <AddExerciseModal
+        visible={showAddExercise}
+        onAdd={addFreeExercise}
+        onClose={() => setShowAddExercise(false)}
+      />
 
       {/* Top bar */}
       <LinearGradient
@@ -665,14 +832,13 @@ export default function GymSessionScreen() {
         style={{ backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', maxHeight: 52 }}
         contentContainerStyle={{ paddingHorizontal: 12, gap: 4, alignItems: 'center' }}
       >
-        {session.exercises.map((ex, i) => {
-          const exSets = sets.filter(s => s.workoutExerciseId === ex.id)
-          const done = exSets.filter(s => s.completed).length
-          const total = exSets.length
+        {(session.freeSession ? freeExercises.map((fe, i) => ({ id: fe.localId, label: String(i + 1), sets: sets.filter(s => s.workoutExerciseId === fe.localId) })) : session.exercises.map((ex, i) => ({ id: ex.id, label: String(i + 1), sets: sets.filter(s => s.workoutExerciseId === ex.id), setType: ex.setType }))).map((item, i) => {
+          const done = item.sets.filter(s => s.completed).length
+          const total = item.sets.length
           const isActive = i === activeExerciseIdx
           return (
             <TouchableOpacity
-              key={ex.id}
+              key={item.id}
               onPress={() => setActiveExerciseIdx(i)}
               style={{
                 paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
@@ -681,19 +847,28 @@ export default function GymSessionScreen() {
               }}
             >
               <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: isActive ? 'white' : '#6b7280' }}>
-                {i + 1}
+                {item.label}
               </Text>
               {done > 0 && (
                 <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: done === total ? '#22c55e' : '#f97316', alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontSize: 8, color: 'white', fontFamily: 'Inter_700Bold' }}>{done}</Text>
                 </View>
               )}
-              {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].text }} />
+              {(item as any).setType && (item as any).setType !== 'NORMAL' && !!MOBILE_SUPERSET_STYLES[(item as any).setType] && (
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[(item as any).setType].text }} />
               )}
             </TouchableOpacity>
           )
         })}
+        {session.freeSession && (
+          <TouchableOpacity
+            onPress={() => setShowAddExercise(true)}
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff7ed', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <Ionicons name="add" size={14} color="#f97316" />
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: '#f97316' }}>Agregar</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Active exercise */}
@@ -703,7 +878,80 @@ export default function GymSessionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {session.exercises[activeExerciseIdx] && (() => {
+        {/* Free session empty state */}
+        {session.freeSession && freeExercises.length === 0 && (
+          <View style={{ alignItems: 'center', paddingVertical: 48, gap: 16 }}>
+            <Text style={{ fontSize: 48 }}>💪</Text>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center' }}>
+                Sesión libre
+              </Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 }}>
+                Agrega los ejercicios que vas a hacer hoy.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowAddExercise(true)}
+              style={{ backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            >
+              <Ionicons name="add-circle" size={18} color="white" />
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: 'white' }}>Agregar ejercicio</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Free session exercise content */}
+        {session.freeSession && freeExercises[activeExerciseIdx] && (() => {
+          const fe = freeExercises[activeExerciseIdx]
+          const exSets = sets.filter(s => s.workoutExerciseId === fe.localId)
+          const exSetIdxOffset = sets.findIndex(s => s.workoutExerciseId === fe.localId)
+          return (
+            <View style={{ gap: 12 }}>
+              {/* Free exercise header */}
+              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>{fe.name}</Text>
+                {fe.gif ? (
+                  <Image source={{ uri: fe.gif }} style={{ width: '100%', height: 140, borderRadius: 10, backgroundColor: '#f3f4f6' }} resizeMode="contain" />
+                ) : null}
+              </View>
+              {/* Column headers */}
+              <View style={{ flexDirection: 'row', paddingHorizontal: 4 }}>
+                <Text style={{ width: 32, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase' }}>Set</Text>
+                <Text style={{ flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', textAlign: 'center' }}>Kg</Text>
+                <Text style={{ flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', textAlign: 'center' }}>Reps</Text>
+                <View style={{ width: 56 }} />
+              </View>
+              {exSets.map((set, localIdx) => {
+                const globalIdx = exSetIdxOffset + localIdx
+                return (
+                  <View key={`${fe.localId}-${set.setNumber}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: set.completed ? '#f0fdf4' : 'white', borderRadius: 12, padding: 10, borderWidth: 1.5, borderColor: set.completed ? '#86efac' : '#e5e7eb' }}>
+                    <TouchableOpacity onPress={() => !set.completed && cycleSetType(globalIdx)} disabled={set.completed} style={{ width: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: set.completed ? 'transparent' : SET_TYPE_CONFIG[set.setLogType].bg, borderRadius: 8, paddingVertical: 2, minHeight: 44, gap: 1 }}>
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: set.completed ? '#22c55e' : SET_TYPE_CONFIG[set.setLogType].text }}>{set.setNumber}</Text>
+                      {!set.completed && SET_TYPE_CONFIG[set.setLogType].badge && (
+                        <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: SET_TYPE_CONFIG[set.setLogType].text }}>{SET_TYPE_CONFIG[set.setLogType].badge}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <TextInput value={set.weightKg} onChangeText={v => updateSet(globalIdx, 'weightKg', v)} placeholder="—" placeholderTextColor="#d1d5db" keyboardType="decimal-pad" editable={!set.completed} style={{ width: '100%', height: 44, textAlign: 'center', fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827', backgroundColor: set.completed ? 'transparent' : '#f9fafb', borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb' }} />
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <TextInput value={set.repsCompleted} onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)} placeholder="—" placeholderTextColor="#d1d5db" keyboardType="number-pad" editable={!set.completed} style={{ width: '100%', height: 44, textAlign: 'center', fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827', backgroundColor: set.completed ? 'transparent' : '#f9fafb', borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb' }} />
+                    </View>
+                    <TouchableOpacity onPress={() => !set.completed && markSetDone(globalIdx)} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: set.completed ? '#22c55e' : '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={set.completed ? 'checkmark' : 'checkmark-outline'} size={20} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                )
+              })}
+              <TouchableOpacity onPress={() => addFreeSet(fe.localId)} style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                <Ionicons name="add" size={16} color="#6b7280" />
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar set</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        })()}
+
+        {session.exercises[activeExerciseIdx] && !session.freeSession && (() => {
           const ex = session.exercises[activeExerciseIdx]
           const exSets = sets.filter(s => s.workoutExerciseId === ex.id)
           const exSetIdxOffset = sets.findIndex(s => s.workoutExerciseId === ex.id)
@@ -937,7 +1185,7 @@ export default function GymSessionScreen() {
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>← Anterior</Text>
                   </TouchableOpacity>
                 )}
-                {activeExerciseIdx < session.exercises.length - 1 && (
+                {activeExerciseIdx < session.exercises.length - 1 && !session.freeSession && (
                   <TouchableOpacity
                     onPress={() => setActiveExerciseIdx(i => i + 1)}
                     style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
@@ -945,7 +1193,7 @@ export default function GymSessionScreen() {
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>Siguiente →</Text>
                   </TouchableOpacity>
                 )}
-                {activeExerciseIdx === session.exercises.length - 1 && (
+                {(activeExerciseIdx === session.exercises.length - 1 || session.freeSession) && (
                   <TouchableOpacity
                     onPress={handleFinish}
                     style={{ flex: 1, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}

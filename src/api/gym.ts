@@ -68,6 +68,7 @@ export type GymSessionData = {
   templateName: string
   dayOfWeek: number
   isRestDay: boolean
+  freeSession?: boolean
   hasCoach: boolean
   workoutDay: {
     id: string
@@ -104,7 +105,8 @@ export type GymSessionData = {
 }
 
 export type SetLog = {
-  workoutExerciseId: string
+  workoutExerciseId?: string
+  exerciseName?: string
   setNumber: number
   weightKg: number | null
   repsCompleted: number | null
@@ -137,6 +139,7 @@ export type ExerciseSearchResult = {
   bodyPart: string
   target: string
   equipment: string
+  gif?: string
 }
 
 export async function searchExercises(params: {
