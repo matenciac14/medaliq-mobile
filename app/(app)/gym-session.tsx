@@ -68,23 +68,38 @@ function SwapModal({
   visible,
   originalName,
   defaultBodyPart,
+  exerciseId,
   onSwap,
   onClose,
 }: {
   visible: boolean
   originalName: string
   defaultBodyPart: string
+  exerciseId?: string
   onSwap: (result: ExerciseSearchResult) => void
   onClose: () => void
 }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState<ExerciseSearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [alternatives, setAlternatives] = useState<ExerciseSearchResult[]>([])
+  const [loadingAlt, setLoadingAlt] = useState(false)
 
   // Reset on close
   useEffect(() => {
-    if (!visible) { setQ(''); setResults([]) }
+    if (!visible) { setQ(''); setResults([]); setAlternatives([]) }
   }, [visible])
+
+  // Fetch alternatives from DB when opening
+  useEffect(() => {
+    if (!visible || !exerciseId) return
+    setLoadingAlt(true)
+    fetch(`/api/mobile/exercises/${exerciseId}/alternatives`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setAlternatives)
+      .catch(() => setAlternatives([]))
+      .finally(() => setLoadingAlt(false))
+  }, [visible, exerciseId])
 
   // Debounced search
   useEffect(() => {
@@ -135,6 +150,44 @@ function SwapModal({
               )}
             </View>
           </View>
+
+          {/* Suggested alternatives */}
+          {(loadingAlt || alternatives.length > 0) && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                Sugeridas ({alternatives.length})
+              </Text>
+              {loadingAlt ? (
+                <ActivityIndicator color="#f97316" style={{ paddingVertical: 8 }} />
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {alternatives.map(r => (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => onSwap(r)}
+                      style={{ width: 110, backgroundColor: '#fff7ed', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#fed7aa' }}
+                    >
+                      {r.gif ? (
+                        <Image source={{ uri: r.gif }} style={{ width: '100%', height: 80 }} resizeMode="contain" />
+                      ) : (
+                        <View style={{ width: '100%', height: 80, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="barbell-outline" size={24} color="#d1d5db" />
+                        </View>
+                      )}
+                      <View style={{ padding: 6 }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }} numberOfLines={2}>
+                          {r.nameEs ?? r.name}
+                        </Text>
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }} numberOfLines={1}>
+                          {r.equipment}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
 
           {/* Results */}
           <ScrollView
@@ -523,7 +576,7 @@ export default function GymSessionScreen() {
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
-  const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; bodyPart: string; originalName: string } | null>(null)
+  const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
   const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
   const startTimeRef = useRef(Date.now())
   const draftRestoredRef = useRef(false)
@@ -790,6 +843,7 @@ export default function GymSessionScreen() {
           visible
           originalName={swapTarget.originalName}
           defaultBodyPart={swapTarget.bodyPart}
+          exerciseId={swapTarget.exerciseId}
           onSwap={handleSwap}
           onClose={() => setSwapTarget(null)}
         />
@@ -990,6 +1044,7 @@ export default function GymSessionScreen() {
                     <TouchableOpacity
                       onPress={() => setSwapTarget({
                         workoutExerciseId: ex.id,
+                        exerciseId: ex.exercise.id,
                         bodyPart: ex.exercise.bodyPart ?? '',
                         originalName: ex.exercise.name,
                       })}
