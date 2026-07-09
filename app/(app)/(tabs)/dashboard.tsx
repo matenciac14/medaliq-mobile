@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { getDashboard, getWeekSessions, type WeekSession, type DashboardData } from '../../../src/api/dashboard'
+import { getNotifications } from '../../../src/api/notifications'
 import { useAuthStore } from '../../../src/store/auth'
 
 const SESSION_ICONS: Record<string, string> = {
@@ -576,6 +577,13 @@ export default function DashboardScreen() {
     queryFn: getDashboard,
   })
 
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications-count'],
+    queryFn: getNotifications,
+    staleTime: 30_000,
+  })
+  const unreadCount = notifData?.unreadCount ?? 0
+
   // Refrescar al volver al tab (tabs no se desmontan, refetchOnMount no dispara)
   useFocusEffect(
     useCallback(() => {
@@ -640,6 +648,25 @@ export default function DashboardScreen() {
               </Text>
             </View>
           )}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push('/(app)/notifications') }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={22} color="white" />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 4, right: 2,
+                backgroundColor: '#f97316', borderRadius: 8,
+                minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center',
+                paddingHorizontal: 3,
+              }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {d.planData && (
