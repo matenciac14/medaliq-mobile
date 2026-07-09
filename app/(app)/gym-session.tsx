@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Modal, Vibration, ActivityIndicator,
+  Alert, Modal, Vibration, ActivityIndicator, Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -742,7 +742,7 @@ export default function GymSessionScreen() {
                     <TouchableOpacity
                       onPress={() => setSwapTarget({
                         workoutExerciseId: ex.id,
-                        bodyPart: ex.exercise.muscleGroups[0] ?? '',
+                        bodyPart: ex.exercise.bodyPart ?? '',
                         originalName: ex.exercise.name,
                       })}
                       style={{ backgroundColor: '#eff6ff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
@@ -757,15 +757,31 @@ export default function GymSessionScreen() {
                   {ex.sets} series · {ex.repsScheme}
                   {ex.restSeconds ? ` · ${ex.restSeconds}s descanso` : ''}
                 </Text>
-                {ex.exercise.muscleGroups.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                    {ex.exercise.muscleGroups.map(mg => (
-                      <View key={mg} style={{ backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{mg}</Text>
-                      </View>
-                    ))}
+
+                {/* Muscle group badges */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#3b82f6' }}>{ex.exercise.target}</Text>
                   </View>
-                )}
+                  <View style={{ backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{ex.exercise.bodyPart}</Text>
+                  </View>
+                  {ex.exercise.mechanic ? (
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#16a34a' }}>{ex.exercise.mechanic}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* GIF demo — EX-11: guía visual del movimiento */}
+                {!swappedEx && ex.exercise.gif ? (
+                  <Image
+                    source={{ uri: ex.exercise.gif }}
+                    style={{ width: '100%', height: 160, borderRadius: 10, backgroundColor: '#f3f4f6', marginTop: 8 }}
+                    resizeMode="contain"
+                  />
+                ) : null}
+
                 {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
                   <View style={{ backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].bg, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 6 }}>
                     <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: MOBILE_SUPERSET_STYLES[ex.setType].text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -776,11 +792,6 @@ export default function GymSessionScreen() {
                 {!swappedEx && ex.exercise.description && (
                   <Text style={{ fontSize: 12, color: '#4b5563', fontFamily: 'Inter_400Regular', marginTop: 4, lineHeight: 18 }}>
                     {ex.exercise.description}
-                  </Text>
-                )}
-                {!swappedEx && ex.exercise.tips && (
-                  <Text style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Inter_400Regular', marginTop: 4, fontStyle: 'italic' }}>
-                    💡 {ex.exercise.tips}
                   </Text>
                 )}
                 {ex.notes && (

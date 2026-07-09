@@ -88,11 +88,12 @@ export type GymSessionData = {
     exercise: {
       id: string
       name: string
-      muscleGroups: string[]
+      bodyPart: string
+      target: string
       equipment: string
-      category: string | null
+      mechanic: string | null
       description: string | null
-      tips: string | null
+      gif: string | null
     }
     previousLogs: {
       setNumber: number
