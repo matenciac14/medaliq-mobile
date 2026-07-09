@@ -10,6 +10,10 @@ export type HealthProfile = {
   hrMax: number | null
   sleepHoursAvg: number | null
   gender: string | null
+  sport: string | null
+  experienceLevel: string | null
+  injuries: string[]
+  conditions: string[]
 }
 
 export type ProfilePatchPayload = {
@@ -20,6 +24,11 @@ export type ProfilePatchPayload = {
   hrResting?: number
   hrMax?: number
   sleepHoursAvg?: number
+  gender?: 'male' | 'female'
+  sport?: string
+  experienceLevel?: string
+  injuries?: string[]
+  conditions?: string[]
 }
 
 export async function getHealthProfile(): Promise<{ profile: HealthProfile | null }> {

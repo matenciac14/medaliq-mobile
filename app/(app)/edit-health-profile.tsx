@@ -10,6 +10,58 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { getHealthProfile, patchHealthProfile } from '../../src/api/profile'
 
+const SPORTS = [
+  { value: 'RUNNING',  label: '🏃 Running' },
+  { value: 'STRENGTH', label: '🏋️ Fuerza' },
+  { value: 'CYCLING',  label: '🚴 Ciclismo' },
+  { value: 'SWIMMING', label: '🏊 Natación' },
+]
+
+const EXPERIENCE = [
+  { value: 'BEGINNER',     label: 'Principiante' },
+  { value: 'INTERMEDIATE', label: 'Intermedio' },
+  { value: 'ADVANCED',     label: 'Avanzado' },
+]
+
+const COMMON_INJURIES = ['Rodilla', 'Tobillo', 'Cadera', 'Espalda baja', 'Hombro', 'Fascitis plantar', 'Isquiotibiales', 'Gemelos']
+const COMMON_CONDITIONS = ['Hipertensión', 'Diabetes', 'Asma', 'Hipotiroidismo', 'Anemia', 'Arritmia']
+
+function ChipSelector({
+  label, options, selected, onToggle,
+}: {
+  label: string
+  options: string[]
+  selected: string[]
+  onToggle: (v: string) => void
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>{label}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {options.map(opt => {
+          const active = selected.includes(opt)
+          return (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => { Haptics.selectionAsync(); onToggle(opt) }}
+              activeOpacity={0.8}
+              style={{
+                paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+                backgroundColor: active ? '#1e3a5f' : '#f3f4f6',
+                borderWidth: 1, borderColor: active ? '#1e3a5f' : '#e5e7eb',
+              }}
+            >
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: active ? 'white' : '#374151' }}>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
 function Field({
   label, value, onChangeText, placeholder, keyboardType = 'decimal-pad', unit,
 }: {
@@ -64,6 +116,12 @@ export default function EditHealthProfileScreen() {
   const [hrResting, setHrResting] = useState(profile?.hrResting?.toString() ?? '')
   const [hrMax, setHrMax] = useState(profile?.hrMax?.toString() ?? '')
   const [sleepHoursAvg, setSleepHoursAvg] = useState(profile?.sleepHoursAvg?.toString() ?? '')
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ? profile.dateOfBirth.split('T')[0] : '')
+  const [gender, setGender] = useState<'male' | 'female' | null>((profile?.gender as 'male' | 'female') ?? null)
+  const [sport, setSport] = useState<string | null>(profile?.sport ?? null)
+  const [experienceLevel, setExperienceLevel] = useState<string | null>(profile?.experienceLevel ?? null)
+  const [injuries, setInjuries] = useState<string[]>(profile?.injuries ?? [])
+  const [conditions, setConditions] = useState<string[]>(profile?.conditions ?? [])
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -71,12 +129,18 @@ export default function EditHealthProfileScreen() {
     setSaving(true)
     try {
       await patchHealthProfile({
-        weightKg:     weightKg     ? parseFloat(weightKg)     : undefined,
-        weightGoalKg: weightGoalKg ? parseFloat(weightGoalKg) : undefined,
-        heightCm:     heightCm     ? parseFloat(heightCm)     : undefined,
-        hrResting:    hrResting    ? parseInt(hrResting)       : undefined,
-        hrMax:        hrMax        ? parseInt(hrMax)           : undefined,
-        sleepHoursAvg: sleepHoursAvg ? parseFloat(sleepHoursAvg) : undefined,
+        weightKg:        weightKg        ? parseFloat(weightKg)        : undefined,
+        weightGoalKg:    weightGoalKg    ? parseFloat(weightGoalKg)    : undefined,
+        heightCm:        heightCm        ? parseFloat(heightCm)        : undefined,
+        hrResting:       hrResting       ? parseInt(hrResting)          : undefined,
+        hrMax:           hrMax           ? parseInt(hrMax)              : undefined,
+        sleepHoursAvg:   sleepHoursAvg   ? parseFloat(sleepHoursAvg)   : undefined,
+        dateOfBirth:     dateOfBirth     || undefined,
+        gender:          gender          ?? undefined,
+        sport:           sport           ?? undefined,
+        experienceLevel: experienceLevel ?? undefined,
+        injuries:        injuries.length > 0 ? injuries : undefined,
+        conditions:      conditions.length > 0 ? conditions : undefined,
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       queryClient.invalidateQueries({ queryKey: ['health-profile'] })
@@ -155,6 +219,128 @@ export default function EditHealthProfileScreen() {
             La FC máxima se estima automáticamente si no la ingresas.
           </Text>
           <Field label="Sueño promedio" value={sleepHoursAvg} onChangeText={setSleepHoursAvg} placeholder="7.5" unit="h" />
+        </View>
+
+        {/* Identidad deportiva */}
+        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Identidad deportiva
+          </Text>
+
+          {/* Fecha de nacimiento */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Fecha de nacimiento</Text>
+            <TextInput
+              value={dateOfBirth}
+              onChangeText={setDateOfBirth}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#d1d5db"
+              keyboardType="numbers-and-punctuation"
+              style={{
+                backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13,
+                fontSize: 16, fontFamily: 'Inter_400Regular', color: '#111827',
+                borderWidth: 1, borderColor: '#e5e7eb',
+              }}
+            />
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+              Ajusta el cálculo de TDEE y zonas de FC.
+            </Text>
+          </View>
+
+          {/* Género */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Género biológico</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {([{ v: 'male', l: '♂ Masculino' }, { v: 'female', l: '♀ Femenino' }] as const).map(({ v, l }) => (
+                <TouchableOpacity
+                  key={v}
+                  onPress={() => { Haptics.selectionAsync(); setGender(gender === v ? null : v) }}
+                  activeOpacity={0.8}
+                  style={{
+                    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                    backgroundColor: gender === v ? '#1e3a5f' : '#f9fafb',
+                    borderWidth: 1, borderColor: gender === v ? '#1e3a5f' : '#e5e7eb',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: gender === v ? 'white' : '#374151' }}>{l}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+              Afecta el cálculo de TDEE (Mifflin-St Jeor).
+            </Text>
+          </View>
+
+          {/* Deporte principal */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Deporte principal</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {SPORTS.map(({ value, label }) => {
+                const active = sport === value
+                return (
+                  <TouchableOpacity
+                    key={value}
+                    onPress={() => { Haptics.selectionAsync(); setSport(sport === value ? null : value) }}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+                      backgroundColor: active ? '#f97316' : '#f9fafb',
+                      borderWidth: 1, borderColor: active ? '#f97316' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: active ? 'white' : '#374151' }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+
+          {/* Nivel de experiencia */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Nivel de experiencia</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {EXPERIENCE.map(({ value, label }) => {
+                const active = experienceLevel === value
+                return (
+                  <TouchableOpacity
+                    key={value}
+                    onPress={() => { Haptics.selectionAsync(); setExperienceLevel(experienceLevel === value ? null : value) }}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
+                      backgroundColor: active ? '#1e3a5f' : '#f9fafb',
+                      borderWidth: 1, borderColor: active ? '#1e3a5f' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? 'white' : '#374151', textAlign: 'center' }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Lesiones y condiciones */}
+        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Salud
+          </Text>
+          <ChipSelector
+            label="Lesiones activas"
+            options={COMMON_INJURIES}
+            selected={injuries}
+            onToggle={v => setInjuries(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+          />
+          <ChipSelector
+            label="Condiciones médicas"
+            options={COMMON_CONDITIONS}
+            selected={conditions}
+            onToggle={v => setConditions(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+          />
         </View>
 
         {/* CTA */}

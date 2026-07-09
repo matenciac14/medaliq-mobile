@@ -24,6 +24,7 @@ export type NutritionData = {
   mealPlan: any | null
   pendingAdjustment: PendingNutritionAdjustment | null
   gymKcalBurned: number | null
+  waterMlTarget?: number
 }
 
 export type FoodLogEntry = {
@@ -80,6 +81,24 @@ export async function logFood(payload: {
   date?: string
 }): Promise<FoodLogEntry & MacroTotals> {
   return apiFetch('/api/mobile/nutrition/log', { method: 'POST', body: payload })
+}
+
+export async function deleteFoodLog(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/log/${id}`, { method: 'DELETE', body: {} })
+}
+
+export type WeeklyNutritionSummary = {
+  weekStart: string
+  weekEnd: string
+  daysWithLog: number
+  daysWithoutLog: number
+  avgKcal: number
+  targetKcal: number
+  adherencePct: number | null
+}
+
+export async function getWeeklyNutritionSummary(): Promise<WeeklyNutritionSummary> {
+  return apiFetch('/api/mobile/nutrition/log/summary')
 }
 
 export type FoodItem = {
@@ -154,4 +173,36 @@ export async function acceptNutritionAdjustment(id: string): Promise<{ ok: boole
 
 export async function rejectNutritionAdjustment(id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/api/mobile/nutrition/adjustment/${id}/reject`, { method: 'POST', body: {} })
+}
+
+export type ProposeInput = {
+  name: string
+  category: string
+  kcalPer100g: number
+  proteinPer100g: number
+  carbsPer100g: number
+  fatPer100g: number
+  fiberPer100g?: number
+  servingG?: number
+  servingLabel?: string
+  country?: string
+  notes?: string
+}
+
+export type FoodProposalSummary = {
+  id: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  food: { id: string; name: string; kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number }
+  reviewNote?: string
+  country?: string
+  notes?: string
+  createdAt: string
+}
+
+export async function proposeFood(payload: ProposeInput): Promise<{ proposalId: string; foodId: string }> {
+  return apiFetch('/api/mobile/nutrition/foods/propose', { method: 'POST', body: payload })
+}
+
+export async function getMyProposals(): Promise<{ proposals: FoodProposalSummary[] }> {
+  return apiFetch('/api/mobile/nutrition/foods/my-proposals')
 }

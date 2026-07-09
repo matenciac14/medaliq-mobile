@@ -33,10 +33,18 @@ export type CheckinStatus = {
     notes: string | null
     recordedAt: string
   } | null
+  pendingSuggestions?: CheckinSuggestion[]
 }
 
 export async function getCheckinStatus(): Promise<CheckinStatus> {
   return apiFetch('/api/mobile/checkin')
+}
+
+export type CheckinSuggestion = {
+  id: string
+  type: string
+  title: string
+  description: string
 }
 
 export type CheckinResult = {
@@ -47,6 +55,16 @@ export type CheckinResult = {
     adjustments: string[]
     triggers: string[]
   } | null
+  suggestions?: CheckinSuggestion[]
+  pendingSuggestions?: number
+}
+
+export async function acceptSuggestion(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/checkin/suggestions/${id}/accept`, { method: 'POST' })
+}
+
+export async function rejectSuggestion(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/checkin/suggestions/${id}/reject`, { method: 'POST' })
 }
 
 export async function submitCheckin(payload: CheckinPayload): Promise<CheckinResult> {

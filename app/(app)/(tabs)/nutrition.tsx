@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, acceptNutritionAdjustment, rejectNutritionAdjustment, type PendingNutritionAdjustment } from '../../../src/api/nutrition'
+import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, type PendingNutritionAdjustment } from '../../../src/api/nutrition'
 
 function getLocalDateString(): string {
   const d = new Date()
@@ -14,6 +14,8 @@ import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
 import LogFoodModal from '../../../src/components/LogFoodModal'
+import ProposeFoodModal from '../../../src/components/ProposeFoodModal'
+import { getMyProposals, type FoodProposalSummary } from '../../../src/api/nutrition'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -123,20 +125,31 @@ const HYDRATION_TIPS = [
   'Post-sesión: 500 ml para recuperación inmediata',
 ]
 
-function HydrationSection({ hydrationL }: { hydrationL: number }) {
+function HydrationSection({ waterMlTarget, fallbackL }: { waterMlTarget?: number; fallbackL?: number }) {
+  const totalL = waterMlTarget != null
+    ? (waterMlTarget / 1000)
+    : (fallbackL ?? 2)
+
   return (
     <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, paddingBottom: 14 }}>
         <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 22 }}>💧</Text>
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
             Hidratación
           </Text>
-          <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.5, marginTop: 2 }}>
-            {hydrationL} L
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.5 }}>
+              {totalL.toFixed(1)} L
+            </Text>
+            {waterMlTarget != null && (
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                ({waterMlTarget} ml objetivo)
+              </Text>
+            )}
+          </View>
         </View>
       </View>
       <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 20, paddingVertical: 14, gap: 10 }}>
@@ -212,10 +225,20 @@ function RulesSection({ rules }: { rules: string[] }) {
 
 function TrackingSection({ onAdd }: { onAdd: () => void }) {
   const [expanded, setExpanded] = useState(false)
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['nutrition-log'],
     queryFn: () => getFoodLogs(getLocalDateString()),
     staleTime: 30_000,
+  })
+  const { mutate: doDelete } = useMutation({
+    mutationFn: deleteFoodLog,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    },
+    onError: () => Alert.alert('Error', 'No se pudo eliminar el alimento.'),
   })
 
   const totals = data?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
@@ -310,13 +333,27 @@ function TrackingSection({ onAdd }: { onAdd: () => void }) {
             <View style={{ gap: 2, paddingTop: 4 }}>
               <View style={{ height: 1, backgroundColor: '#f3f4f6', marginBottom: 8 }} />
               {logs.map(log => (
-                <View key={log.id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', flex: 1 }} numberOfLines={1}>
-                    {log.food.name}
-                  </Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginLeft: 8 }}>
-                    {log.grams}g · {log.kcal} kcal
-                  </Text>
+                <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }} numberOfLines={1}>
+                      {log.food.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                      {log.grams}g · {log.kcal} kcal · {log.mealType}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() =>
+                      Alert.alert('Eliminar', `¿Quitar "${log.food.name}"?`, [
+                        { text: 'Cancelar', style: 'cancel' },
+                        { text: 'Eliminar', style: 'destructive', onPress: () => doDelete(log.id) },
+                      ])
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 4 }}
+                  >
+                    <Text style={{ fontSize: 16, color: '#ef4444' }}>×</Text>
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -407,6 +444,129 @@ function NutritionAdjustmentCard({ adj, onAction }: { adj: PendingNutritionAdjus
   )
 }
 
+// ─── MyProposalsSection ───────────────────────────────────────────────────────
+
+const PROPOSAL_STATUS: Record<string, { label: string; bg: string; text: string; emoji: string }> = {
+  PENDING:  { label: 'En revisión', bg: '#fef9c3', text: '#854d0e', emoji: '⏳' },
+  APPROVED: { label: 'Aprobado',    bg: '#f0fdf4', text: '#14532d', emoji: '✅' },
+  REJECTED: { label: 'Rechazado',   bg: '#fef2f2', text: '#991b1b', emoji: '❌' },
+}
+
+function MyProposalsSection({ proposals }: { proposals: FoodProposalSummary[] }) {
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+      <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 }}>
+        Mis propuestas de alimento
+      </Text>
+      {proposals.map((p, i) => {
+        const status = PROPOSAL_STATUS[p.status] ?? PROPOSAL_STATUS.PENDING
+        return (
+          <View
+            key={p.id}
+            style={{
+              borderTopWidth: 1, borderTopColor: '#f3f4f6',
+              paddingHorizontal: 20, paddingVertical: 14,
+              flexDirection: 'row', alignItems: 'center', gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }} numberOfLines={1}>
+                {p.food.name}
+              </Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                {p.food.kcalPer100g} kcal · {p.food.proteinPer100g}g P · {p.food.carbsPer100g}g C · {p.food.fatPer100g}g G
+              </Text>
+              {p.reviewNote && (
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }} numberOfLines={2}>
+                  Nota: {p.reviewNote}
+                </Text>
+              )}
+            </View>
+            <View style={{ backgroundColor: status.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 11 }}>{status.emoji}</Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: status.text }}>{status.label}</Text>
+            </View>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+// ─── WeeklySummarySection ─────────────────────────────────────────────────────
+
+function WeeklySummarySection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['nutrition-summary'],
+    queryFn: getWeeklyNutritionSummary,
+    staleTime: 5 * 60_000,
+  })
+
+  if (isLoading || !data) return null
+
+  const adherence = data.adherencePct
+  const adherenceColor = adherence == null ? '#9ca3af'
+    : adherence >= 85 ? '#16a34a'
+    : adherence >= 60 ? '#f97316'
+    : '#ef4444'
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 18, gap: 14 }}>
+      <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+        Resumen de la semana
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        {/* Días registrados */}
+        <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14, alignItems: 'center', gap: 2 }}>
+          <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
+            {data.daysWithLog}
+            <Text style={{ fontSize: 13, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>/7</Text>
+          </Text>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>días registrados</Text>
+        </View>
+
+        {/* Promedio kcal */}
+        <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14, alignItems: 'center', gap: 2 }}>
+          <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1 }}>
+            {data.avgKcal > 0 ? data.avgKcal.toLocaleString() : '—'}
+          </Text>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+            kcal promedio{data.targetKcal > 0 ? ` / ${data.targetKcal.toLocaleString()}` : ''}
+          </Text>
+        </View>
+      </View>
+
+      {/* Adherencia */}
+      {adherence != null && (
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>Adherencia calórica</Text>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: adherenceColor }}>{adherence}%</Text>
+          </View>
+          <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+            <View style={{ height: '100%', width: `${Math.min(adherence, 100)}%`, backgroundColor: adherenceColor, borderRadius: 4 }} />
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+            {adherence >= 85 ? 'Excelente consistencia esta semana 💪'
+              : adherence >= 60 ? 'Buena semana — sigue sumando días'
+              : 'Registra más días para mejorar tu adherencia'}
+          </Text>
+        </View>
+      )}
+
+      {data.daysWithoutLog > 0 && data.daysWithLog > 0 && (
+        <View style={{ backgroundColor: '#fef9c3', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 13 }}>💡</Text>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#713f12', flex: 1 }}>
+            {data.daysWithoutLog} {data.daysWithoutLog === 1 ? 'día sin registro' : 'días sin registrar'} — registrar todos los días mejora la precisión del plan.
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function NutritionScreen() {
@@ -414,8 +574,14 @@ export default function NutritionScreen() {
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['nutrition'], queryFn: getNutrition })
-  const [showSetup, setShowSetup]   = useState(false)
-  const [showLogFood, setShowLogFood] = useState(false)
+  const [showSetup, setShowSetup]       = useState(false)
+  const [showLogFood, setShowLogFood]   = useState(false)
+  const [showPropose, setShowPropose]   = useState(false)
+  const { data: proposalsData, refetch: refetchProposals } = useQuery({
+    queryKey: ['food-proposals'],
+    queryFn: getMyProposals,
+    staleTime: 5 * 60_000,
+  })
 
   if (!user?.features?.nutrition) {
     return <UpgradeWall icon="🥗" title="Plan nutricional" description="Accede a tu plan de nutrición periodizado por tipo de entrenamiento con el plan Pro." />
@@ -488,7 +654,15 @@ export default function NutritionScreen() {
               {/* ── 1. Hero: progreso del día (kcal consumidas vs target) ── */}
               <TrackingSection onAdd={() => setShowLogFood(true)} />
 
-              {/* ── 2. Objetivo de macros del día ── */}
+              {/* ── 2. Resumen semanal de adherencia ── */}
+              <WeeklySummarySection />
+
+              {/* ── 2b. Mis propuestas de alimento ── */}
+              {(proposalsData?.proposals ?? []).length > 0 && (
+                <MyProposalsSection proposals={proposalsData!.proposals} />
+              )}
+
+              {/* ── 3. Objetivo de macros del día ── */}
               <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
                   Tu objetivo de hoy
@@ -535,9 +709,10 @@ export default function NutritionScreen() {
                 <>
                   <MealList mealPlan={data.mealPlan} dayType={dayType} />
                   {/* ── 3. Hidratación ── */}
-                  {data.mealPlan[dayType]?.hydrationL != null && (
-                    <HydrationSection hydrationL={data.mealPlan[dayType].hydrationL} />
-                  )}
+                  <HydrationSection
+                    waterMlTarget={data.waterMlTarget}
+                    fallbackL={data.mealPlan[dayType]?.hydrationL}
+                  />
                   {/* ── 4. Suplementación ── */}
                   {data.mealPlan[dayType]?.supplements?.length > 0 && (
                     <SupplementsSection supplements={data.mealPlan[dayType].supplements} />
@@ -568,7 +743,27 @@ export default function NutritionScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* TrackingSection movido al top como hero */}
+              {/* ── Proponer alimento ── */}
+              <TouchableOpacity
+                onPress={() => setShowPropose(true)}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: 'white', borderRadius: 20, borderWidth: 1,
+                  borderColor: '#e5e7eb', padding: 16,
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>🥦</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>Proponer alimento</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                    ¿No encuentras lo que buscas? Agrégalo a la biblioteca.
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>
+              </TouchableOpacity>
             </>
           )}
         </ScrollView>
@@ -576,6 +771,7 @@ export default function NutritionScreen() {
 
       <FoodSetupFlow visible={showSetup} onClose={() => setShowSetup(false)} />
       <LogFoodModal visible={showLogFood} onClose={() => setShowLogFood(false)} date={getLocalDateString()} />
+      <ProposeFoodModal visible={showPropose} onClose={() => setShowPropose(false)} onSuccess={refetchProposals} />
     </View>
   )
 }

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { getCheckinStatus, submitCheckin, type CheckinResult } from '../../../src/api/checkin'
+import { getCheckinStatus, submitCheckin, acceptSuggestion, rejectSuggestion, type CheckinResult, type CheckinSuggestion } from '../../../src/api/checkin'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
@@ -72,6 +72,7 @@ export default function CheckinScreen() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<CheckinResult['adjustment'] | null>(null)
+  const [suggestions, setSuggestions] = useState<CheckinSuggestion[]>([])
   const [showMedidas, setShowMedidas] = useState(false)
   const [waist, setWaist] = useState('')
   const [arms, setArms] = useState('')
@@ -99,6 +100,7 @@ export default function CheckinScreen() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       refetchStatus()
       setResult(data.adjustment ?? null)
+      setSuggestions(data.suggestions ?? [])
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
     } finally {
@@ -134,6 +136,7 @@ export default function CheckinScreen() {
       setWeight(''); setHrResting(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setMotivation(0); setHasPain(false); setNotes('')
       setWaist(''); setArms(''); setHips(''); setThighs(''); setShowMedidas(false)
       setResult(data.adjustment ?? null)
+      setSuggestions(data.suggestions ?? [])
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
     } finally {
@@ -218,9 +221,53 @@ export default function CheckinScreen() {
           </>
         )}
 
+        {/* Sugerencias pendientes (planes COACH) */}
+        {suggestions.length > 0 && (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
+              Sugerencias de ajuste
+            </Text>
+            {suggestions.map((s) => (
+              <View key={s.id} style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
+                <View style={{ gap: 4 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{s.title}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', lineHeight: 20 }}>{s.description}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={async () => {
+                      try {
+                        await acceptSuggestion(s.id)
+                        setSuggestions(prev => prev.filter(x => x.id !== s.id))
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+                      } catch { /* silenciar */ }
+                    }}
+                    style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Aceptar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={async () => {
+                      try {
+                        await rejectSuggestion(s.id)
+                        setSuggestions(prev => prev.filter(x => x.id !== s.id))
+                      } catch { /* silenciar */ }
+                    }}
+                    style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' }}
+                  >
+                    <Text style={{ color: '#6b7280', fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Rechazar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* CTA */}
         <TouchableOpacity
-          onPress={() => setResult(null)}
+          onPress={() => { setResult(null); setSuggestions([]) }}
           activeOpacity={0.85}
           style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 18, alignItems: 'center' }}
         >
@@ -294,6 +341,50 @@ export default function CheckinScreen() {
             Tu plan se ajustará automáticamente basándose en estos datos. Vuelve el viernes de la próxima semana para el siguiente check-in.
           </Text>
         </View>
+
+        {/* Sugerencias pendientes del check-in anterior */}
+        {(statusData?.pendingSuggestions ?? []).length > 0 && (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
+              Sugerencias de ajuste pendientes
+            </Text>
+            {(statusData!.pendingSuggestions ?? []).map((s) => (
+              <View key={s.id} style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
+                <View style={{ gap: 4 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{s.title}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', lineHeight: 20 }}>{s.description}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={async () => {
+                      try {
+                        await acceptSuggestion(s.id)
+                        refetchStatus()
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+                      } catch { /* silenciar */ }
+                    }}
+                    style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Aceptar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={async () => {
+                      try {
+                        await rejectSuggestion(s.id)
+                        refetchStatus()
+                      } catch { /* silenciar */ }
+                    }}
+                    style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' }}
+                  >
+                    <Text style={{ color: '#6b7280', fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Rechazar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     )
   }

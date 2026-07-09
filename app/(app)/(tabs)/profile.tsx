@@ -75,7 +75,6 @@ export default function ProfileScreen() {
   const planLabel: Record<string, string> = {
     INACTIVE: 'Inactivo',
     FREE: 'Gratis',
-    TRIAL: 'Trial 30 días',
     PRO: 'Pro',
   }
 
@@ -108,26 +107,13 @@ export default function ProfileScreen() {
         <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: 'white' }}>{user?.name ?? 'Atleta'}</Text>
         <View style={{
           marginTop: 8, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20,
-          backgroundColor: plan === 'TRIAL' ? '#f97316' : plan === 'PRO' ? '#22c55e' : 'rgba(255,255,255,0.2)',
+          backgroundColor: plan === 'PRO' ? '#22c55e' : 'rgba(255,255,255,0.2)',
         }}>
           <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-            {plan === 'TRIAL' ? '✦ Trial 30 días' : plan === 'PRO' ? '✦ Pro' : 'Inactivo'}
+            {plan === 'PRO' ? '✦ Pro' : 'Inactivo'}
           </Text>
         </View>
       </LinearGradient>
-
-      {/* Trial banner */}
-      {plan === 'TRIAL' && (
-        <View style={{ marginHorizontal: 16, backgroundColor: '#fff7ed', borderRadius: 14, padding: 14,
-          borderLeftWidth: 4, borderLeftColor: '#f97316' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>
-            Trial activo — acceso completo por 30 días
-          </Text>
-          <Text style={{ fontSize: 12, color: '#c2410c', fontFamily: 'Inter_400Regular', marginTop: 3 }}>
-            Plan, check-in, nutrición y gym disponibles.
-          </Text>
-        </View>
-      )}
 
       {/* Cuenta */}
       <View>
