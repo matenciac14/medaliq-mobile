@@ -23,6 +23,7 @@ export type NutritionData = {
   } | null
   mealPlan: any | null
   pendingAdjustment: PendingNutritionAdjustment | null
+  gymKcalBurned: number | null
 }
 
 export type FoodLogEntry = {

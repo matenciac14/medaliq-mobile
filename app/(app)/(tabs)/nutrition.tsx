@@ -517,6 +517,14 @@ export default function NutritionScreen() {
                     </View>
                   ))}
                 </View>
+                {data.gymKcalBurned != null && data.gymKcalBurned > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#fff7ed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ fontSize: 13 }}>🔥</Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
+                      Quemaste {data.gymKcalBurned} kcal en gym hoy
+                    </Text>
+                  </View>
+                )}
                 <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 10 }}>
                   TDEE base {macros.tdee} kcal · ajustado por {day.label.toLowerCase()}
                 </Text>
