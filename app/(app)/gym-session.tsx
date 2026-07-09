@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Modal, Vibration, ActivityIndicator, Image,
+  Alert, Modal, Vibration, ActivityIndicator, Image, Animated, Share,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ import {
   SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
 } from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
+import { useGymSessionStore } from '../../src/store/gymSession'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
@@ -342,6 +343,7 @@ function FinishModal({
   visible,
   completedCount,
   defaultDuration,
+  defaultRpe,
   onConfirm,
   onClose,
   submitting,
@@ -349,12 +351,16 @@ function FinishModal({
   visible: boolean
   completedCount: number
   defaultDuration: number
+  defaultRpe?: number
   onConfirm: (rpe: number, durationMin: number, notes: string) => void
   onClose: () => void
   submitting: boolean
 }) {
-  const [rpe, setRpe] = useState(7)
+  const [rpe, setRpe] = useState(defaultRpe ?? 7)
   const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+
+  // Sync defaultRpe when it arrives (exerciseRpeMap updates after first RPE is set)
+  useEffect(() => { if (defaultRpe != null) setRpe(defaultRpe) }, [defaultRpe])
   const [notes, setNotes] = useState('')
 
   return (
@@ -521,45 +527,119 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
   )
 }
 
-// PR Celebration Modal
+// PR Celebration Modal — Recompensas Capa 3
+const CONFETTI = ['🎉', '🏆', '💪', '⭐', '🔥', '🎊']
+
 function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
+  const scale = useRef(new Animated.Value(0.5)).current
+  const opacity = useRef(new Animated.Value(0)).current
+  const trophyBounce = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.sequence([
+        Animated.timing(trophyBounce, { toValue: -12, duration: 180, useNativeDriver: true }),
+        Animated.spring(trophyBounce, { toValue: 0, friction: 4, tension: 150, useNativeDriver: true }),
+      ]).start()
+    })
+  }, [])
+
+  async function handleShare() {
+    const lines = prs.map(pr => `${pr.exerciseName ?? 'Ejercicio'}${pr.weightKg != null ? `: ${pr.weightKg} kg` : ''} 🏆`)
+    try {
+      await Share.share({
+        message: `¡Nuevos récords personales en MedalIQ! 💪\n${lines.join('\n')}`,
+      })
+    } catch { /* silently ignore */ }
+  }
+
   return (
-    <Modal visible transparent animationType="fade">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16 }}>
-          <Text style={{ fontSize: 48 }}>🏆</Text>
-          <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.4, textAlign: 'center' }}>
-            ¡Nuevo récord personal!
+    <Modal visible transparent animationType="none">
+      <Animated.View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 24, opacity }}>
+        {/* Confetti row */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          {CONFETTI.map((e, i) => (
+            <Text key={i} style={{ fontSize: 18, opacity: 0.85 }}>{e}</Text>
+          ))}
+        </View>
+
+        <Animated.View style={{
+          backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16,
+          transform: [{ scale }],
+        }}>
+          <Animated.Text style={{ fontSize: 56, transform: [{ translateY: trophyBounce }] }}>🏆</Animated.Text>
+          <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.5, textAlign: 'center' }}>
+            ¡Récord personal!
           </Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', marginTop: -8 }}>
+            {prs.length === 1 ? 'Superaste tu mejor marca' : `${prs.length} nuevas mejores marcas`}
+          </Text>
+
           <View style={{ width: '100%', gap: 8 }}>
             {prs.map((pr, i) => (
-              <View key={i} style={{ backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fed7aa', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 20 }}>💪</Text>
+              <View key={i} style={{ backgroundColor: '#fff7ed', borderRadius: 14, borderWidth: 1.5, borderColor: '#fed7aa', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 22 }}>💪</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#9a3412' }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#9a3412' }}>
                     {pr.exerciseName ?? 'Ejercicio'}
                   </Text>
                   {pr.weightKg != null && (
-                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#c2410c', marginTop: 2 }}>
-                      {pr.weightKg} kg — tu mejor marca
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#c2410c', marginTop: 2 }}>
+                      {pr.weightKg} kg · nueva mejor marca
                     </Text>
                   )}
                 </View>
-                <View style={{ backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: 'white', letterSpacing: 0.5 }}>PR</Text>
+                <View style={{ backgroundColor: '#f97316', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: 0.5 }}>PR</Text>
                 </View>
               </View>
             ))}
           </View>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, marginTop: 4 }}
-          >
-            <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>¡Genial! 🎉</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 }}>
+            <TouchableOpacity
+              onPress={handleShare}
+              style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>Compartir 📤</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 14, fontFamily: 'Inter_700Bold' }}>¡Genial! 🎉</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
+  )
+}
+
+// RPE picker inline por ejercicio — aparece cuando todos los sets están completados
+function ExerciseRpePicker({ value, onChange }: { value: number | undefined; onChange: (v: number) => void }) {
+  return (
+    <View style={{ backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa', gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>Esfuerzo (RPE)</Text>
+        <Text style={{ fontSize: 15, fontFamily: 'Inter_900Black', color: '#f97316' }}>{value != null ? `${value}/10` : '—'}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 3 }}>
+        {[1,2,3,4,5,6,7,8,9,10].map(n => (
+          <TouchableOpacity
+            key={n}
+            onPress={() => { Haptics.selectionAsync(); onChange(n) }}
+            style={{ flex: 1, height: 30, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: value === n ? '#f97316' : '#f3f4f6' }}
+          >
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: value === n ? 'white' : '#6b7280' }}>{n}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   )
 }
 
@@ -567,6 +647,7 @@ export default function GymSessionScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
+  const setLastSession = useGymSessionStore(s => s.setLastSession)
 
   const [sets, setSets] = useState<LocalSet[]>([])
   const [freeExercises, setFreeExercises] = useState<FreeExercise[]>([])
@@ -578,7 +659,19 @@ export default function GymSessionScreen() {
   const [prResults, setPrResults] = useState<PRResult[]>([])
   const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
   const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
+  const [exerciseRpeMap, setExerciseRpeMap] = useState<Record<string, number>>({})
   const startTimeRef = useRef(Date.now())
+
+  function isExerciseDone(exerciseId: string): boolean {
+    const exSets = sets.filter(s => s.workoutExerciseId === exerciseId)
+    return exSets.length > 0 && exSets.every(s => s.completed)
+  }
+
+  function avgExerciseRpe(): number | undefined {
+    const vals = Object.values(exerciseRpeMap)
+    if (vals.length === 0) return undefined
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+  }
   const draftRestoredRef = useRef(false)
   const lastPayloadRef = useRef<Parameters<typeof completeGymSession>[0] | null>(null)
 
@@ -635,6 +728,11 @@ export default function GymSessionScreen() {
       queryClient.invalidateQueries({ queryKey: ['gym-today'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['gym-history'] })
+      setLastSession({
+        durationMin: lastPayloadRef.current?.durationMin ?? 60,
+        prCount: data.newPRs.length,
+        prs: data.newPRs,
+      })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setShowFinishModal(false)
       if (data.newPRs.length > 0) {
@@ -770,6 +868,7 @@ export default function GymSessionScreen() {
             repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
             completed: s.completed,
             setLogType: s.setLogType,
+            rpe: exerciseRpeMap[s.workoutExerciseId],
           }
         })
       : sets.map(s => ({
@@ -779,6 +878,7 @@ export default function GymSessionScreen() {
           repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
           completed: s.completed,
           setLogType: s.setLogType,
+          rpe: exerciseRpeMap[s.workoutExerciseId],
         }))
     const overridesArr: ExerciseOverride[] = session!.exercises
       .filter(ex => exerciseOverrides.has(ex.id))
@@ -834,6 +934,7 @@ export default function GymSessionScreen() {
         visible={showFinishModal}
         completedCount={completedCount}
         defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
+        defaultRpe={avgExerciseRpe()}
         onConfirm={handleConfirmFinish}
         onClose={() => setShowFinishModal(false)}
         submitting={finishing}
@@ -1001,6 +1102,12 @@ export default function GymSessionScreen() {
                 <Ionicons name="add" size={16} color="#6b7280" />
                 <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar set</Text>
               </TouchableOpacity>
+              {isExerciseDone(fe.localId) && (
+                <ExerciseRpePicker
+                  value={exerciseRpeMap[fe.localId]}
+                  onChange={v => setExerciseRpeMap(prev => ({ ...prev, [fe.localId]: v }))}
+                />
+              )}
             </View>
           )
         })()}
@@ -1229,6 +1336,14 @@ export default function GymSessionScreen() {
                   </View>
                 )
               })}
+
+              {/* RPE por ejercicio — visible cuando todos los sets están completados */}
+              {isExerciseDone(ex.id) && (
+                <ExerciseRpePicker
+                  value={exerciseRpeMap[ex.id]}
+                  onChange={v => setExerciseRpeMap(prev => ({ ...prev, [ex.id]: v }))}
+                />
+              )}
 
               {/* Navigate exercises */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>

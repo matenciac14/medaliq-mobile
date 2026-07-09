@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getPlan, type PlannedSession } from '../../../src/api/plan'
+import { getPlan, type PlannedSession, type PlanData, type LastCompletedPlan } from '../../../src/api/plan'
 import { getDashboard } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
@@ -574,7 +574,9 @@ export default function PlanScreen() {
   const [selectedWeekNum, setSelectedWeekNum] = useState<number | null>(null)
   const [selectedDow, setSelectedDow] = useState(todayDow)
 
-  const { data: plan, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['plan'], queryFn: getPlan })
+  const { data: planRaw, isLoading, refetch, isRefetching } = useQuery({ queryKey: ['plan'], queryFn: getPlan })
+  const plan: PlanData | null = planRaw && 'id' in planRaw ? planRaw as PlanData : null
+  const lastCompletedPlan: LastCompletedPlan | null = planRaw && 'lastCompletedPlan' in planRaw ? (planRaw as { lastCompletedPlan: LastCompletedPlan }).lastCompletedPlan : null
   const { data: dash } = useQuery({ queryKey: ['dashboard'], queryFn: getDashboard })
 
   // Refetch when returning from any screen (e.g. after edit-session or log)
@@ -606,13 +608,48 @@ export default function PlanScreen() {
   if (!plan) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', paddingHorizontal: 24 }}>
-        <Text style={{ fontSize: 40, marginBottom: 16 }}>📋</Text>
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1e3a5f', textAlign: 'center' }}>
-          Sin plan activo
-        </Text>
-        <Text style={{ fontSize: 14, color: '#6b7280', fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 8 }}>
-          Completa el onboarding para generar tu plan personalizado.
-        </Text>
+        {lastCompletedPlan ? (
+          <>
+            <Text style={{ fontSize: 48, marginBottom: 16 }}>🏆</Text>
+            <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center' }}>
+              ¡Plan completado!
+            </Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151', textAlign: 'center', marginTop: 8 }}>
+              {lastCompletedPlan.name}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 20, marginTop: 20 }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#f97316' }}>{lastCompletedPlan.totalWeeks}</Text>
+                <Text style={{ fontSize: 11, color: '#9ca3af' }}>semanas</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#22c55e' }}>{lastCompletedPlan.sessionsLogged}</Text>
+                <Text style={{ fontSize: 11, color: '#9ca3af' }}>/{lastCompletedPlan.sessionsTotal} sesiones</Text>
+              </View>
+              {lastCompletedPlan.endDate ? (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>
+                    {lastCompletedPlan.sessionsTotal > 0 ? Math.round((lastCompletedPlan.sessionsLogged / lastCompletedPlan.sessionsTotal) * 100) : 0}%
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>adherencia</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 20 }}>
+              Tu coach asignará el próximo plan.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={{ fontSize: 40, marginBottom: 16 }}>📋</Text>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1e3a5f', textAlign: 'center' }}>
+              Sin plan activo
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6b7280', fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 8 }}>
+              Completa el onboarding para generar tu plan personalizado.
+            </Text>
+          </>
+        )}
       </View>
     )
   }

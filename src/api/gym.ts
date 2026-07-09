@@ -70,6 +70,7 @@ export type GymSessionData = {
   isRestDay: boolean
   freeSession?: boolean
   hasCoach: boolean
+  plannedRunToday: { type: string; durationMin: number | null; zoneTarget: string | null } | null
   workoutDay: {
     id: string
     label: string
@@ -112,6 +113,7 @@ export type SetLog = {
   repsCompleted: number | null
   completed: boolean
   setLogType?: 'WORK' | 'WARMUP' | 'DROPSET'
+  rpe?: number
 }
 
 export type ExerciseOverride = {
