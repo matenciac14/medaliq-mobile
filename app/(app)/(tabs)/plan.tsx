@@ -848,6 +848,22 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
       >
+        {/* Chips de semana: recuperación + foco */}
+        {(week.isRecoveryWeek || week.focusDescription) && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {week.isRecoveryWeek && (
+              <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#15803d' }}>🌿 Semana de recuperación</Text>
+              </View>
+            )}
+            {week.focusDescription && (
+              <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#1d4ed8' }}>{week.focusDescription}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Session header label */}
         <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8 }}>
           Sesión seleccionada — {selectedLabel}

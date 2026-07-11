@@ -26,6 +26,8 @@ export type PlanWeek = {
   id: string
   weekNumber: number
   phase: string
+  focusDescription: string | null
+  isRecoveryWeek: boolean
   sessions: PlannedSession[]
 }
 
