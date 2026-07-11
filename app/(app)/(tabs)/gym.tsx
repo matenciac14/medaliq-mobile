@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, type PublicTemplate, type GymDayDetail, type GymWeekDetail, type RunningSession } from '../../../src/api/gym'
 import { useAuthStore } from '../../../src/store/auth'
+import { useGymSessionStore } from '../../../src/store/gymSession'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
 const DOW_LABELS = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -391,6 +392,7 @@ function TemplateCard({ tmpl, onSelect, selecting }: {
 }
 
 function TemplatePickerScreen({ insets }: { insets: { top: number; bottom: number } }) {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const [selecting, setSelecting] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -436,10 +438,20 @@ function TemplatePickerScreen({ insets }: { insets: { top: number; bottom: numbe
         colors={['#1e3a5f', '#2d5a8e']}
         style={{ paddingTop: insets.top + 16, paddingBottom: 24, paddingHorizontal: 20, gap: 4 }}
       >
-        <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>Gym</Text>
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular' }}>
-          Elige tu rutina y empieza hoy
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View style={{ gap: 4 }}>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>Gym</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular' }}>
+              Elige tu rutina y empieza hoy
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/exercises')}
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, marginTop: 4 }}
+          >
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Ejercicios →</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <ScrollView
@@ -466,6 +478,7 @@ export default function GymScreen() {
   const { user } = useAuthStore()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { lastSession, clearLastSession } = useGymSessionStore()
 
   const todayDow = (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })()
 
@@ -518,13 +531,57 @@ export default function GymScreen() {
         colors={['#1e3a5f', '#2d5a8e']}
         style={{ paddingTop: insets.top + 16, paddingBottom: 24, paddingHorizontal: 20 }}
       >
-        <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-          Gym
-        </Text>
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-          {session.workoutDay.label}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
+              Gym
+            </Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+              {session.workoutDay.label}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/exercises')}
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, marginTop: 4 }}
+          >
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Ejercicios →</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
+
+      {/* Post-session summary banner */}
+      {lastSession && (
+        <View style={{ marginHorizontal: 16, backgroundColor: '#f0fdf4', borderRadius: 14, borderWidth: 1, borderColor: '#bbf7d0', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: 28 }}>✅</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#15803d' }}>Sesión completada</Text>
+            <Text style={{ fontSize: 12, color: '#16a34a', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+              {lastSession.durationMin} min
+              {lastSession.prCount > 0 ? ` · ${lastSession.prCount} PR${lastSession.prCount > 1 ? 's' : ''} nuevo${lastSession.prCount > 1 ? 's' : ''}` : ''}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={clearLastSession} style={{ padding: 4 }}>
+            <Text style={{ fontSize: 18, color: '#86efac' }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Running session planned today banner (GYM-MOB-02) */}
+      {session?.plannedRunToday && (
+        <View style={{ marginHorizontal: 16, backgroundColor: '#f0f7ff', borderRadius: 14, borderWidth: 1, borderColor: '#bfdbfe', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: 22 }}>🏃</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1d4ed8' }}>
+              {['INTERVALOS', 'TIRADA_LARGA', 'SIMULACRO', 'TEST', 'TEMPO', 'FARTLEK'].includes(session.plannedRunToday.type) ? 'Doble carga hoy' : 'Running + Gym hoy'}
+            </Text>
+            <Text style={{ fontSize: 12, color: '#2563eb', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+              {session.plannedRunToday.type.replace(/_/g, ' ')}
+              {session.plannedRunToday.durationMin ? ` · ${session.plannedRunToday.durationMin} min` : ''}
+              {session.plannedRunToday.zoneTarget ? ` · ${session.plannedRunToday.zoneTarget}` : ''}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Start session card */}
       <View style={{ paddingHorizontal: 16 }}>

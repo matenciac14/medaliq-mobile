@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
 import { getDashboard, getWeekSessions, type WeekSession, type DashboardData } from '../../../src/api/dashboard'
+import { apiFetch } from '../../../src/api/client'
+import { getNotifications } from '../../../src/api/notifications'
 import { useAuthStore } from '../../../src/store/auth'
 
 const SESSION_ICONS: Record<string, string> = {
@@ -324,6 +326,92 @@ function HeroCarrera({ raceDays, isRecomp, planData, metrics }: {
   )
 }
 
+// DAILY-02 — widget de registro diario (peso + energía)
+function TodayLogCard({ initial }: { initial: { weightKg: number | null; energyLevel: number | null } | null }) {
+  const [weightInput, setWeightInput] = useState(initial?.weightKg != null ? String(initial.weightKg) : '')
+  const [energy, setEnergy] = useState<number | null>(initial?.energyLevel ?? null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [open, setOpen] = useState(!initial)
+
+  async function save() {
+    const weightKg = weightInput ? parseFloat(weightInput) : undefined
+    if (!weightKg && !energy) return
+    setSaving(true)
+    try {
+      await apiFetch('/api/mobile/metrics/log', {
+        method: 'POST',
+        body: JSON.stringify({ ...(weightKg && { weightKg }), ...(energy && { energyLevel: energy }) }),
+      })
+      setSaved(true)
+      setOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 14, gap: 10 }}>
+      <TouchableOpacity onPress={() => setOpen(o => !o)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 15 }}>📋</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Registro de hoy</Text>
+          {(initial || saved) && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#22c55e' }} />}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {initial?.weightKg && !open && (
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#374151' }}>{initial.weightKg} kg</Text>
+          )}
+          {initial?.energyLevel && !open && (
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>E{initial.energyLevel}/5</Text>
+          )}
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
+        </View>
+      </TouchableOpacity>
+
+      {open && (
+        <View style={{ gap: 10 }}>
+          {/* Peso */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280', width: 60 }}>Peso (kg)</Text>
+            <TextInput
+              value={weightInput}
+              onChangeText={setWeightInput}
+              placeholder="ej. 70.5"
+              placeholderTextColor="#d1d5db"
+              keyboardType="decimal-pad"
+              style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827', backgroundColor: '#f9fafb' }}
+            />
+          </View>
+          {/* Energía */}
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Energía</Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[1,2,3,4,5].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => { Haptics.selectionAsync(); setEnergy(n) }}
+                  style={{ flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: energy === n ? '#f97316' : '#f3f4f6' }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: energy === n ? 'white' : '#6b7280' }}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center' }}>1 = sin energía · 5 = excelente</Text>
+          </View>
+          <TouchableOpacity
+            onPress={save}
+            disabled={saving}
+            style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>{saving ? 'Guardando...' : 'Guardar'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  )
+}
+
 function HeroPeso({ metrics, weeklyWeightChange, weightProgressPct }: {
   metrics: { weightKg: number | null; weightGoalKg: number | null }
   weeklyWeightChange: number | null
@@ -576,6 +664,13 @@ export default function DashboardScreen() {
     queryFn: getDashboard,
   })
 
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications-count'],
+    queryFn: getNotifications,
+    staleTime: 30_000,
+  })
+  const unreadCount = notifData?.unreadCount ?? 0
+
   // Refrescar al volver al tab (tabs no se desmontan, refetchOnMount no dispara)
   useFocusEffect(
     useCallback(() => {
@@ -633,13 +728,25 @@ export default function DashboardScreen() {
           >
             {getGreeting()}, {firstName}
           </Text>
-          {d.trialDaysLeft !== null && d.trialDaysLeft > 0 && (
-            <View style={{ backgroundColor: '#fef9c3', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexShrink: 0 }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>
-                {d.trialDaysLeft}d trial
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push('/(app)/notifications') }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={22} color="white" />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 4, right: 2,
+                backgroundColor: '#f97316', borderRadius: 8,
+                minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center',
+                paddingHorizontal: 3,
+              }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {d.planData && (
@@ -858,6 +965,8 @@ export default function DashboardScreen() {
           planData={d.planData}
           metrics={d.metrics}
         />
+
+        <TodayLogCard initial={d.todayLog ?? null} />
 
         <HeroPeso
           metrics={d.metrics}

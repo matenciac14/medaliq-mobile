@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Modal, Animated, Vibration,
+  Alert, Modal, Vibration, ActivityIndicator, Image, Animated, Share,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -9,8 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getTodayGymSession, completeGymSession, SetLog, GymSessionData, PRResult } from '../../src/api/gym'
+import {
+  getTodayGymSession, completeGymSession, searchExercises,
+  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
+} from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
+import { useGymSessionStore } from '../../src/store/gymSession'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
@@ -26,6 +30,15 @@ type LocalSet = {
   completed: boolean
   setLogType: 'WORK' | 'WARMUP' | 'DROPSET'
 }
+
+type FreeExercise = {
+  localId: string
+  name: string
+  gif?: string | null
+}
+
+let _nextLocalId = 1
+function newLocalId() { return `free-${_nextLocalId++}` }
 
 const SET_TYPE_CONFIG = {
   WORK:    { bg: 'transparent', text: '#374151', badge: null },
@@ -51,11 +64,286 @@ function buildInitialSets(data: GymSessionData): LocalSet[] {
   return sets
 }
 
+// Exercise Swap Modal
+function SwapModal({
+  visible,
+  originalName,
+  defaultBodyPart,
+  exerciseId,
+  onSwap,
+  onClose,
+}: {
+  visible: boolean
+  originalName: string
+  defaultBodyPart: string
+  exerciseId?: string
+  onSwap: (result: ExerciseSearchResult) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<ExerciseSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [alternatives, setAlternatives] = useState<ExerciseSearchResult[]>([])
+  const [loadingAlt, setLoadingAlt] = useState(false)
+
+  // Reset on close
+  useEffect(() => {
+    if (!visible) { setQ(''); setResults([]); setAlternatives([]) }
+  }, [visible])
+
+  // Fetch alternatives from DB when opening
+  useEffect(() => {
+    if (!visible || !exerciseId) return
+    setLoadingAlt(true)
+    fetch(`/api/mobile/exercises/${exerciseId}/alternatives`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setAlternatives)
+      .catch(() => setAlternatives([]))
+      .finally(() => setLoadingAlt(false))
+  }, [visible, exerciseId])
+
+  // Debounced search
+  useEffect(() => {
+    if (!visible) return
+    setLoading(true)
+    const timer = setTimeout(() => {
+      searchExercises({ q: q || undefined, bodyPart: defaultBodyPart || undefined, limit: 25 })
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, visible, defaultBodyPart])
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' }}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>Sustituir ejercicio</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }} numberOfLines={1}>
+                Reemplazando: {originalName}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search input */}
+          <View style={{ padding: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+              <Ionicons name="search" size={16} color="#9ca3af" />
+              <TextInput
+                value={q}
+                onChangeText={setQ}
+                placeholder="Buscar ejercicio..."
+                placeholderTextColor="#9ca3af"
+                autoFocus
+                style={{ flex: 1, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#111827' }}
+              />
+              {q.length > 0 && (
+                <TouchableOpacity onPress={() => setQ('')}>
+                  <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Suggested alternatives */}
+          {(loadingAlt || alternatives.length > 0) && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                Sugeridas ({alternatives.length})
+              </Text>
+              {loadingAlt ? (
+                <ActivityIndicator color="#f97316" style={{ paddingVertical: 8 }} />
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {alternatives.map(r => (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => onSwap(r)}
+                      style={{ width: 110, backgroundColor: '#fff7ed', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#fed7aa' }}
+                    >
+                      {r.gif ? (
+                        <Image source={{ uri: r.gif }} style={{ width: '100%', height: 80 }} resizeMode="contain" />
+                      ) : (
+                        <View style={{ width: '100%', height: 80, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="barbell-outline" size={24} color="#d1d5db" />
+                        </View>
+                      )}
+                      <View style={{ padding: 6 }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }} numberOfLines={2}>
+                          {r.nameEs ?? r.name}
+                        </Text>
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }} numberOfLines={1}>
+                          {r.equipment}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {/* Results */}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ paddingHorizontal: 16 }}
+            contentContainerStyle={{ paddingBottom: 32, gap: 8 }}
+          >
+            {loading && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <ActivityIndicator color="#f97316" />
+              </View>
+            )}
+            {!loading && results.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Sin resultados</Text>
+              </View>
+            )}
+            {results.map(r => (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => onSwap(r)}
+                style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#e5e7eb', gap: 4, marginBottom: 8 }}
+              >
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{r.nameEs ?? r.name}</Text>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                  <View style={{ backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#3b82f6' }}>{r.bodyPart}</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#16a34a' }}>{r.target}</Text>
+                  </View>
+                  {r.equipment && (
+                    <View style={{ backgroundColor: '#faf5ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#7c3aed' }}>{r.equipment}</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+// Add Exercise Modal (free session) — EX-12 / sesión auto-dirigida
+function AddExerciseModal({
+  visible,
+  onAdd,
+  onClose,
+}: {
+  visible: boolean
+  onAdd: (result: ExerciseSearchResult) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<ExerciseSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!visible) { setQ(''); setResults([]) }
+  }, [visible])
+
+  useEffect(() => {
+    if (!visible) return
+    setLoading(true)
+    const timer = setTimeout(() => {
+      searchExercises({ q: q || undefined, limit: 30 })
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, visible])
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>Agregar ejercicio</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ padding: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+              <Ionicons name="search" size={16} color="#9ca3af" />
+              <TextInput
+                value={q}
+                onChangeText={setQ}
+                placeholder="Buscar ejercicio..."
+                placeholderTextColor="#9ca3af"
+                autoFocus
+                style={{ flex: 1, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#111827' }}
+              />
+              {q.length > 0 && (
+                <TouchableOpacity onPress={() => setQ('')}>
+                  <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 32, gap: 8 }}>
+            {loading && <View style={{ padding: 24, alignItems: 'center' }}><ActivityIndicator color="#f97316" /></View>}
+            {!loading && results.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                  {q.length === 0 ? 'Escribe para buscar...' : 'Sin resultados'}
+                </Text>
+              </View>
+            )}
+            {results.map(r => (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => onAdd(r)}
+                style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 8 }}
+              >
+                {r.gif ? (
+                  <Image source={{ uri: r.gif }} style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#f3f4f6' }} resizeMode="contain" />
+                ) : (
+                  <View style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="barbell" size={20} color="#d1d5db" />
+                  </View>
+                )}
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{r.nameEs ?? r.name}</Text>
+                  <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                    <View style={{ backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#3b82f6' }}>{r.bodyPart}</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#16a34a' }}>{r.target}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ backgroundColor: '#f97316', borderRadius: 8, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="add" size={18} color="white" />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 // Finish Session Modal
 function FinishModal({
   visible,
   completedCount,
   defaultDuration,
+  defaultRpe,
   onConfirm,
   onClose,
   submitting,
@@ -63,12 +351,16 @@ function FinishModal({
   visible: boolean
   completedCount: number
   defaultDuration: number
+  defaultRpe?: number
   onConfirm: (rpe: number, durationMin: number, notes: string) => void
   onClose: () => void
   submitting: boolean
 }) {
-  const [rpe, setRpe] = useState(7)
+  const [rpe, setRpe] = useState(defaultRpe ?? 7)
   const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+
+  // Sync defaultRpe when it arrives (exerciseRpeMap updates after first RPE is set)
+  useEffect(() => { if (defaultRpe != null) setRpe(defaultRpe) }, [defaultRpe])
   const [notes, setNotes] = useState('')
 
   return (
@@ -188,7 +480,11 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
     return () => clearInterval(intervalRef.current!)
   }, [])
 
-  const progress = remaining / seconds
+  function adjustTime(delta: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setRemaining(prev => Math.max(5, prev + delta))
+  }
+
   const mins = Math.floor(remaining / 60)
   const secs = remaining % 60
 
@@ -204,6 +500,21 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
               {mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`}
             </Text>
           </View>
+          {/* Adjust timer */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => adjustTime(-15)}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#374151' }}>−15s</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => adjustTime(+15)}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#374151' }}>+15s</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             onPress={onDone}
             style={{ backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14 }}
@@ -216,45 +527,119 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
   )
 }
 
-// PR Celebration Modal
+// PR Celebration Modal — Recompensas Capa 3
+const CONFETTI = ['🎉', '🏆', '💪', '⭐', '🔥', '🎊']
+
 function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
+  const scale = useRef(new Animated.Value(0.5)).current
+  const opacity = useRef(new Animated.Value(0)).current
+  const trophyBounce = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.sequence([
+        Animated.timing(trophyBounce, { toValue: -12, duration: 180, useNativeDriver: true }),
+        Animated.spring(trophyBounce, { toValue: 0, friction: 4, tension: 150, useNativeDriver: true }),
+      ]).start()
+    })
+  }, [])
+
+  async function handleShare() {
+    const lines = prs.map(pr => `${pr.exerciseName ?? 'Ejercicio'}${pr.weightKg != null ? `: ${pr.weightKg} kg` : ''} 🏆`)
+    try {
+      await Share.share({
+        message: `¡Nuevos récords personales en MedalIQ! 💪\n${lines.join('\n')}`,
+      })
+    } catch { /* silently ignore */ }
+  }
+
   return (
-    <Modal visible transparent animationType="fade">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16 }}>
-          <Text style={{ fontSize: 48 }}>🏆</Text>
-          <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.4, textAlign: 'center' }}>
-            ¡Nuevo récord personal!
+    <Modal visible transparent animationType="none">
+      <Animated.View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 24, opacity }}>
+        {/* Confetti row */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          {CONFETTI.map((e, i) => (
+            <Text key={i} style={{ fontSize: 18, opacity: 0.85 }}>{e}</Text>
+          ))}
+        </View>
+
+        <Animated.View style={{
+          backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16,
+          transform: [{ scale }],
+        }}>
+          <Animated.Text style={{ fontSize: 56, transform: [{ translateY: trophyBounce }] }}>🏆</Animated.Text>
+          <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.5, textAlign: 'center' }}>
+            ¡Récord personal!
           </Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', marginTop: -8 }}>
+            {prs.length === 1 ? 'Superaste tu mejor marca' : `${prs.length} nuevas mejores marcas`}
+          </Text>
+
           <View style={{ width: '100%', gap: 8 }}>
             {prs.map((pr, i) => (
-              <View key={i} style={{ backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fed7aa', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 20 }}>💪</Text>
+              <View key={i} style={{ backgroundColor: '#fff7ed', borderRadius: 14, borderWidth: 1.5, borderColor: '#fed7aa', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 22 }}>💪</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#9a3412' }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#9a3412' }}>
                     {pr.exerciseName ?? 'Ejercicio'}
                   </Text>
                   {pr.weightKg != null && (
-                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#c2410c', marginTop: 2 }}>
-                      {pr.weightKg} kg — tu mejor marca
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#c2410c', marginTop: 2 }}>
+                      {pr.weightKg} kg · nueva mejor marca
                     </Text>
                   )}
                 </View>
-                <View style={{ backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: 'white', letterSpacing: 0.5 }}>PR</Text>
+                <View style={{ backgroundColor: '#f97316', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: 0.5 }}>PR</Text>
                 </View>
               </View>
             ))}
           </View>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, marginTop: 4 }}
-          >
-            <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>¡Genial! 🎉</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 }}>
+            <TouchableOpacity
+              onPress={handleShare}
+              style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>Compartir 📤</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 14, fontFamily: 'Inter_700Bold' }}>¡Genial! 🎉</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
+  )
+}
+
+// RPE picker inline por ejercicio — aparece cuando todos los sets están completados
+function ExerciseRpePicker({ value, onChange }: { value: number | undefined; onChange: (v: number) => void }) {
+  return (
+    <View style={{ backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa', gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#92400e' }}>Esfuerzo (RPE)</Text>
+        <Text style={{ fontSize: 15, fontFamily: 'Inter_900Black', color: '#f97316' }}>{value != null ? `${value}/10` : '—'}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 3 }}>
+        {[1,2,3,4,5,6,7,8,9,10].map(n => (
+          <TouchableOpacity
+            key={n}
+            onPress={() => { Haptics.selectionAsync(); onChange(n) }}
+            style={{ flex: 1, height: 30, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: value === n ? '#f97316' : '#f3f4f6' }}
+          >
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: value === n ? 'white' : '#6b7280' }}>{n}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   )
 }
 
@@ -262,14 +647,31 @@ export default function GymSessionScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
+  const setLastSession = useGymSessionStore(s => s.setLastSession)
 
   const [sets, setSets] = useState<LocalSet[]>([])
+  const [freeExercises, setFreeExercises] = useState<FreeExercise[]>([])
+  const [showAddExercise, setShowAddExercise] = useState(false)
   const [restTimer, setRestTimer] = useState<{ show: boolean; seconds: number }>({ show: false, seconds: 90 })
   const [elapsedSecs, setElapsedSecs] = useState(0)
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
+  const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
+  const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
+  const [exerciseRpeMap, setExerciseRpeMap] = useState<Record<string, number>>({})
   const startTimeRef = useRef(Date.now())
+
+  function isExerciseDone(exerciseId: string): boolean {
+    const exSets = sets.filter(s => s.workoutExerciseId === exerciseId)
+    return exSets.length > 0 && exSets.every(s => s.completed)
+  }
+
+  function avgExerciseRpe(): number | undefined {
+    const vals = Object.values(exerciseRpeMap)
+    if (vals.length === 0) return undefined
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+  }
   const draftRestoredRef = useRef(false)
   const lastPayloadRef = useRef<Parameters<typeof completeGymSession>[0] | null>(null)
 
@@ -326,6 +728,11 @@ export default function GymSessionScreen() {
       queryClient.invalidateQueries({ queryKey: ['gym-today'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['gym-history'] })
+      setLastSession({
+        durationMin: lastPayloadRef.current?.durationMin ?? 60,
+        prCount: data.newPRs.length,
+        prs: data.newPRs,
+      })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setShowFinishModal(false)
       if (data.newPRs.length > 0) {
@@ -367,6 +774,49 @@ export default function GymSessionScreen() {
     })
   }
 
+  function handleSwap(result: ExerciseSearchResult) {
+    if (!swapTarget) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setExerciseOverrides(prev => {
+      const next = new Map(prev)
+      next.set(swapTarget.workoutExerciseId, { id: result.id, name: result.nameEs ?? result.name })
+      return next
+    })
+    setSwapTarget(null)
+  }
+
+  function addFreeExercise(result: ExerciseSearchResult) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    const localId = newLocalId()
+    const fe: FreeExercise = { localId, name: result.nameEs ?? result.name, gif: result.gif ?? null }
+    setFreeExercises(prev => [...prev, fe])
+    // Pre-add one blank set for this exercise
+    setSets(prev => [...prev, {
+      workoutExerciseId: localId,
+      setNumber: 1,
+      weightKg: '',
+      repsCompleted: '',
+      completed: false,
+      setLogType: 'WORK',
+    }])
+    setActiveExerciseIdx(freeExercises.length) // focus new exercise tab
+    setShowAddExercise(false)
+  }
+
+  function addFreeSet(localId: string) {
+    setSets(prev => {
+      const existingSets = prev.filter(s => s.workoutExerciseId === localId)
+      return [...prev, {
+        workoutExerciseId: localId,
+        setNumber: existingSets.length + 1,
+        weightKg: '',
+        repsCompleted: '',
+        completed: false,
+        setLogType: 'WORK',
+      }]
+    })
+  }
+
   function updateSet(idx: number, field: 'weightKg' | 'repsCompleted', value: string) {
     setSets(prev => {
       const next = prev.map((s, i) => i === idx ? { ...s, [field]: value } : s)
@@ -396,6 +846,10 @@ export default function GymSessionScreen() {
 
   function handleFinish() {
     const completedCount = sets.filter(s => s.completed).length
+    if (session?.freeSession && freeExercises.length === 0) {
+      Alert.alert('Sin ejercicios', 'Agrega al menos un ejercicio antes de finalizar.')
+      return
+    }
     if (completedCount === 0) {
       Alert.alert('Sin sets', 'Completa al menos un set antes de finalizar.')
       return
@@ -404,14 +858,38 @@ export default function GymSessionScreen() {
   }
 
   function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
-    const completedSets: SetLog[] = sets.map(s => ({
-      workoutExerciseId: s.workoutExerciseId,
-      setNumber: s.setNumber,
-      weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
-      repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
-      completed: s.completed,
-      setLogType: s.setLogType,
-    }))
+    const completedSets: SetLog[] = session!.freeSession
+      ? sets.map(s => {
+          const fe = freeExercises.find(f => f.localId === s.workoutExerciseId)
+          return {
+            exerciseName: fe?.name ?? s.workoutExerciseId,
+            setNumber: s.setNumber,
+            weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+            repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+            completed: s.completed,
+            setLogType: s.setLogType,
+            rpe: exerciseRpeMap[s.workoutExerciseId],
+          }
+        })
+      : sets.map(s => ({
+          workoutExerciseId: s.workoutExerciseId,
+          setNumber: s.setNumber,
+          weightKg: s.weightKg ? parseFloat(s.weightKg) : null,
+          repsCompleted: s.repsCompleted ? parseInt(s.repsCompleted) : null,
+          completed: s.completed,
+          setLogType: s.setLogType,
+          rpe: exerciseRpeMap[s.workoutExerciseId],
+        }))
+    const overridesArr: ExerciseOverride[] = session!.exercises
+      .filter(ex => exerciseOverrides.has(ex.id))
+      .map(ex => {
+        const ov = exerciseOverrides.get(ex.id)!
+        return {
+          originalWorkoutExerciseId: ex.id,
+          replacedWithExerciseId: ov.id,
+          replacedExerciseName: ov.name,
+        }
+      })
     const payload = {
       ...(session!.plannedSessionId
         ? { plannedSessionId: session!.plannedSessionId }
@@ -421,6 +899,7 @@ export default function GymSessionScreen() {
       durationMin,
       rpe,
       notes: notes.trim() || undefined,
+      exerciseOverrides: overridesArr.length > 0 ? overridesArr : undefined,
     }
     lastPayloadRef.current = payload
     finishSession(payload)
@@ -455,9 +934,25 @@ export default function GymSessionScreen() {
         visible={showFinishModal}
         completedCount={completedCount}
         defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
+        defaultRpe={avgExerciseRpe()}
         onConfirm={handleConfirmFinish}
         onClose={() => setShowFinishModal(false)}
         submitting={finishing}
+      />
+      {swapTarget && (
+        <SwapModal
+          visible
+          originalName={swapTarget.originalName}
+          defaultBodyPart={swapTarget.bodyPart}
+          exerciseId={swapTarget.exerciseId}
+          onSwap={handleSwap}
+          onClose={() => setSwapTarget(null)}
+        />
+      )}
+      <AddExerciseModal
+        visible={showAddExercise}
+        onAdd={addFreeExercise}
+        onClose={() => setShowAddExercise(false)}
       />
 
       {/* Top bar */}
@@ -492,14 +987,13 @@ export default function GymSessionScreen() {
         style={{ backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', maxHeight: 52 }}
         contentContainerStyle={{ paddingHorizontal: 12, gap: 4, alignItems: 'center' }}
       >
-        {session.exercises.map((ex, i) => {
-          const exSets = sets.filter(s => s.workoutExerciseId === ex.id)
-          const done = exSets.filter(s => s.completed).length
-          const total = exSets.length
+        {(session.freeSession ? freeExercises.map((fe, i) => ({ id: fe.localId, label: String(i + 1), sets: sets.filter(s => s.workoutExerciseId === fe.localId) })) : session.exercises.map((ex, i) => ({ id: ex.id, label: String(i + 1), sets: sets.filter(s => s.workoutExerciseId === ex.id), setType: ex.setType }))).map((item, i) => {
+          const done = item.sets.filter(s => s.completed).length
+          const total = item.sets.length
           const isActive = i === activeExerciseIdx
           return (
             <TouchableOpacity
-              key={ex.id}
+              key={item.id}
               onPress={() => setActiveExerciseIdx(i)}
               style={{
                 paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
@@ -508,19 +1002,28 @@ export default function GymSessionScreen() {
               }}
             >
               <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: isActive ? 'white' : '#6b7280' }}>
-                {i + 1}
+                {item.label}
               </Text>
               {done > 0 && (
                 <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: done === total ? '#22c55e' : '#f97316', alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontSize: 8, color: 'white', fontFamily: 'Inter_700Bold' }}>{done}</Text>
                 </View>
               )}
-              {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].text }} />
+              {(item as any).setType && (item as any).setType !== 'NORMAL' && !!MOBILE_SUPERSET_STYLES[(item as any).setType] && (
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MOBILE_SUPERSET_STYLES[(item as any).setType].text }} />
               )}
             </TouchableOpacity>
           )
         })}
+        {session.freeSession && (
+          <TouchableOpacity
+            onPress={() => setShowAddExercise(true)}
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff7ed', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <Ionicons name="add" size={14} color="#f97316" />
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: '#f97316' }}>Agregar</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Active exercise */}
@@ -530,10 +1033,92 @@ export default function GymSessionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {session.exercises[activeExerciseIdx] && (() => {
+        {/* Free session empty state */}
+        {session.freeSession && freeExercises.length === 0 && (
+          <View style={{ alignItems: 'center', paddingVertical: 48, gap: 16 }}>
+            <Text style={{ fontSize: 48 }}>💪</Text>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center' }}>
+                Sesión libre
+              </Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 }}>
+                Agrega los ejercicios que vas a hacer hoy.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowAddExercise(true)}
+              style={{ backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            >
+              <Ionicons name="add-circle" size={18} color="white" />
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: 'white' }}>Agregar ejercicio</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Free session exercise content */}
+        {session.freeSession && freeExercises[activeExerciseIdx] && (() => {
+          const fe = freeExercises[activeExerciseIdx]
+          const exSets = sets.filter(s => s.workoutExerciseId === fe.localId)
+          const exSetIdxOffset = sets.findIndex(s => s.workoutExerciseId === fe.localId)
+          return (
+            <View style={{ gap: 12 }}>
+              {/* Free exercise header */}
+              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>{fe.name}</Text>
+                {fe.gif ? (
+                  <Image source={{ uri: fe.gif }} style={{ width: '100%', height: 140, borderRadius: 10, backgroundColor: '#f3f4f6' }} resizeMode="contain" />
+                ) : null}
+              </View>
+              {/* Column headers */}
+              <View style={{ flexDirection: 'row', paddingHorizontal: 4 }}>
+                <Text style={{ width: 32, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase' }}>Set</Text>
+                <Text style={{ flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', textAlign: 'center' }}>Kg</Text>
+                <Text style={{ flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', textAlign: 'center' }}>Reps</Text>
+                <View style={{ width: 56 }} />
+              </View>
+              {exSets.map((set, localIdx) => {
+                const globalIdx = exSetIdxOffset + localIdx
+                return (
+                  <View key={`${fe.localId}-${set.setNumber}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: set.completed ? '#f0fdf4' : 'white', borderRadius: 12, padding: 10, borderWidth: 1.5, borderColor: set.completed ? '#86efac' : '#e5e7eb' }}>
+                    <TouchableOpacity onPress={() => !set.completed && cycleSetType(globalIdx)} disabled={set.completed} style={{ width: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: set.completed ? 'transparent' : SET_TYPE_CONFIG[set.setLogType].bg, borderRadius: 8, paddingVertical: 2, minHeight: 44, gap: 1 }}>
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: set.completed ? '#22c55e' : SET_TYPE_CONFIG[set.setLogType].text }}>{set.setNumber}</Text>
+                      {!set.completed && SET_TYPE_CONFIG[set.setLogType].badge && (
+                        <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: SET_TYPE_CONFIG[set.setLogType].text }}>{SET_TYPE_CONFIG[set.setLogType].badge}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <TextInput value={set.weightKg} onChangeText={v => updateSet(globalIdx, 'weightKg', v)} placeholder="—" placeholderTextColor="#d1d5db" keyboardType="decimal-pad" editable={!set.completed} style={{ width: '100%', height: 44, textAlign: 'center', fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827', backgroundColor: set.completed ? 'transparent' : '#f9fafb', borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb' }} />
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <TextInput value={set.repsCompleted} onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)} placeholder="—" placeholderTextColor="#d1d5db" keyboardType="number-pad" editable={!set.completed} style={{ width: '100%', height: 44, textAlign: 'center', fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827', backgroundColor: set.completed ? 'transparent' : '#f9fafb', borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb' }} />
+                    </View>
+                    <TouchableOpacity onPress={() => !set.completed && markSetDone(globalIdx)} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: set.completed ? '#22c55e' : '#f97316', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={set.completed ? 'checkmark' : 'checkmark-outline'} size={20} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                )
+              })}
+              <TouchableOpacity onPress={() => addFreeSet(fe.localId)} style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                <Ionicons name="add" size={16} color="#6b7280" />
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar set</Text>
+              </TouchableOpacity>
+              {isExerciseDone(fe.localId) && (
+                <ExerciseRpePicker
+                  value={exerciseRpeMap[fe.localId]}
+                  onChange={v => setExerciseRpeMap(prev => ({ ...prev, [fe.localId]: v }))}
+                />
+              )}
+            </View>
+          )
+        })()}
+
+        {session.exercises[activeExerciseIdx] && !session.freeSession && (() => {
           const ex = session.exercises[activeExerciseIdx]
           const exSets = sets.filter(s => s.workoutExerciseId === ex.id)
           const exSetIdxOffset = sets.findIndex(s => s.workoutExerciseId === ex.id)
+
+          const swappedEx = exerciseOverrides.get(ex.id)
+          const hasCompletedSets = sets.filter(s => s.workoutExerciseId === ex.id && s.completed).length > 0
 
           return (
             <View style={{ gap: 12 }}>
@@ -549,23 +1134,64 @@ export default function GymSessionScreen() {
               )}
 
               {/* Exercise header */}
-              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 4 }}>
-                <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
-                  {ex.exercise.name}
-                </Text>
+              <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: swappedEx ? '#bfdbfe' : '#e5e7eb', gap: 4 }}>
+                {/* Name row + Sustituir button */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.3 }}>
+                      {swappedEx ? swappedEx.name : ex.exercise.name}
+                    </Text>
+                    {swappedEx && (
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
+                        Antes: {ex.exercise.name}
+                      </Text>
+                    )}
+                  </View>
+                  {!hasCompletedSets && (
+                    <TouchableOpacity
+                      onPress={() => setSwapTarget({
+                        workoutExerciseId: ex.id,
+                        exerciseId: ex.exercise.id,
+                        bodyPart: ex.exercise.bodyPart ?? '',
+                        originalName: ex.exercise.name,
+                      })}
+                      style={{ backgroundColor: '#eff6ff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Ionicons name="swap-horizontal" size={13} color="#3b82f6" />
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#3b82f6' }}>Sustituir</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular' }}>
                   {ex.sets} series · {ex.repsScheme}
                   {ex.restSeconds ? ` · ${ex.restSeconds}s descanso` : ''}
                 </Text>
-                {ex.exercise.muscleGroups.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                    {ex.exercise.muscleGroups.map(mg => (
-                      <View key={mg} style={{ backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{mg}</Text>
-                      </View>
-                    ))}
+
+                {/* Muscle group badges */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#3b82f6' }}>{ex.exercise.target}</Text>
                   </View>
-                )}
+                  <View style={{ backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{ex.exercise.bodyPart}</Text>
+                  </View>
+                  {ex.exercise.mechanic ? (
+                    <View style={{ backgroundColor: '#f0fdf4', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#16a34a' }}>{ex.exercise.mechanic}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* GIF demo — EX-11: guía visual del movimiento */}
+                {!swappedEx && ex.exercise.gif ? (
+                  <Image
+                    source={{ uri: ex.exercise.gif }}
+                    style={{ width: '100%', height: 160, borderRadius: 10, backgroundColor: '#f3f4f6', marginTop: 8 }}
+                    resizeMode="contain"
+                  />
+                ) : null}
+
                 {ex.setType && ex.setType !== 'NORMAL' && MOBILE_SUPERSET_STYLES[ex.setType] && (
                   <View style={{ backgroundColor: MOBILE_SUPERSET_STYLES[ex.setType].bg, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 6 }}>
                     <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: MOBILE_SUPERSET_STYLES[ex.setType].text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -573,14 +1199,9 @@ export default function GymSessionScreen() {
                     </Text>
                   </View>
                 )}
-                {ex.exercise.description && (
+                {!swappedEx && ex.exercise.description && (
                   <Text style={{ fontSize: 12, color: '#4b5563', fontFamily: 'Inter_400Regular', marginTop: 4, lineHeight: 18 }}>
                     {ex.exercise.description}
-                  </Text>
-                )}
-                {ex.exercise.tips && (
-                  <Text style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Inter_400Regular', marginTop: 4, fontStyle: 'italic' }}>
-                    💡 {ex.exercise.tips}
                   </Text>
                 )}
                 {ex.notes && (
@@ -601,6 +1222,29 @@ export default function GymSessionScreen() {
               {/* Sets */}
               {exSets.map((set, localIdx) => {
                 const globalIdx = exSetIdxOffset + localIdx
+                const prevLog = ex.previousLogs.find(l => l.setNumber === set.setNumber)
+
+                const currentWeight = set.weightKg !== '' ? parseFloat(set.weightKg) : null
+                const currentReps = set.repsCompleted !== '' ? parseInt(set.repsCompleted) : null
+                const weightDelta = prevLog?.weightKg != null && currentWeight != null
+                  ? Math.round((currentWeight - prevLog.weightKg) * 10) / 10
+                  : null
+                const repsDelta = prevLog?.repsCompleted != null && currentReps != null
+                  ? currentReps - prevLog.repsCompleted
+                  : null
+
+                function deltaColor(delta: number | null) {
+                  if (delta == null) return '#9ca3af'
+                  if (delta > 0) return '#22c55e'
+                  if (delta < 0) return '#ef4444'
+                  return '#9ca3af'
+                }
+                function deltaLabel(delta: number | null, prev: number | null, unit: string) {
+                  if (delta != null) return delta > 0 ? `+${delta}${unit}` : delta < 0 ? `${delta}${unit}` : `=${prev}${unit}`
+                  if (prev != null) return `ant: ${prev}${unit}`
+                  return null
+                }
+
                 return (
                   <View
                     key={`${ex.id}-${set.setNumber}`}
@@ -630,36 +1274,55 @@ export default function GymSessionScreen() {
                         </Text>
                       )}
                     </TouchableOpacity>
-                    <TextInput
-                      value={set.weightKg}
-                      onChangeText={v => updateSet(globalIdx, 'weightKg', v)}
-                      placeholder="—"
-                      placeholderTextColor="#d1d5db"
-                      keyboardType="decimal-pad"
-                      inputMode="decimal"
-                      editable={!set.completed}
-                      style={{
-                        flex: 1, height: 44, textAlign: 'center', fontSize: 18,
-                        fontFamily: 'Inter_700Bold', color: '#111827',
-                        backgroundColor: set.completed ? 'transparent' : '#f9fafb',
-                        borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
-                      }}
-                    />
-                    <TextInput
-                      value={set.repsCompleted}
-                      onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)}
-                      placeholder="—"
-                      placeholderTextColor="#d1d5db"
-                      keyboardType="number-pad"
-                      inputMode="numeric"
-                      editable={!set.completed}
-                      style={{
-                        flex: 1, height: 44, textAlign: 'center', fontSize: 18,
-                        fontFamily: 'Inter_700Bold', color: '#111827',
-                        backgroundColor: set.completed ? 'transparent' : '#f9fafb',
-                        borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
-                      }}
-                    />
+
+                    {/* Kg column */}
+                    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      <TextInput
+                        value={set.weightKg}
+                        onChangeText={v => updateSet(globalIdx, 'weightKg', v)}
+                        placeholder={prevLog?.weightKg != null ? String(prevLog.weightKg) : '—'}
+                        placeholderTextColor="#d1d5db"
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        editable={!set.completed}
+                        style={{
+                          width: '100%', height: 44, textAlign: 'center', fontSize: 18,
+                          fontFamily: 'Inter_700Bold', color: '#111827',
+                          backgroundColor: set.completed ? 'transparent' : '#f9fafb',
+                          borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
+                        }}
+                      />
+                      {deltaLabel(weightDelta, prevLog?.weightKg ?? null, 'kg') && (
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: deltaColor(weightDelta) }}>
+                          {deltaLabel(weightDelta, prevLog?.weightKg ?? null, 'kg')}
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Reps column */}
+                    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      <TextInput
+                        value={set.repsCompleted}
+                        onChangeText={v => updateSet(globalIdx, 'repsCompleted', v)}
+                        placeholder="—"
+                        placeholderTextColor="#d1d5db"
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        editable={!set.completed}
+                        style={{
+                          width: '100%', height: 44, textAlign: 'center', fontSize: 18,
+                          fontFamily: 'Inter_700Bold', color: '#111827',
+                          backgroundColor: set.completed ? 'transparent' : '#f9fafb',
+                          borderRadius: 8, borderWidth: set.completed ? 0 : 1, borderColor: '#e5e7eb',
+                        }}
+                      />
+                      {deltaLabel(repsDelta, prevLog?.repsCompleted ?? null, '') && (
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: deltaColor(repsDelta) }}>
+                          {deltaLabel(repsDelta, prevLog?.repsCompleted ?? null, '')}
+                        </Text>
+                      )}
+                    </View>
+
                     <TouchableOpacity
                       onPress={() => !set.completed && markSetDone(globalIdx)}
                       style={{
@@ -674,6 +1337,14 @@ export default function GymSessionScreen() {
                 )
               })}
 
+              {/* RPE por ejercicio — visible cuando todos los sets están completados */}
+              {isExerciseDone(ex.id) && (
+                <ExerciseRpePicker
+                  value={exerciseRpeMap[ex.id]}
+                  onChange={v => setExerciseRpeMap(prev => ({ ...prev, [ex.id]: v }))}
+                />
+              )}
+
               {/* Navigate exercises */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
                 {activeExerciseIdx > 0 && (
@@ -684,7 +1355,7 @@ export default function GymSessionScreen() {
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>← Anterior</Text>
                   </TouchableOpacity>
                 )}
-                {activeExerciseIdx < session.exercises.length - 1 && (
+                {activeExerciseIdx < session.exercises.length - 1 && !session.freeSession && (
                   <TouchableOpacity
                     onPress={() => setActiveExerciseIdx(i => i + 1)}
                     style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
@@ -692,7 +1363,7 @@ export default function GymSessionScreen() {
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>Siguiente →</Text>
                   </TouchableOpacity>
                 )}
-                {activeExerciseIdx === session.exercises.length - 1 && (
+                {(activeExerciseIdx === session.exercises.length - 1 || session.freeSession) && (
                   <TouchableOpacity
                     onPress={handleFinish}
                     style={{ flex: 1, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}

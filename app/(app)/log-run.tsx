@@ -4,12 +4,13 @@ import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
+import { getLastRunSession } from '../../src/api/progress'
 
 const RUN_TYPES = [
   { type: 'RODAJE_Z2',    icon: '🟢', label: 'Rodaje Z2',   sub: 'Ritmo facil — conversacional' },
@@ -40,6 +41,13 @@ export default function LogRunScreen() {
   const [rpe, setRpe] = useState(0)
   const [notes, setNotes] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+
+  const { data: lastSessionData } = useQuery({
+    queryKey: ['last-run-session', runType],
+    queryFn: () => getLastRunSession(runType!),
+    enabled: !!runType,
+    staleTime: 5 * 60 * 1000,
+  })
 
   useEffect(() => {
     if (showSuccess) {
@@ -174,6 +182,53 @@ export default function LogRunScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Comparativa vs sesión anterior */}
+        {lastSessionData?.log && (() => {
+          const prev = lastSessionData.log
+          const prevDate = prev.completedAt ? new Date(prev.completedAt) : null
+          const dateLabel = prevDate
+            ? prevDate.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+            : 'Sesión anterior'
+          return (
+            <View style={{
+              backgroundColor: '#f0f7ff', borderRadius: 16, padding: 16,
+              borderWidth: 1, borderColor: '#bfdbfe', gap: 10,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="time-outline" size={16} color="#3b82f6" />
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Última vez — {dateLabel}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 0 }}>
+                {prev.durationMin != null && (
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{prev.durationMin}<Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}> min</Text></Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Duración</Text>
+                  </View>
+                )}
+                {prev.distanceKm != null && (
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{prev.distanceKm.toFixed(1)}<Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}> km</Text></Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Distancia</Text>
+                  </View>
+                )}
+                {prev.rpe != null && (
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#f97316' }}>{prev.rpe}<Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>/10</Text></Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>RPE</Text>
+                  </View>
+                )}
+              </View>
+              {prev.notes ? (
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', fontStyle: 'italic' }} numberOfLines={2}>
+                  "{prev.notes}"
+                </Text>
+              ) : null}
+            </View>
+          )
+        })()}
 
         {/* Duracion y Distancia */}
         <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 }}>

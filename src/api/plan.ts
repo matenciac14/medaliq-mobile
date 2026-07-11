@@ -37,6 +37,16 @@ export type PlanData = {
   weeks: PlanWeek[]
 }
 
-export async function getPlan(): Promise<PlanData | null> {
-  return apiFetch<PlanData | null>('/api/mobile/plan')
+export type LastCompletedPlan = {
+  name: string
+  totalWeeks: number
+  endDate: string | null
+  sessionsLogged: number
+  sessionsTotal: number
+}
+
+export type PlanResponse = PlanData | { lastCompletedPlan: LastCompletedPlan } | null
+
+export async function getPlan(): Promise<PlanResponse> {
+  return apiFetch<PlanResponse>('/api/mobile/plan')
 }

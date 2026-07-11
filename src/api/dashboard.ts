@@ -38,7 +38,6 @@ export type DashboardData = {
   completedCount: number
   totalTraining: number
   checkinPending: boolean
-  trialDaysLeft: number | null
   // hero cards
   streakDays: number
   raceDays: number | null
@@ -74,6 +73,11 @@ export type DashboardData = {
     durationMin: number | null
     rpe: number | null
   }[]
+  // DAILY-02: registro diario de hoy
+  todayLog: {
+    weightKg: number | null
+    energyLevel: number | null
+  } | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {

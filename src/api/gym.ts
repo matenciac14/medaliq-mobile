@@ -68,7 +68,9 @@ export type GymSessionData = {
   templateName: string
   dayOfWeek: number
   isRestDay: boolean
+  freeSession?: boolean
   hasCoach: boolean
+  plannedRunToday: { type: string; durationMin: number | null; zoneTarget: string | null } | null
   workoutDay: {
     id: string
     label: string
@@ -88,11 +90,12 @@ export type GymSessionData = {
     exercise: {
       id: string
       name: string
-      muscleGroups: string[]
+      bodyPart: string
+      target: string
       equipment: string
-      category: string | null
+      mechanic: string | null
       description: string | null
-      tips: string | null
+      gif: string | null
     }
     previousLogs: {
       setNumber: number
@@ -103,12 +106,21 @@ export type GymSessionData = {
 }
 
 export type SetLog = {
-  workoutExerciseId: string
+  workoutExerciseId?: string
+  exerciseName?: string
   setNumber: number
   weightKg: number | null
   repsCompleted: number | null
   completed: boolean
   setLogType?: 'WORK' | 'WARMUP' | 'DROPSET'
+  rpe?: number
+}
+
+export type ExerciseOverride = {
+  originalWorkoutExerciseId: string
+  replacedWithExerciseId: string
+  replacedExerciseName: string
+  reason?: string
 }
 
 export type CompleteSessionPayload = {
@@ -119,6 +131,32 @@ export type CompleteSessionPayload = {
   rpe?: number
   durationMin?: number
   notes?: string
+  exerciseOverrides?: ExerciseOverride[]
+}
+
+export type ExerciseSearchResult = {
+  id: string
+  name: string
+  nameEs?: string
+  bodyPart: string
+  target: string
+  equipment: string
+  gif?: string
+}
+
+export async function searchExercises(params: {
+  q?: string
+  bodyPart?: string
+  limit?: number
+}): Promise<ExerciseSearchResult[]> {
+  const sp = new URLSearchParams()
+  if (params.q) sp.set('q', params.q)
+  if (params.bodyPart) sp.set('bodyPart', params.bodyPart)
+  sp.set('limit', String(params.limit ?? 20))
+  const res = await apiFetch<{ exercises: ExerciseSearchResult[]; total: number }>(
+    `/api/mobile/exercises?${sp}`
+  )
+  return res.exercises
 }
 
 export async function getTodayGymSession(): Promise<GymSessionData | null> {
