@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,80 +19,70 @@ import type { SessionUser } from '../../src/api/auth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type MainGoal = 'SPORT' | 'GYM' | 'BODY'
-type Sport = 'RUNNING' | 'STRENGTH'
-type Step = 'goal' | 'sport' | 'hr-fitness' | 'physical' | 'schedule' | 'health' | 'generating'
+type ActivityType = 'GYM' | 'RUNNING'
+type GymGoal = 'MUSCLE_GAIN' | 'FAT_LOSS' | 'RECOMPOSITION'
+type RunningGoal = 'GENERAL_FITNESS' | 'RACE_5K' | 'RACE_10K'
+type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
+type Step = 'goal' | 'profile-1' | 'profile-2' | 'generating'
 
 type FormData = {
-  mainGoal: MainGoal | null
-  sport: Sport | null
-  raceDistance: string | null
-  hrSource: 'known' | 'estimated'
-  hrMax: string
+  activityType: ActivityType | null
+  gymGoal: GymGoal | null
+  runningGoal: RunningGoal | null
   gender: 'male' | 'female'
   age: string
   weightKg: string
   heightCm: string
+  weightGoalKg: string
   daysPerWeek: number
-  hoursPerSession: number
-  injuries: string[]
-  conditions: string[]
-  experienceLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null
+  sessionMinutes: number
+  experienceLevel: ExperienceLevel | null
+  injuries: string
+  conditions: string
 }
 
 const INITIAL: FormData = {
-  mainGoal: null, sport: null, raceDistance: null,
-  hrSource: 'estimated', hrMax: '',
-  gender: 'male', age: '', weightKg: '', heightCm: '',
-  daysPerWeek: 4, hoursPerSession: 1,
-  injuries: [], conditions: [], experienceLevel: null,
+  activityType: null,
+  gymGoal: null,
+  runningGoal: null,
+  gender: 'male',
+  age: '',
+  weightKg: '',
+  heightCm: '',
+  weightGoalKg: '',
+  daysPerWeek: 4,
+  sessionMinutes: 60,
+  experienceLevel: null,
+  injuries: '',
+  conditions: '',
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GOALS = [
-  { id: 'SPORT', label: 'Deporte y rendimiento', emoji: '🏅', desc: 'Correr, ciclismo, natación, triatlón...' },
-  { id: 'GYM', label: 'Gym y fuerza', emoji: '🏋️', desc: 'Ganar músculo, perder grasa' },
-  { id: 'BODY', label: 'Recomposición corporal', emoji: '🔥', desc: 'Mejorar composición sin deporte específico' },
+const ACTIVITIES = [
+  { id: 'RUNNING' as ActivityType, label: 'Running', emoji: '🏃', desc: 'Correr, mejorar ritmo y resistencia' },
+  { id: 'GYM' as ActivityType, label: 'Ejercicios', emoji: '🏋️', desc: 'Gym, pesas y recomposición corporal' },
 ]
 
-const SPORTS = [
-  { id: 'RUNNING', label: 'Running', emoji: '🏃' },
-  { id: 'STRENGTH', label: 'Fuerza / Gym', emoji: '🏋️' },
+const RUNNING_GOALS = [
+  { id: 'GENERAL_FITNESS' as RunningGoal, label: 'Fitness general', emoji: '💪' },
+  { id: 'RACE_5K' as RunningGoal, label: 'Carrera 5K', emoji: '🏅' },
+  { id: 'RACE_10K' as RunningGoal, label: 'Carrera 10K', emoji: '🏅' },
 ]
 
-const RACE_DISTANCES = [
-  { id: 'RACE_5K', label: '5K' },
-  { id: 'RACE_10K', label: '10K' },
-  { id: 'RACE_HALF_MARATHON', label: 'Media maratón' },
-  { id: 'RACE_MARATHON', label: 'Maratón' },
+const GYM_GOALS = [
+  { id: 'MUSCLE_GAIN' as GymGoal, label: 'Ganar músculo', emoji: '📈' },
+  { id: 'FAT_LOSS' as GymGoal, label: 'Perder grasa', emoji: '🔥' },
+  { id: 'RECOMPOSITION' as GymGoal, label: 'Recomposición', emoji: '⚖️' },
 ]
 
 const EXPERIENCE_LEVELS = [
-  { id: 'BEGINNER', label: 'Principiante', desc: 'Menos de 1 año' },
-  { id: 'INTERMEDIATE', label: 'Intermedio', desc: '1 a 3 años' },
-  { id: 'ADVANCED', label: 'Avanzado', desc: 'Más de 3 años' },
+  { id: 'BEGINNER' as ExperienceLevel, label: 'Principiante', desc: '< 1 año' },
+  { id: 'INTERMEDIATE' as ExperienceLevel, label: 'Intermedio', desc: '1–3 años' },
+  { id: 'ADVANCED' as ExperienceLevel, label: 'Avanzado', desc: '3+ años' },
 ]
 
-const INJURY_OPTIONS = ['Rodilla', 'Espalda/Lumbar', 'Tobillo', 'Hombro', 'Cadera', 'Ninguna']
-const CONDITION_OPTIONS = ['Hipertensión', 'Diabetes', 'Asma', 'Condición cardíaca', 'Ninguna']
-
-const AEROBIC_SPORTS: Sport[] = ['RUNNING']
-
-function getNextStep(current: Step, form: FormData): Step {
-  switch (current) {
-    case 'goal':
-      return form.mainGoal === 'SPORT' ? 'sport' : 'physical'
-    case 'sport':
-      if (AEROBIC_SPORTS.includes(form.sport!)) return 'hr-fitness'
-      return 'physical'
-    case 'hr-fitness': return 'physical'
-    case 'physical': return 'schedule'
-    case 'schedule': return 'health'
-    case 'health': return 'generating'
-    default: return 'generating'
-  }
-}
+const SESSION_OPTIONS = [30, 45, 60, 90]
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -103,10 +94,25 @@ export default function OnboardingScreen() {
   const [form, setForm] = useState<FormData>(INITIAL)
   const [loading, setLoading] = useState(false)
 
+  const fadeAnim  = useRef(new Animated.Value(1)).current
+  const slideAnim = useRef(new Animated.Value(0)).current
+
   const step = stepHistory[stepHistory.length - 1]
 
+  useEffect(() => {
+    fadeAnim.setValue(0)
+    slideAnim.setValue(24)
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start()
+  }, [step])
+
+  const currentStepIndex = stepHistory.filter(s => s !== 'generating').length
+  const totalSteps = 3 // goal + profile-1 + profile-2
+
   function next() {
-    const nextStep = getNextStep(step, form)
+    const nextStep = getNextStep(step)
     if (nextStep === 'generating') {
       handleGenerate()
     } else {
@@ -118,31 +124,48 @@ export default function OnboardingScreen() {
     setStepHistory(h => h.slice(0, -1))
   }
 
+  function getNextStep(current: Step): Step {
+    switch (current) {
+      case 'goal': return 'profile-1'
+      case 'profile-1': return 'profile-2'
+      case 'profile-2': return 'generating'
+      default: return 'generating'
+    }
+  }
+
+  const canNext = (() => {
+    if (step === 'goal') {
+      if (!form.activityType) return false
+      if (form.activityType === 'GYM' && !form.gymGoal) return false
+      if (form.activityType === 'RUNNING' && !form.runningGoal) return false
+      return true
+    }
+    if (step === 'profile-1') return !!form.age && !!form.weightKg && !!form.heightCm
+    return true
+  })()
+
   async function handleGenerate() {
     if (!form.age || !form.weightKg || !form.heightCm) {
       Alert.alert('Faltan datos', 'Completa tu edad, peso y altura.')
-      setStepHistory(h => [...h, 'physical'])
       return
     }
     setStepHistory(h => [...h, 'generating'])
     setLoading(true)
     try {
       const payload = {
-        mainGoal: form.mainGoal,
-        sport: form.sport,
-        raceDistance: form.raceDistance,
-        hrMax: form.hrSource === 'known' && form.hrMax ? parseInt(form.hrMax) : undefined,
-        hrSource: form.hrSource,
+        activityType: form.activityType,
+        gymGoal: form.gymGoal,
+        runningGoal: form.runningGoal,
         gender: form.gender,
         age: parseInt(form.age),
         weightKg: parseFloat(form.weightKg),
         heightCm: parseFloat(form.heightCm),
+        weightGoalKg: form.weightGoalKg ? parseFloat(form.weightGoalKg) : null,
         daysPerWeek: form.daysPerWeek,
-        hoursPerSession: form.hoursPerSession,
-        injuries: form.injuries.filter(i => i !== 'Ninguna'),
-        conditions: form.conditions.filter(c => c !== 'Ninguna'),
+        sessionMinutes: form.sessionMinutes,
         experienceLevel: form.experienceLevel,
-        nutritionCommitment: 'moderate',
+        injuries: form.injuries,
+        conditions: form.conditions,
       }
 
       const res = await apiFetch<{ success: boolean; token: string; isB2B: boolean }>(
@@ -160,35 +183,19 @@ export default function OnboardingScreen() {
       if (res.isB2B) {
         Alert.alert(
           'Perfil creado',
-          'Tu coach revisará tu perfil y activará tu cuenta. Te notificará directamente cuando esté lista.',
+          'Tu coach revisará tu perfil y activará tu cuenta.',
           [{ text: 'Entendido', onPress: () => router.replace('/(auth)/login') }]
         )
       } else {
         router.replace('/(app)/(tabs)/dashboard')
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'No se pudo generar el plan.')
+      Alert.alert('Error', err.message ?? 'No se pudo configurar tu cuenta.')
       setStepHistory(h => h.slice(0, -1))
     } finally {
       setLoading(false)
     }
   }
-
-  function toggleItem(arr: string[], item: string): string[] {
-    if (item === 'Ninguna') return ['Ninguna']
-    const filtered = arr.filter(i => i !== 'Ninguna')
-    return filtered.includes(item)
-      ? filtered.filter(i => i !== item)
-      : [...filtered, item]
-  }
-
-  const canNext = (() => {
-    if (step === 'goal') return !!form.mainGoal
-    if (step === 'sport') return !!form.sport
-    if (step === 'hr-fitness') return true // hrMax optional (can be estimated)
-    if (step === 'physical') return !!form.age && !!form.weightKg && !!form.heightCm
-    return true
-  })()
 
   // ── Generating screen ──────────────────────────────────────────────────────
 
@@ -200,17 +207,16 @@ export default function OnboardingScreen() {
         </View>
         <ActivityIndicator color="#f97316" size="large" />
         <Text style={{ color: 'white', fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' }}>
-          Generando tu plan...
+          Configurando tu cuenta...
         </Text>
         <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
-          Medaliq está creando tu plan personalizado. Esto puede tomar unos segundos.
+          Calculando tus objetivos iniciales
         </Text>
       </View>
     )
   }
 
-  const totalSteps = stepHistory.filter(s => s !== 'generating').length + 1
-  const progressPct = Math.round((stepHistory.length / 8) * 100)
+  const progressPct = Math.round((currentStepIndex / totalSteps) * 100)
 
   return (
     <KeyboardAvoidingView
@@ -218,157 +224,114 @@ export default function OnboardingScreen() {
       style={{ flex: 1, backgroundColor: '#f8fafc' }}
     >
       {/* Progress bar */}
-      <View style={{ height: 4, backgroundColor: '#e2e8f0', marginTop: insets.top }}>
-        <View style={{ height: 4, backgroundColor: '#f97316', width: `${progressPct}%` }} />
+      <View style={{ paddingTop: insets.top, backgroundColor: '#f8fafc' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#94a3b8' }}>
+            Paso {currentStepIndex} de {totalSteps}
+          </Text>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>
+            {progressPct}%
+          </Text>
+        </View>
+        <View style={{ height: 4, backgroundColor: '#e2e8f0', marginHorizontal: 20, borderRadius: 2 }}>
+          <Animated.View style={{ height: 4, backgroundColor: '#f97316', width: `${progressPct}%`, borderRadius: 2 }} />
+        </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 120 }}
+      <Animated.ScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
       >
         {/* Header */}
         <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#0f172a', marginBottom: 6 }}>
-          {stepTitle(step)}
+          {STEP_TITLES[step]}
         </Text>
         <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#64748b', marginBottom: 24 }}>
-          {stepSubtitle(step)}
+          {STEP_SUBTITLES[step]}
         </Text>
 
-        {/* ── Goal step ── */}
+        {/* ── Step: Goal ── */}
         {step === 'goal' && (
           <View style={{ gap: 12 }}>
-            {GOALS.map(g => (
+            {ACTIVITIES.map(a => (
               <TouchableOpacity
-                key={g.id}
-                onPress={() => setForm(f => ({ ...f, mainGoal: g.id as MainGoal }))}
+                key={a.id}
+                onPress={() => setForm(f => ({ ...f, activityType: a.id, gymGoal: null, runningGoal: null }))}
                 activeOpacity={0.85}
                 style={{
                   borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14,
-                  backgroundColor: form.mainGoal === g.id ? '#1e3a5f' : 'white',
-                  borderWidth: 2, borderColor: form.mainGoal === g.id ? '#1e3a5f' : '#e2e8f0',
+                  backgroundColor: form.activityType === a.id ? '#1e3a5f' : 'white',
+                  borderWidth: 2, borderColor: form.activityType === a.id ? '#1e3a5f' : '#e2e8f0',
                 }}
               >
-                <Text style={{ fontSize: 28 }}>{g.emoji}</Text>
+                <Text style={{ fontSize: 28 }}>{a.emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: form.mainGoal === g.id ? 'white' : '#0f172a' }}>{g.label}</Text>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: form.mainGoal === g.id ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2 }}>{g.desc}</Text>
+                  <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: form.activityType === a.id ? 'white' : '#0f172a' }}>{a.label}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: form.activityType === a.id ? 'rgba(255,255,255,0.65)' : '#64748b', marginTop: 2 }}>{a.desc}</Text>
                 </View>
               </TouchableOpacity>
             ))}
-          </View>
-        )}
 
-        {/* ── Sport step ── */}
-        {step === 'sport' && (
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              {SPORTS.map(s => (
-                <TouchableOpacity
-                  key={s.id}
-                  onPress={() => setForm(f => ({ ...f, sport: s.id as Sport, raceDistance: null }))}
-                  activeOpacity={0.85}
-                  style={{
-                    borderRadius: 14, padding: 16, alignItems: 'center', gap: 6, width: '47%',
-                    backgroundColor: form.sport === s.id ? '#1e3a5f' : 'white',
-                    borderWidth: 2, borderColor: form.sport === s.id ? '#1e3a5f' : '#e2e8f0',
-                  }}
-                >
-                  <Text style={{ fontSize: 28 }}>{s.emoji}</Text>
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.sport === s.id ? 'white' : '#0f172a' }}>{s.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {form.sport === 'RUNNING' && (
-              <View style={{ marginTop: 8, gap: 8 }}>
-                <Text style={labelStyle}>Distancia objetivo</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {RACE_DISTANCES.map(d => (
-                    <TouchableOpacity
-                      key={d.id}
-                      onPress={() => setForm(f => ({ ...f, raceDistance: d.id }))}
-                      activeOpacity={0.85}
-                      style={{
-                        borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,
-                        backgroundColor: form.raceDistance === d.id ? '#f97316' : 'white',
-                        borderWidth: 2, borderColor: form.raceDistance === d.id ? '#f97316' : '#e2e8f0',
-                      }}
-                    >
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.raceDistance === d.id ? 'white' : '#0f172a' }}>{d.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* ── HR Fitness step ── */}
-        {step === 'hr-fitness' && (
-          <View style={{ gap: 24 }}>
-            <View style={{ gap: 12 }}>
-              <Text style={labelStyle}>¿Conoces tu FC máxima?</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {[
-                  { id: 'known', label: 'Sí, la conozco', desc: 'La he medido en test' },
-                  { id: 'estimated', label: 'Estimarla', desc: 'Se calculará automáticamente' },
-                ].map(opt => (
+            {/* Running sub-goals */}
+            {form.activityType === 'RUNNING' && (
+              <View style={{ marginTop: 8, padding: 16, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', gap: 8 }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151', marginBottom: 4 }}>¿Cuál es tu meta?</Text>
+                {RUNNING_GOALS.map(g => (
                   <TouchableOpacity
-                    key={opt.id}
-                    onPress={() => setForm(f => ({ ...f, hrSource: opt.id as 'known' | 'estimated' }))}
+                    key={g.id}
+                    onPress={() => setForm(f => ({ ...f, runningGoal: g.id }))}
                     activeOpacity={0.85}
                     style={{
-                      flex: 1, borderRadius: 14, padding: 16, alignItems: 'center', gap: 4,
-                      backgroundColor: form.hrSource === opt.id ? '#1e3a5f' : 'white',
-                      borderWidth: 2, borderColor: form.hrSource === opt.id ? '#1e3a5f' : '#e2e8f0',
+                      borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+                      flexDirection: 'row', alignItems: 'center', gap: 10,
+                      backgroundColor: form.runningGoal === g.id ? '#f97316' : 'white',
+                      borderWidth: 2, borderColor: form.runningGoal === g.id ? '#f97316' : '#e2e8f0',
                     }}
                   >
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', textAlign: 'center', color: form.hrSource === opt.id ? 'white' : '#0f172a' }}>{opt.label}</Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', textAlign: 'center', color: form.hrSource === opt.id ? 'rgba(255,255,255,0.65)' : '#64748b' }}>{opt.desc}</Text>
+                    <Text style={{ fontSize: 18 }}>{g.emoji}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.runningGoal === g.id ? 'white' : '#0f172a' }}>{g.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
-
-            {form.hrSource === 'known' && (
-              <View style={{ gap: 8 }}>
-                <Text style={labelStyle}>FC Máxima (ppm)</Text>
-                <TextInput
-                  value={form.hrMax}
-                  onChangeText={v => setForm(f => ({ ...f, hrMax: v }))}
-                  placeholder="Ej: 185"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                  style={fieldStyle}
-                />
-              </View>
             )}
 
-            {form.hrSource === 'estimated' && (
-              <View style={{ backgroundColor: '#eff6ff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#bfdbfe' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1e40af', marginBottom: 4 }}>
-                  Cálculo automático
-                </Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#3b82f6', lineHeight: 20 }}>
-                  Usaremos la fórmula 211 - 0.64 × edad para estimar tu FC máxima y calcular tus zonas de entrenamiento.
-                </Text>
+            {/* Gym sub-goals */}
+            {form.activityType === 'GYM' && (
+              <View style={{ marginTop: 8, padding: 16, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', gap: 8 }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151', marginBottom: 4 }}>¿Cuál es tu meta?</Text>
+                {GYM_GOALS.map(g => (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => setForm(f => ({ ...f, gymGoal: g.id }))}
+                    activeOpacity={0.85}
+                    style={{
+                      borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+                      flexDirection: 'row', alignItems: 'center', gap: 10,
+                      backgroundColor: form.gymGoal === g.id ? '#f97316' : 'white',
+                      borderWidth: 2, borderColor: form.gymGoal === g.id ? '#f97316' : '#e2e8f0',
+                    }}
+                  >
+                    <Text style={{ fontSize: 18 }}>{g.emoji}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.gymGoal === g.id ? 'white' : '#0f172a' }}>{g.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
         )}
 
-        {/* ── Physical step ── */}
-        {step === 'physical' && (
+        {/* ── Step: Profile 1 (datos físicos) ── */}
+        {step === 'profile-1' && (
           <View style={{ gap: 16 }}>
             <View style={{ gap: 8 }}>
-              <Text style={labelStyle}>Sexo biológico</Text>
+              <Text style={labelStyle}>Género</Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                {[['male', 'Masculino'], ['female', 'Femenino']].map(([v, l]) => (
+                {([['male', '♂ Hombre'], ['female', '♀ Mujer']] as const).map(([v, l]) => (
                   <TouchableOpacity
                     key={v}
-                    onPress={() => setForm(f => ({ ...f, gender: v as 'male' | 'female' }))}
+                    onPress={() => setForm(f => ({ ...f, gender: v }))}
                     activeOpacity={0.85}
                     style={{
                       flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center',
@@ -382,50 +345,55 @@ export default function OnboardingScreen() {
               </View>
             </View>
 
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 6 }}>
               <Text style={labelStyle}>Edad</Text>
-              <TextInput value={form.age} onChangeText={v => setForm(f => ({ ...f, age: v }))} placeholder="Ej: 28" placeholderTextColor="#94a3b8" keyboardType="numeric" inputMode="numeric" style={fieldStyle} />
+              <TextInput value={form.age} onChangeText={v => setForm(f => ({ ...f, age: v }))} placeholder="32" placeholderTextColor="#94a3b8" keyboardType="number-pad" inputMode="numeric" style={fieldStyle} />
             </View>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 6 }}>
               <Text style={labelStyle}>Peso (kg)</Text>
-              <TextInput value={form.weightKg} onChangeText={v => setForm(f => ({ ...f, weightKg: v }))} placeholder="Ej: 70" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" inputMode="decimal" style={fieldStyle} />
+              <TextInput value={form.weightKg} onChangeText={v => setForm(f => ({ ...f, weightKg: v }))} placeholder="68" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" inputMode="decimal" style={fieldStyle} />
             </View>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 6 }}>
               <Text style={labelStyle}>Altura (cm)</Text>
-              <TextInput value={form.heightCm} onChangeText={v => setForm(f => ({ ...f, heightCm: v }))} placeholder="Ej: 175" placeholderTextColor="#94a3b8" keyboardType="numeric" inputMode="numeric" style={fieldStyle} />
+              <TextInput value={form.heightCm} onChangeText={v => setForm(f => ({ ...f, heightCm: v }))} placeholder="170" placeholderTextColor="#94a3b8" keyboardType="number-pad" inputMode="numeric" style={fieldStyle} />
             </View>
 
-            <View style={{ gap: 8 }}>
-              <Text style={labelStyle}>Nivel de experiencia</Text>
-              <View style={{ gap: 8 }}>
-                {EXPERIENCE_LEVELS.map(e => (
-                  <TouchableOpacity
-                    key={e.id}
-                    onPress={() => setForm(f => ({ ...f, experienceLevel: e.id as FormData['experienceLevel'] }))}
-                    activeOpacity={0.85}
-                    style={{
-                      borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      backgroundColor: form.experienceLevel === e.id ? '#1e3a5f' : 'white',
-                      borderWidth: 2, borderColor: form.experienceLevel === e.id ? '#1e3a5f' : '#e2e8f0',
-                    }}
-                  >
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.experienceLevel === e.id ? 'white' : '#0f172a' }}>{e.label}</Text>
-                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: form.experienceLevel === e.id ? 'rgba(255,255,255,0.65)' : '#64748b' }}>{e.desc}</Text>
-                  </TouchableOpacity>
-                ))}
+            {form.activityType === 'GYM' && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ ...labelStyle, color: '#94a3b8' }}>Peso objetivo (kg) — opcional</Text>
+                <TextInput value={form.weightGoalKg} onChangeText={v => setForm(f => ({ ...f, weightGoalKg: v }))} placeholder="65" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" inputMode="decimal" style={fieldStyle} />
               </View>
+            )}
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ ...labelStyle, color: '#94a3b8' }}>Nivel de experiencia — opcional</Text>
+              {EXPERIENCE_LEVELS.map(e => (
+                <TouchableOpacity
+                  key={e.id}
+                  onPress={() => setForm(f => ({ ...f, experienceLevel: f.experienceLevel === e.id ? null : e.id }))}
+                  activeOpacity={0.85}
+                  style={{
+                    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    backgroundColor: form.experienceLevel === e.id ? '#1e3a5f' : 'white',
+                    borderWidth: 2, borderColor: form.experienceLevel === e.id ? '#1e3a5f' : '#e2e8f0',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.experienceLevel === e.id ? 'white' : '#0f172a' }}>{e.label}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: form.experienceLevel === e.id ? 'rgba(255,255,255,0.65)' : '#64748b' }}>{e.desc}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         )}
 
-        {/* ── Schedule step ── */}
-        {step === 'schedule' && (
-          <View style={{ gap: 24 }}>
+        {/* ── Step: Profile 2 (disponibilidad + salud) ── */}
+        {step === 'profile-2' && (
+          <View style={{ gap: 20 }}>
             <View style={{ gap: 12 }}>
-              <Text style={labelStyle}>Días de entrenamiento por semana: <Text style={{ color: '#f97316' }}>{form.daysPerWeek}</Text></Text>
+              <Text style={labelStyle}>Días de entrenamiento por semana</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {[2, 3, 4, 5, 6].map(d => (
+                {[3, 4, 5, 6].map(d => (
                   <TouchableOpacity
                     key={d}
                     onPress={() => setForm(f => ({ ...f, daysPerWeek: d }))}
@@ -443,78 +411,49 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={{ gap: 12 }}>
-              <Text style={labelStyle}>Horas por sesión: <Text style={{ color: '#f97316' }}>{form.hoursPerSession}h</Text></Text>
+              <Text style={labelStyle}>Duración por sesión</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {[0.5, 1, 1.5, 2].map(h => (
+                {SESSION_OPTIONS.map(m => (
                   <TouchableOpacity
-                    key={h}
-                    onPress={() => setForm(f => ({ ...f, hoursPerSession: h }))}
+                    key={m}
+                    onPress={() => setForm(f => ({ ...f, sessionMinutes: m }))}
                     activeOpacity={0.85}
                     style={{
                       flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center',
-                      backgroundColor: form.hoursPerSession === h ? '#f97316' : 'white',
-                      borderWidth: 2, borderColor: form.hoursPerSession === h ? '#f97316' : '#e2e8f0',
+                      backgroundColor: form.sessionMinutes === m ? '#f97316' : 'white',
+                      borderWidth: 2, borderColor: form.sessionMinutes === m ? '#f97316' : '#e2e8f0',
                     }}
                   >
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.hoursPerSession === h ? 'white' : '#0f172a' }}>{h}h</Text>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: form.sessionMinutes === m ? 'white' : '#0f172a' }}>{m}m</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-          </View>
-        )}
 
-        {/* ── Health step ── */}
-        {step === 'health' && (
-          <View style={{ gap: 20 }}>
-            <View style={{ gap: 10 }}>
-              <Text style={labelStyle}>Lesiones actuales</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {INJURY_OPTIONS.map(inj => {
-                  const active = form.injuries.includes(inj)
-                  return (
-                    <TouchableOpacity
-                      key={inj}
-                      onPress={() => setForm(f => ({ ...f, injuries: toggleItem(f.injuries, inj) }))}
-                      activeOpacity={0.85}
-                      style={{
-                        borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-                        backgroundColor: active ? '#1e3a5f' : 'white',
-                        borderWidth: 2, borderColor: active ? '#1e3a5f' : '#e2e8f0',
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: active ? 'white' : '#374151' }}>{inj}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ ...labelStyle, color: '#94a3b8' }}>Lesiones o molestias — opcional</Text>
+              <TextInput
+                value={form.injuries}
+                onChangeText={v => setForm(f => ({ ...f, injuries: v }))}
+                placeholder="Ej: dolor en rodilla derecha"
+                placeholderTextColor="#94a3b8"
+                style={fieldStyle}
+              />
             </View>
 
-            <View style={{ gap: 10 }}>
-              <Text style={labelStyle}>Condiciones médicas</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {CONDITION_OPTIONS.map(cond => {
-                  const active = form.conditions.includes(cond)
-                  return (
-                    <TouchableOpacity
-                      key={cond}
-                      onPress={() => setForm(f => ({ ...f, conditions: toggleItem(f.conditions, cond) }))}
-                      activeOpacity={0.85}
-                      style={{
-                        borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-                        backgroundColor: active ? '#1e3a5f' : 'white',
-                        borderWidth: 2, borderColor: active ? '#1e3a5f' : '#e2e8f0',
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: active ? 'white' : '#374151' }}>{cond}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ ...labelStyle, color: '#94a3b8' }}>Condiciones médicas — opcional</Text>
+              <TextInput
+                value={form.conditions}
+                onChangeText={v => setForm(f => ({ ...f, conditions: v }))}
+                placeholder="Ej: hipertensión, asma"
+                placeholderTextColor="#94a3b8"
+                style={fieldStyle}
+              />
             </View>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Bottom actions */}
       <View style={{
@@ -544,7 +483,7 @@ export default function OnboardingScreen() {
           }}
         >
           <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: canNext ? 'white' : '#94a3b8' }}>
-            {step === 'health' ? 'Generar mi plan' : 'Continuar'}
+            {step === 'profile-2' ? 'Guardar y entrar' : 'Continuar'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -552,33 +491,23 @@ export default function OnboardingScreen() {
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Step metadata ─────────────────────────────────────────────────────────────
 
-function stepTitle(step: Step): string {
-  const map: Record<Step, string> = {
-    goal: '¿Cuál es tu objetivo?',
-    sport: '¿Qué deporte practicas?',
-    'hr-fitness': 'Tu condición cardiovascular',
-    physical: 'Tu perfil físico',
-    schedule: 'Tu disponibilidad',
-    health: 'Salud y restricciones',
-    generating: 'Generando...',
-  }
-  return map[step]
+const STEP_TITLES: Record<Step, string> = {
+  'goal': '¿Cómo quieres entrenar?',
+  'profile-1': 'Tus datos',
+  'profile-2': 'Disponibilidad y salud',
+  'generating': 'Configurando...',
 }
 
-function stepSubtitle(step: Step): string {
-  const map: Record<Step, string> = {
-    goal: 'Elige el que mejor describe lo que quieres lograr.',
-    sport: 'Selecciona tu deporte principal.',
-    'hr-fitness': 'Usamos esto para calcular tus zonas de entrenamiento.',
-    physical: 'Usamos estos datos para calibrar tu plan.',
-    schedule: '¿Cuánto tiempo puedes entrenar?',
-    health: 'Selecciona lo que aplica. Puedes omitir si no hay nada.',
-    generating: '',
-  }
-  return map[step]
+const STEP_SUBTITLES: Record<Step, string> = {
+  'goal': 'Medaliq se adapta a tu forma de entrenar.',
+  'profile-1': 'Con esto calculamos tus calorías y macros.',
+  'profile-2': 'Tu plan se adapta al tiempo que tienes.',
+  'generating': '',
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const labelStyle = {
   fontSize: 14,
@@ -587,7 +516,7 @@ const labelStyle = {
 } as const
 
 const fieldStyle = {
-  backgroundColor: 'white',
+  backgroundColor: '#f8fafc',
   borderRadius: 12,
   paddingHorizontal: 16,
   paddingVertical: 14,
