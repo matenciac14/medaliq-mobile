@@ -221,6 +221,35 @@ export default function CheckinScreen() {
           </>
         )}
 
+        {/* Valores numéricos exactos (CI-F-05) */}
+        {(result.planChanges?.volumeDeltaPct !== undefined || result.nutritionChanges?.newKcalHard !== undefined) && (
+          <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 10 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Valores aplicados
+            </Text>
+            {result.planChanges?.volumeDeltaPct !== undefined && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Volumen próxima semana</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: result.planChanges.volumeDeltaPct < 0 ? '#92400e' : '#166534' }}>
+                  {result.planChanges.volumeDeltaPct > 0 ? '+' : ''}{result.planChanges.volumeDeltaPct}%
+                </Text>
+              </View>
+            )}
+            {result.nutritionChanges?.newKcalHard !== undefined && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Kcal día intenso</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>{Math.round(result.nutritionChanges.newKcalHard)} kcal</Text>
+              </View>
+            )}
+            {result.nutritionChanges?.newKcalEasy !== undefined && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Kcal día suave</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>{Math.round(result.nutritionChanges.newKcalEasy)} kcal</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Sugerencias pendientes (planes COACH) */}
         {suggestions.length > 0 && (
           <View style={{ gap: 10 }}>

@@ -54,6 +54,8 @@ export type CheckinResult = {
     recommendation: string
     adjustments: string[]
     triggers: string[]
+    planChanges?: { volumeDeltaPct?: number }
+    nutritionChanges?: { newKcalHard?: number; newKcalEasy?: number }
   } | null
   suggestions?: CheckinSuggestion[]
   pendingSuggestions?: number
