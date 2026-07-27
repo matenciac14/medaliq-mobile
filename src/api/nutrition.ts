@@ -25,6 +25,7 @@ export type NutritionData = {
   pendingAdjustment: PendingNutritionAdjustment | null
   gymKcalBurned: number | null
   waterMlTarget?: number
+  planPhaseContext?: string | null
 }
 
 export type FoodLogEntry = {

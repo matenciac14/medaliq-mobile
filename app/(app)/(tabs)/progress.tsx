@@ -405,6 +405,72 @@ export default function ProgressScreen() {
         </View>
       )}
 
+      {/* Histórico 1RM por ejercicio */}
+      {(data.gymPRHistory ?? []).length > 0 && (
+        <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <SectionHeader title="Progresión 1RM" />
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#15803d' }}>📈 Epley</Text>
+            </View>
+          </View>
+          <View style={{ gap: 14 }}>
+            {data.gymPRHistory.slice(0, 5).map((series) => {
+              const pts = series.points.slice(-6)
+              const max = Math.max(...pts.map(p => p.oneRmKg))
+              const min = Math.min(...pts.map(p => p.oneRmKg))
+              const last = pts[pts.length - 1]
+              const first = pts[0]
+              const delta = pts.length > 1 ? Math.round((last.oneRmKg - first.oneRmKg) * 10) / 10 : null
+              return (
+                <View key={series.exerciseName} style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827', flex: 1 }} numberOfLines={1}>
+                      {series.exerciseName}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>
+                        {last.oneRmKg} <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kg 1RM</Text>
+                      </Text>
+                      {delta != null && (
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: delta > 0 ? '#22c55e' : delta < 0 ? '#ef4444' : '#9ca3af' }}>
+                          {delta > 0 ? '+' : ''}{delta}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {/* Sparkline bars */}
+                  <View style={{ flexDirection: 'row', gap: 4, alignItems: 'flex-end', height: 32 }}>
+                    {pts.map((p, i) => {
+                      const range = max - min
+                      const pct = range > 0 ? ((p.oneRmKg - min) / range) : 1
+                      const barH = Math.max(6, Math.round(pct * 28))
+                      const isLast = i === pts.length - 1
+                      return (
+                        <View key={p.date} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: 32 }}>
+                          <View style={{ width: '100%', height: barH, backgroundColor: isLast ? '#1e3a5f' : '#dbeafe', borderRadius: 3 }} />
+                        </View>
+                      )
+                    })}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {pts.map((p, i) => {
+                      const d = new Date(p.date)
+                      const label = `${d.getDate()}/${d.getMonth() + 1}`
+                      return (
+                        <Text key={p.date} style={{ flex: 1, fontSize: 8, fontFamily: 'Inter_400Regular', color: '#d1d5db', textAlign: 'center' }}>
+                          {label}
+                        </Text>
+                      )
+                    })}
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
       {/* Benchmarks de rendimiento */}
       {(data.benchmarks ?? []).length > 0 && (() => {
         const METRIC_LABELS: Record<string, string> = {

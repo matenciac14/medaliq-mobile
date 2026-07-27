@@ -188,9 +188,10 @@ export default function RegisterScreen() {
             <View style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
           </View>
 
-          {/* Google placeholder */}
+          {/* Google — pendiente de implementar OAuth */}
           <TouchableOpacity
-            activeOpacity={0.85}
+            disabled
+            activeOpacity={1}
             style={{
               borderWidth: 1.5,
               borderColor: '#e2e8f0',
@@ -200,9 +201,11 @@ export default function RegisterScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
+              opacity: 0.45,
             }}
           >
             <Text style={{ color: '#374151', fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Continuar con Google</Text>
+            <Text style={{ color: '#94a3b8', fontSize: 12, fontFamily: 'Inter_400Regular' }}>(próximamente)</Text>
           </TouchableOpacity>
 
           {/* Login link */}

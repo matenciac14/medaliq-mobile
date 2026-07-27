@@ -10,6 +10,9 @@ export type Benchmark = {
   notes?: string | null
 }
 
+export type GymPRHistoryPoint = { date: string; oneRmKg: number }
+export type GymPRHistorySeries = { exerciseName: string; points: GymPRHistoryPoint[] }
+
 export type GymPR = {
   id: string
   exerciseName: string
@@ -50,6 +53,7 @@ export type ProgressData = {
   gymAdherenceByWeek: { weekLabel: string; sessions: number }[]
   benchmarks: Benchmark[]
   gymPRs: GymPR[]
+  gymPRHistory: GymPRHistorySeries[]
   totalCheckIns: number
   overallAdherencePct: number
 }

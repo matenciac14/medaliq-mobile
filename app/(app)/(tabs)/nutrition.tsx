@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -571,6 +572,7 @@ function WeeklySummarySection() {
 
 export default function NutritionScreen() {
   const { user } = useAuthStore()
+  const router = useRouter()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['nutrition'], queryFn: getNutrition })
@@ -647,6 +649,35 @@ export default function NutritionScreen() {
               adj={data.pendingAdjustment}
               onAction={() => queryClient.invalidateQueries({ queryKey: ['nutrition'] })}
             />
+          )}
+
+          {/* MOB-NUT-01: contexto de fase del plan */}
+          {data?.planPhaseContext && (
+            <View style={{
+              backgroundColor: '#eff6ff',
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: '#bfdbfe',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <Text style={{ fontSize: 18 }}>📅</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {data.planPhaseContext}
+                </Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#3b82f6', marginTop: 2 }}>
+                  {data.planPhaseContext === 'Semana de descarga'
+                    ? 'Reduce la carga — la nutrición se adapta para recuperación.'
+                    : data.planPhaseContext === 'Semana de carga alta'
+                      ? 'Semana exigente — prioriza carbohidratos y proteína.'
+                      : 'Semana de volumen moderado — mantén consistencia nutricional.'}
+                </Text>
+              </View>
+            </View>
           )}
 
           {data?.hasNutritionPlan && macros && (
@@ -760,6 +791,28 @@ export default function NutritionScreen() {
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>Proponer alimento</Text>
                   <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
                     ¿No encuentras lo que buscas? Agrégalo a la biblioteca.
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>
+              </TouchableOpacity>
+
+              {/* ── Plantillas de comida ── */}
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/nutrition-builder')}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: 'white', borderRadius: 20, borderWidth: 1,
+                  borderColor: '#e5e7eb', padding: 16,
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>📋</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>Mis plantillas de comida</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                    Crea y gestiona tus comidas habituales.
                   </Text>
                 </View>
                 <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>

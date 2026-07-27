@@ -462,6 +462,24 @@ function TemplatePickerScreen({ insets }: { insets: { top: number; bottom: numbe
           <TemplateCard key={tmpl.id} tmpl={tmpl} onSelect={(id) => assign(id)} selecting={selecting} />
         ))}
 
+        {/* Crear rutina personalizada */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/gym-builder')}
+          activeOpacity={0.8}
+          style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#1e3a5f', padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}
+        >
+          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 22 }}>✏️</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Crear mi propia rutina</Text>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+              Arma tu rutina eligiendo ejercicios, series y reps.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>
+        </TouchableOpacity>
+
         {/* Coach tip */}
         <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 16, padding: 14, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
           <Text style={{ fontSize: 18 }}>👨‍💼</Text>
@@ -643,10 +661,10 @@ export default function GymScreen() {
         </View>
       )}
 
-      {/* Historial link */}
-      <View style={{ paddingHorizontal: 16 }}>
+      {/* Acciones rápidas */}
+      <View style={{ paddingHorizontal: 16, gap: 8 }}>
         <TouchableOpacity
-          onPress={() => router.push('/(app)/gym-history')}
+          onPress={() => router.push('/(app)/log-history')}
           activeOpacity={0.7}
           style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
@@ -655,7 +673,23 @@ export default function GymScreen() {
             <Text style={{ fontSize: 18 }}>📋</Text>
             <View>
               <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Historial de sesiones</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>Ver todas mis sesiones</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>Running y gym — todas mis sesiones</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 20, color: '#9ca3af' }}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/gym-builder')}
+          activeOpacity={0.7}
+          style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 18 }}>✏️</Text>
+            <View>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Crear nueva rutina</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>Arma tu rutina personalizada</Text>
             </View>
           </View>
           <Text style={{ fontSize: 20, color: '#9ca3af' }}>›</Text>

@@ -409,6 +409,17 @@ export default function LogScreen() {
               </Text>
           }
         </TouchableOpacity>
+
+        {/* Ver historial */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/log-history')}
+          activeOpacity={0.7}
+          style={{ alignItems: 'center', paddingVertical: 8 }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>
+            Ver historial de sesiones →
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   )
