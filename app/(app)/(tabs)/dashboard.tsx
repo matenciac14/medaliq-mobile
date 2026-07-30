@@ -11,21 +11,13 @@ import { apiFetch } from '../../../src/api/client'
 import { getNotifications } from '../../../src/api/notifications'
 import { useAuthStore } from '../../../src/store/auth'
 
-const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃', TEMPO: '🏃', INTERVALOS: '🏃',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
-}
+import { SESSION_ICONS, SESSION_LABELS } from '../../../src/constants/sessions'
+import { DAY_LETTERS as DAY_LABELS } from '../../../src/constants/calendar'
 
 // Código corto para celdas de 28×28px en WeeklyStrip — NO cambiar a palabras largas
 const SESSION_SHORT: Record<string, string> = {
   RODAJE_Z2: 'Z2', FARTLEK: 'FK', TIRADA_LARGA: 'TL', TEMPO: 'TMP', INTERVALOS: 'INT',
   CICLA: 'CIC', NATACION: 'NAT', FUERZA: 'FZA', DESCANSO: '·', OTRO: '?',
-}
-
-// Nombre legible para listas (actividad reciente, historial)
-const SESSION_LABEL: Record<string, string> = {
-  RODAJE_Z2: 'Correr Z2', FARTLEK: 'Fartlek', TIRADA_LARGA: 'Long run', TEMPO: 'Tempo', INTERVALOS: 'Intervalos',
-  CICLA: 'Ciclismo', NATACION: 'Natación', FUERZA: 'Fuerza', DESCANSO: 'Descanso', OTRO: 'Actividad',
 }
 
 const SESSION_COLORS: Record<string, string> = {
@@ -36,8 +28,6 @@ const SESSION_COLORS: Record<string, string> = {
   CICLA: '#3b82f6',
   NATACION: '#06b6d4',
 }
-
-const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 const SHADOW = {
   shadowColor: '#000',
@@ -768,6 +758,67 @@ export default function DashboardScreen() {
 
       <View style={{ paddingHorizontal: 16, gap: 12 }}>
 
+        {/* UX-ONBOARD-01: orientación post-onboarding para usuarios sin actividad */}
+        {!d.hasEverLogged && user?.onboardingCompleted && (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+            <View style={{ height: 3, backgroundColor: '#f97316' }} />
+            <View style={{ padding: 18, gap: 14 }}>
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
+                  ¿Por dónde empezar?
+                </Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', lineHeight: 19 }}>
+                  Tu cuenta está lista. Aquí los tres primeros pasos para comenzar tu seguimiento.
+                </Text>
+              </View>
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/plan') }}
+                  activeOpacity={0.85}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>📅</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Ver tu plan</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Sesiones de esta semana</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, color: '#d1d5db' }}>›</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/gym') }}
+                  activeOpacity={0.85}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>💪</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Registrar sesión de gym</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Pesas, series y repeticiones</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, color: '#d1d5db' }}>›</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/nutrition') }}
+                  activeOpacity={0.85}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>🥗</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Ver tu nutrición</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Macros y plan de comidas</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, color: '#d1d5db' }}>›</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* ── Sesión de hoy ─────────────────────────────────── */}
         {d.todaySession ? (
           <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
@@ -900,7 +951,7 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 22 }}>{SESSION_ICONS[a.type] ?? '🏅'}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-                    {SESSION_LABEL[a.type] ?? a.type.toLowerCase().replace(/_/g, ' ')}
+                    {SESSION_LABELS[a.type] ?? a.type.toLowerCase().replace(/_/g, ' ')}
                   </Text>
                   <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 1 }}>
                     {new Date(a.completedAt).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}

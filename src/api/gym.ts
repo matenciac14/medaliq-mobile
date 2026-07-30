@@ -159,6 +159,13 @@ export async function searchExercises(params: {
   return res.exercises
 }
 
+export async function getExerciseAlternatives(exerciseId: string): Promise<ExerciseSearchResult[]> {
+  const res = await apiFetch<{ alternatives: ExerciseSearchResult[] }>(
+    `/api/mobile/exercises/${exerciseId}/alternatives`
+  )
+  return res.alternatives ?? []
+}
+
 export async function getTodayGymSession(): Promise<GymSessionData | null> {
   return apiFetch<GymSessionData | null>('/api/gym/session/today')
 }

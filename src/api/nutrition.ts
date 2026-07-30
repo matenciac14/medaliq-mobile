@@ -207,3 +207,61 @@ export async function proposeFood(payload: ProposeInput): Promise<{ proposalId: 
 export async function getMyProposals(): Promise<{ proposals: FoodProposalSummary[] }> {
   return apiFetch('/api/mobile/nutrition/foods/my-proposals')
 }
+
+// ── PlannedMeals ──────────────────────────────────────────────────────────────
+
+export type PlannedMealItem = {
+  id: string
+  mealType: string
+  grams: number
+  food: {
+    id: string; name: string; category: string
+    kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number
+    servingG: number; servingLabel: string | null
+  }
+}
+
+export async function getPlannedMeals(date: string): Promise<{ date: string; meals: PlannedMealItem[] }> {
+  return apiFetch(`/api/mobile/nutrition/plan?date=${encodeURIComponent(date)}`)
+}
+
+export async function logPlannedMeal(plannedMealId: string): Promise<{ ok: boolean; action: 'created' | 'updated' }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/log`, { method: 'POST', body: {} })
+}
+
+export async function logAllPlannedMealsToday(): Promise<{ created: number; total: number }> {
+  return apiFetch('/api/mobile/nutrition/planned-meals/log-today', { method: 'POST', body: {} })
+}
+
+// ── NutritionTemplate (Constructor A) ─────────────────────────────────────────
+
+export type NutritionTemplateItem = {
+  id: string; grams: number
+  food: { name: string; kcalPer100g: number }
+}
+
+export type NutritionTemplateMeal = {
+  id: string; mealType: string
+  items: NutritionTemplateItem[]
+}
+
+export type NutritionTemplateDay = {
+  id: string; dayType: 'HARD' | 'EASY' | 'REST'
+  meals: NutritionTemplateMeal[]
+}
+
+export type NutritionTemplate = {
+  id: string; name: string; goal: string | null
+  days: NutritionTemplateDay[]
+}
+
+export async function getNutritionTemplates(): Promise<{ templates: NutritionTemplate[] }> {
+  return apiFetch('/api/mobile/nutrition/templates')
+}
+
+export async function applyNutritionTemplate(
+  templateId: string,
+  payload: { weekStart: string; intensityMap: Record<string, 'HARD' | 'EASY' | 'REST'> }
+): Promise<{ ok: boolean; created: number }> {
+  return apiFetch(`/api/mobile/nutrition/templates/${templateId}/apply`, { method: 'POST', body: payload })
+}

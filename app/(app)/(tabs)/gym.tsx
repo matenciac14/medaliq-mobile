@@ -464,7 +464,7 @@ function TemplatePickerScreen({ insets }: { insets: { top: number; bottom: numbe
 
         {/* Crear rutina personalizada */}
         <TouchableOpacity
-          onPress={() => router.push('/(app)/gym-builder')}
+          onPress={() => router.push('/(app)/gym-builder' as any)}
           activeOpacity={0.8}
           style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#1e3a5f', padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}
         >
@@ -664,7 +664,7 @@ export default function GymScreen() {
       {/* Acciones rápidas */}
       <View style={{ paddingHorizontal: 16, gap: 8 }}>
         <TouchableOpacity
-          onPress={() => router.push('/(app)/log-history')}
+          onPress={() => router.push('/(app)/log-history' as any)}
           activeOpacity={0.7}
           style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
@@ -680,7 +680,7 @@ export default function GymScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => router.push('/(app)/gym-builder')}
+          onPress={() => router.push('/(app)/gym-builder' as any)}
           activeOpacity={0.7}
           style={{ backgroundColor: 'white', borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}

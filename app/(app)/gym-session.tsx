@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import {
-  getTodayGymSession, completeGymSession, searchExercises,
+  getTodayGymSession, completeGymSession, searchExercises, getExerciseAlternatives,
   SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
 } from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
@@ -95,8 +95,7 @@ function SwapModal({
   useEffect(() => {
     if (!visible || !exerciseId) return
     setLoadingAlt(true)
-    fetch(`/api/mobile/exercises/${exerciseId}/alternatives`)
-      .then(r => r.ok ? r.json() : [])
+    getExerciseAlternatives(exerciseId)
       .then(setAlternatives)
       .catch(() => setAlternatives([]))
       .finally(() => setLoadingAlt(false))
@@ -745,7 +744,9 @@ export default function GymSessionScreen() {
       const isOffline = !('statusCode' in err)
       if (isOffline && session && lastPayloadRef.current) {
         const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
-        savePendingSync(sessionKey, lastPayloadRef.current).catch(() => {})
+        savePendingSync(sessionKey, lastPayloadRef.current).catch(err =>
+          console.error('[gym-session] Failed to save offline sync — session data may be lost:', err)
+        )
         setShowFinishModal(false)
         Alert.alert(
           'Sin conexión',

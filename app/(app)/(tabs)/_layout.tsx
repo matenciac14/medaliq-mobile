@@ -3,12 +3,15 @@ import { useEffect, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { getUnreadCount } from '../../../src/api/messages'
+import { useAuthStore } from '../../../src/store/auth'
 
 const POLL_INTERVAL = 30_000
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets()
   const [unread, setUnread] = useState(0)
+  const { user } = useAuthStore()
+  const isStrength = user?.sport === 'STRENGTH'
 
   useEffect(() => {
     const poll = () => getUnreadCount().then(r => setUnread(r.count)).catch(() => {})
@@ -58,6 +61,7 @@ export default function TabsLayout() {
         name="plan"
         options={{
           title: 'Plan',
+          href: isStrength ? null : undefined,
           tabBarIcon: ({ color }) => (
             <Ionicons name="calendar-outline" size={22} color={color} />
           ),

@@ -137,6 +137,12 @@ export default function ProfileScreen() {
               label="Perfil de salud"
               onPress={() => router.push('/(app)/edit-health-profile' as any)}
             />
+            <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
+            <MenuItem
+              icon="link-outline"
+              label="Integraciones"
+              onPress={() => router.push('/(app)/integrations' as any)}
+            />
           </View>
         </View>
       )}

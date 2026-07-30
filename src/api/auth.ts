@@ -21,6 +21,7 @@ export type SessionUser = {
     coach: boolean
     gym: boolean
   }
+  sport?: string
 }
 
 export async function login(payload: LoginPayload): Promise<SessionUser> {

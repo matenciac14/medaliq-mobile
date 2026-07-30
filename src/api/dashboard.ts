@@ -78,6 +78,7 @@ export type DashboardData = {
     weightKg: number | null
     energyLevel: number | null
   } | null
+  hasEverLogged: boolean
 }
 
 export async function getDashboard(): Promise<DashboardData> {

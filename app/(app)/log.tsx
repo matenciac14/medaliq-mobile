@@ -10,11 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
-
-const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
-}
+import { SESSION_ICONS } from '../../src/constants/sessions'
 
 const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA', 'NATACION'])
 
@@ -412,7 +408,7 @@ export default function LogScreen() {
 
         {/* Ver historial */}
         <TouchableOpacity
-          onPress={() => router.push('/(app)/log-history')}
+          onPress={() => router.push('/(app)/log-history' as any)}
           activeOpacity={0.7}
           style={{ alignItems: 'center', paddingVertical: 8 }}
         >

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { getCheckinStatus, submitCheckin, acceptSuggestion, rejectSuggestion, type CheckinResult, type CheckinSuggestion } from '../../../src/api/checkin'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import { isSyncEnabled, queryRestingHeartRate, querySleepHours } from '../../../src/services/healthkit.service'
 
 type ScaleProps = {
   label: string
@@ -78,6 +79,30 @@ export default function CheckinScreen() {
   const [arms, setArms] = useState('')
   const [hips, setHips] = useState('')
   const [thighs, setThighs] = useState('')
+  // Campos pre-llenados desde Apple Health
+  const [hkPrefilled, setHkPrefilled] = useState<{ hr: boolean; sleep: boolean }>({ hr: false, sleep: false })
+
+  // Pre-fill FC y sueño desde HealthKit al abrir la pantalla
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return
+    ;(async () => {
+      try {
+        const enabled = await isSyncEnabled()
+        if (!enabled) return
+        const [hr, sleepHrs] = await Promise.all([queryRestingHeartRate(), querySleepHours()])
+        if (hr) {
+          setHrResting(hr.toString())
+          setHkPrefilled(p => ({ ...p, hr: true }))
+        }
+        if (sleepHrs) {
+          setSleep(sleepHrs.toString())
+          setHkPrefilled(p => ({ ...p, sleep: true }))
+        }
+      } catch {
+        // HealthKit no disponible — no bloquear el formulario
+      }
+    })()
+  }, [])
 
   const { data: statusData, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
     queryKey: ['checkin-status'],
@@ -492,36 +517,54 @@ export default function CheckinScreen() {
               />
             </View>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>FC reposo (bpm)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>FC reposo (bpm)</Text>
+                {hkPrefilled.hr && (
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444' }}>
+                    📲 Apple Health
+                  </Text>
+                )}
+              </View>
               <TextInput
                 value={hrResting}
-                onChangeText={setHrResting}
+                onChangeText={(v) => { setHrResting(v); setHkPrefilled(p => ({ ...p, hr: false })) }}
                 placeholder="58"
                 placeholderTextColor="#d1d5db"
                 keyboardType="number-pad"
                 inputMode="numeric"
                 style={{
-                  backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                  backgroundColor: hkPrefilled.hr ? '#fff1f2' : '#f9fafb',
+                  borderRadius: 10, paddingHorizontal: 14,
                   paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                  color: '#111827', borderWidth: 1,
+                  borderColor: hkPrefilled.hr ? '#fecdd3' : '#e5e7eb',
                 }}
               />
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Sueño (h)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Sueño (h)</Text>
+                {hkPrefilled.sleep && (
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444' }}>
+                    📲 Apple Health
+                  </Text>
+                )}
+              </View>
               <TextInput
                 value={sleep}
-                onChangeText={setSleep}
+                onChangeText={(v) => { setSleep(v); setHkPrefilled(p => ({ ...p, sleep: false })) }}
                 placeholder="7.5"
                 placeholderTextColor="#d1d5db"
                 keyboardType="decimal-pad"
                 inputMode="decimal"
                 style={{
-                  backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
+                  backgroundColor: hkPrefilled.sleep ? '#fff1f2' : '#f9fafb',
+                  borderRadius: 10, paddingHorizontal: 14,
                   paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                  color: '#111827', borderWidth: 1,
+                  borderColor: hkPrefilled.sleep ? '#fecdd3' : '#e5e7eb',
                 }}
               />
             </View>

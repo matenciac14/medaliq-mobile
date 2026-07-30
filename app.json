@@ -15,7 +15,15 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.medaliq.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Medaliq importa tus entrenamientos y frecuencia cardiaca desde Apple Watch para registrar tus sesiones automaticamente y pre-rellenar tu check-in semanal.",
+        "NSHealthUpdateUsageDescription": "Medaliq puede escribir datos de actividad en Apple Health."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +40,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "react-native-health",
+        {
+          "NSHealthShareUsageDescription": "Medaliq importa tus entrenamientos y frecuencia cardiaca desde Apple Watch para registrar tus sesiones automaticamente y pre-rellenar tu check-in semanal.",
+          "NSHealthUpdateUsageDescription": "Medaliq puede escribir datos de actividad en Apple Health."
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -50,6 +65,11 @@
         }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "REEMPLAZAR_CON_EAS_PROJECT_ID"
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

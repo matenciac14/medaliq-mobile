@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, type PendingNutritionAdjustment } from '../../../src/api/nutrition'
+import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, type PendingNutritionAdjustment, type PlannedMealItem } from '../../../src/api/nutrition'
 
 function getLocalDateString(): string {
   const d = new Date()
@@ -216,6 +216,118 @@ function RulesSection({ rules }: { rules: string[] }) {
         <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 20, paddingVertical: 14 }}>
           <Text style={{ fontSize: 18 }}>{RULE_ICONS[i] ?? '📌'}</Text>
           <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', flex: 1, lineHeight: 20 }}>{rule}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+// ─── PlannedMealsSection ─────────────────────────────────────────────────────
+
+const MEAL_TYPE_LABELS: Record<string, string> = {
+  BREAKFAST:    'Desayuno',
+  PRE_WORKOUT:  'Pre-entreno',
+  LUNCH:        'Almuerzo',
+  SNACK:        'Snack',
+  DINNER:       'Cena',
+  POST_WORKOUT: 'Post-entreno',
+}
+
+function calcKcal(food: PlannedMealItem['food'], grams: number): number {
+  return Math.round((food.kcalPer100g * grams) / 100)
+}
+
+function PlannedMealsSection({
+  meals,
+  onLogged,
+}: {
+  meals: PlannedMealItem[]
+  onLogged: () => void
+}) {
+  const [logging, setLogging] = useState<Set<string>>(new Set())
+  const [logged, setLogged] = useState<Set<string>>(new Set())
+
+  async function handleLog(id: string) {
+    if (logging.has(id) || logged.has(id)) return
+    setLogging(prev => new Set([...prev, id]))
+    try {
+      await logPlannedMeal(id)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      setLogged(prev => new Set([...prev, id]))
+      onLogged()
+    } catch {
+      Alert.alert('Error', 'No se pudo registrar. Intenta de nuevo.')
+    } finally {
+      setLogging(prev => { const s = new Set(prev); s.delete(id); return s })
+    }
+  }
+
+  if (meals.length === 0) return null
+
+  // Group by mealType
+  const grouped: Record<string, PlannedMealItem[]> = {}
+  for (const m of meals) {
+    if (!grouped[m.mealType]) grouped[m.mealType] = []
+    grouped[m.mealType].push(m)
+  }
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+          Plan de hoy
+        </Text>
+        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+          {meals.length} alimentos
+        </Text>
+      </View>
+
+      {Object.entries(grouped).map(([mealType, items]) => (
+        <View key={mealType}>
+          <View style={{ paddingHorizontal: 20, paddingVertical: 6, backgroundColor: '#f8fafc' }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#4b5563' }}>
+              {MEAL_TYPE_LABELS[mealType] ?? mealType}
+            </Text>
+          </View>
+          {items.map((item) => {
+            const isLogging = logging.has(item.id)
+            const isDone = logged.has(item.id)
+            const kcal = calcKcal(item.food, item.grams)
+            return (
+              <View
+                key={item.id}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                  paddingHorizontal: 20, paddingVertical: 12,
+                  borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                  backgroundColor: isDone ? '#f0fdf4' : 'white',
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: isDone ? '#16a34a' : '#111827' }} numberOfLines={1}>
+                    {item.food.name}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                    {item.grams}g · {kcal} kcal · P{Math.round((item.food.proteinPer100g * item.grams) / 100)}g
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleLog(item.id)}
+                  disabled={isLogging || isDone}
+                  activeOpacity={0.75}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
+                    backgroundColor: isDone ? '#dcfce7' : '#1e3a5f',
+                    opacity: isLogging ? 0.6 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: isDone ? '#16a34a' : 'white' }}>
+                    {isDone ? '✓ Listo' : isLogging ? '...' : 'Registrar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )
+          })}
         </View>
       ))}
     </View>
@@ -584,6 +696,11 @@ export default function NutritionScreen() {
     queryFn: getMyProposals,
     staleTime: 5 * 60_000,
   })
+  const { data: plannedMealsData, refetch: refetchPlannedMeals } = useQuery({
+    queryKey: ['planned-meals', getLocalDateString()],
+    queryFn: () => getPlannedMeals(getLocalDateString()),
+    staleTime: 2 * 60_000,
+  })
 
   if (!user?.features?.nutrition) {
     return <UpgradeWall icon="🥗" title="Plan nutricional" description="Accede a tu plan de nutrición periodizado por tipo de entrenamiento con el plan Pro." />
@@ -684,6 +801,18 @@ export default function NutritionScreen() {
             <>
               {/* ── 1. Hero: progreso del día (kcal consumidas vs target) ── */}
               <TrackingSection onAdd={() => setShowLogFood(true)} />
+
+              {/* ── 1b. Plan de hoy — alimentos asignados por coach o planificados ── */}
+              {(plannedMealsData?.meals ?? []).length > 0 && (
+                <PlannedMealsSection
+                  meals={plannedMealsData!.meals}
+                  onLogged={() => {
+                    queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+                    queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
+                    refetchPlannedMeals()
+                  }}
+                />
+              )}
 
               {/* ── 2. Resumen semanal de adherencia ── */}
               <WeeklySummarySection />
@@ -798,7 +927,7 @@ export default function NutritionScreen() {
 
               {/* ── Plantillas de comida ── */}
               <TouchableOpacity
-                onPress={() => router.push('/(app)/nutrition-builder')}
+                onPress={() => router.push('/(app)/nutrition-builder' as any)}
                 activeOpacity={0.8}
                 style={{
                   backgroundColor: 'white', borderRadius: 20, borderWidth: 1,

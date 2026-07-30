@@ -15,22 +15,8 @@ import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 
 // ── Constants ────────────────────────────────────────────────────────
-
-const DAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
-const DAY_SHORT   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTHS      = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
-
-const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃', TEMPO: '🏃',
-  INTERVALOS: '⚡', SIMULACRO: '🏁', TEST: '📊',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
-}
-
-const SESSION_LABELS: Record<string, string> = {
-  RODAJE_Z2: 'Rodaje Z2', FARTLEK: 'Fartlek', TIRADA_LARGA: 'Tirada Larga',
-  TEMPO: 'Tempo', INTERVALOS: 'Intervalos', SIMULACRO: 'Simulacro', TEST: 'Test',
-  CICLA: 'Cicla', NATACION: 'Natación', FUERZA: 'Fuerza', DESCANSO: 'Descanso', OTRO: 'Entrenamiento',
-}
+import { SESSION_ICONS, SESSION_LABELS } from '../../../src/constants/sessions'
+import { DAY_LETTERS, DAY_SHORT, MONTHS } from '../../../src/constants/calendar'
 
 const PLAN_NAME_MAP: Record<string, string> = {
   RACE_HALF_MARATHON: 'Media Maratón', RACE_MARATHON: 'Maratón',

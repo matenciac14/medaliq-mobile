@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { getMealTemplates, createMealTemplate, deleteMealTemplate, getFoods } from '../../src/api/nutrition'
-import type { MealTemplate, Food } from '../../src/api/nutrition'
+import type { MealTemplate, FoodItem as Food } from '../../src/api/nutrition'
 
 // ─── Template Card ────────────────────────────────────────────────────────────
 
@@ -87,12 +87,12 @@ function CreateForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
 
   const { data: foodResults, isLoading: searchLoading } = useQuery({
     queryKey: ['foods-search', query],
-    queryFn: () => query.length >= 2 ? getFoods() : Promise.resolve({ foods: [] }),
+    queryFn: () => query.length >= 2 ? getFoods() : Promise.resolve<Food[]>([]),
     enabled: query.length >= 2,
   })
 
   const filteredFoods = query.length >= 2
-    ? (foodResults?.foods ?? []).filter(f => f.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    ? (foodResults ?? []).filter((f: Food) => f.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
     : []
 
   const qc = useQueryClient()
