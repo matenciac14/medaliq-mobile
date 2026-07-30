@@ -5,18 +5,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, type PendingNutritionAdjustment, type PlannedMealItem } from '../../../src/api/nutrition'
-
-function getLocalDateString(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, getMyProposals, type PendingNutritionAdjustment, type PlannedMealItem, type FoodProposalSummary } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
 import LogFoodModal from '../../../src/components/LogFoodModal'
 import ProposeFoodModal from '../../../src/components/ProposeFoodModal'
-import { getMyProposals, type FoodProposalSummary } from '../../../src/api/nutrition'
+
+function getLocalDateString(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
