@@ -51,6 +51,7 @@ export type ProgressData = {
   weightGoal: number | null
   gymSessionsCompleted: number
   gymAdherenceByWeek: { weekLabel: string; sessions: number }[]
+  nutritionAdherence: { date: string; kcalLogged: number; targetKcal: number; pct: number }[]
   benchmarks: Benchmark[]
   gymPRs: GymPR[]
   gymPRHistory: GymPRHistorySeries[]

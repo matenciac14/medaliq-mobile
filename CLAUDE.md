@@ -254,13 +254,17 @@ Si además toca la DB o API: cargar también `prisma-development`.
 
 Ver `roadmap-data.ts` como fuente canónica. Esta tabla es referencia rápida.
 
-| Prioridad | Feature | Estado web | Notas |
-|-----------|---------|-----------|-------|
-| 🟠 P1 | Medidas corporales en check-in (cintura, brazos, caderas, muslos) | ✅ Sección colapsable | API acepta los campos — falta UI en formulario mobile |
-| 🟠 P1 | Ajuste nutricional pendiente (aceptar/rechazar) | ✅ NutritionAdjustmentCard | Pantalla nutrición mobile no muestra la card ni llama endpoints |
-| 🟠 P1 | Editar perfil de salud (peso, talla, FC reposo, lesiones) | ✅ /profile editable | Profile tab mobile es solo lectura |
-| 🟡 P2 | Gráficas de circunferencias en /progress | ✅ MeasurementsChart | API devuelve measurementPoints — UI mobile no los renderiza |
-| 🟡 P2 | Push notifications (frontend) | ✅ Backend listo | `/api/mobile/push-token` implementado — falta EAS + permisos en mobile |
-| 🟡 P2 | Offline-first gym tracker | ❌ | AsyncStorage backup sin red |
-| 🟢 P3 | Integraciones Strava / Garmin | ❌ | Requiere OAuth externo |
-| 🟢 P3 | Bluetooth HRM | ❌ | react-native-ble-plx |
+| Prioridad | Feature | Estado web | Estado mobile |
+|-----------|---------|-----------|---------------|
+| ✅ P1 | Medidas corporales en check-in | ✅ | ✅ Sección colapsable (2026-07-17) |
+| ✅ P1 | Ajuste nutricional (aceptar/rechazar) | ✅ | ✅ NutritionAdjustmentCard (2026-07-17) |
+| ✅ P1 | Editar perfil de salud | ✅ | ✅ edit-health-profile.tsx (2026-07-17) |
+| ✅ P2 | Gráficas circunferencias en /progress | ✅ | ✅ measurementPoints renderizados (2026-07-24) |
+| ✅ P2 | Adherencia nutricional en /progress | ✅ | ✅ nutritionAdherence[] (2026-07-30) |
+| ✅ P2 | Historial unificado running+gym | ✅ | ✅ log-history.tsx (2026-07-24) |
+| 🟡 P2 | Push notifications en dispositivo real | ✅ Backend | Código listo — **requiere EAS rebuild** con projectId real |
+| 🟡 P2 | Apple HealthKit / Google Health Connect | ✅ Backend | Código listo — **requiere `npm install react-native-health` + EAS rebuild** |
+| 🟡 P2 | Strava en producción | ✅ Backend | Código listo — **requiere env vars + migrate deploy + webhook subscribe** |
+| 🟢 P3 | Vista mensual del plan (PlanCalendarView) | ✅ | ❌ Solo strip semanal — backlog |
+| 🟢 P3 | Garmin Connect API | ❌ | ❌ Requiere partnership + aprobación |
+| 🟢 P3 | Bluetooth HRM | ❌ | ❌ react-native-ble-plx — requiere bare workflow |

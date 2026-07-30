@@ -316,6 +316,56 @@ export default function ProgressScreen() {
         )
       })()}
 
+      {/* Adherencia nutricional — MOB-NUT-02 */}
+      {(data.nutritionAdherence ?? []).length > 0 && (() => {
+        const pts = data.nutritionAdherence.slice(-14)
+        const avg = Math.round(pts.reduce((a, p) => a + p.pct, 0) / pts.length)
+        const avgColor = avg >= 80 ? '#22c55e' : avg >= 60 ? '#f59e0b' : '#ef4444'
+        return (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionHeader title="Adherencia nutricional" />
+              <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: avgColor }}>{avg}%</Text>
+            </View>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: -8 }}>
+              Últimos 14 días · kcal registradas vs objetivo
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 52 }}>
+              {pts.map((p, i) => {
+                const barColor = p.pct >= 80 ? '#22c55e' : p.pct >= 60 ? '#f59e0b' : '#ef4444'
+                const barH = Math.max(4, Math.round((p.pct / 100) * 44))
+                const d = new Date(p.date)
+                const dayLabel = `${d.getUTCDate()}/${d.getUTCMonth() + 1}`
+                return (
+                  <View key={p.date} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
+                    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                      <View style={{ width: '100%', height: barH, backgroundColor: barColor, borderRadius: 3, opacity: i === pts.length - 1 ? 1 : 0.75 }} />
+                    </View>
+                    {i % 3 === 0 && (
+                      <Text style={{ fontSize: 7, fontFamily: 'Inter_400Regular', color: '#d1d5db', textAlign: 'center' }}>
+                        {dayLabel}
+                      </Text>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {[
+                { color: '#22c55e', label: '≥80%' },
+                { color: '#f59e0b', label: '60–79%' },
+                { color: '#ef4444', label: '<60%' },
+              ].map(({ color, label }) => (
+                <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )
+      })()}
+
       {/* Circunferencias */}
       {data.measurementPoints.length > 0 && (() => {
         const MEASURES = [
