@@ -118,16 +118,6 @@ export async function getFoods(): Promise<FoodItem[]> {
   return apiFetch<FoodItem[]>('/api/mobile/nutrition/foods')
 }
 
-export async function generateMeals(payload: {
-  availableFoods: string[]
-  restrictions: string[]
-  mealsPerDay: number
-  weighsFood: boolean
-  notes?: string
-}): Promise<{ ok: boolean; mealPlanId: string }> {
-  return apiFetch('/api/mobile/nutrition/generate-meals', { method: 'POST', body: payload })
-}
-
 export type MealTemplateItem = {
   id: string
   foodId: string
@@ -210,15 +200,22 @@ export async function getMyProposals(): Promise<{ proposals: FoodProposalSummary
 
 // ── PlannedMeals ──────────────────────────────────────────────────────────────
 
+export type PlannedMealFood = {
+  id: string; name: string; category: string
+  kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number
+  servingG: number; servingLabel: string | null
+}
+
 export type PlannedMealItem = {
   id: string
   mealType: string
   grams: number
-  food: {
-    id: string; name: string; category: string
-    kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number
-    servingG: number; servingLabel: string | null
-  }
+  food: PlannedMealFood
+  override: {
+    overrideFoodId: string
+    overrideGrams: number
+    overrideFood: PlannedMealFood
+  } | null
 }
 
 export async function getPlannedMeals(date: string): Promise<{ date: string; meals: PlannedMealItem[] }> {
@@ -227,6 +224,14 @@ export async function getPlannedMeals(date: string): Promise<{ date: string; mea
 
 export async function logPlannedMeal(plannedMealId: string): Promise<{ ok: boolean; action: 'created' | 'updated' }> {
   return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/log`, { method: 'POST', body: {} })
+}
+
+export async function swapPlannedMeal(plannedMealId: string, foodId: string, grams: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/swap`, { method: 'POST', body: { foodId, grams } })
+}
+
+export async function removeSwap(plannedMealId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/swap`, { method: 'DELETE', body: {} })
 }
 
 export async function logAllPlannedMealsToday(): Promise<{ created: number; total: number }> {

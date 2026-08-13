@@ -1,7 +1,18 @@
 import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import AppleHealthKit, { HealthValue, HealthInputOptions } from 'react-native-health'
 import { apiFetch } from '../api/client'
+
+// react-native-health requires a native module (dev client / EAS build).
+// In Expo Go we provide a no-op stub so the app still runs.
+let AppleHealthKit: any = null
+try {
+  AppleHealthKit = require('react-native-health').default
+} catch {
+  // Module not available (Expo Go) — all exports degrade gracefully via Platform/guard checks.
+}
+
+type HealthValue = any
+type HealthInputOptions = any
 
 const LAST_SYNC_KEY = 'hk_last_sync_at'
 const HK_ENABLED_KEY = 'hk_sync_enabled'
@@ -54,6 +65,7 @@ export async function syncRecent(): Promise<void> {
 }
 
 function queryWorkouts(startDate: Date): Promise<HealthValue[]> {
+  if (!AppleHealthKit) return Promise.resolve([])
   return new Promise((resolve, reject) => {
     const options: HealthInputOptions = {
       startDate: startDate.toISOString(),
@@ -104,6 +116,7 @@ async function importWorkout(workout: any): Promise<void> {
 export function queryRestingHeartRate(): Promise<number | null> {
   if (Platform.OS !== 'ios') return Promise.resolve(null)
 
+  if (!AppleHealthKit) return Promise.resolve(null)
   return new Promise((resolve) => {
     const options: HealthInputOptions = {
       startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -125,6 +138,7 @@ export function queryRestingHeartRate(): Promise<number | null> {
 export function querySleepHours(): Promise<number | null> {
   if (Platform.OS !== 'ios') return Promise.resolve(null)
 
+  if (!AppleHealthKit) return Promise.resolve(null)
   return new Promise((resolve) => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)

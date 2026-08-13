@@ -80,8 +80,8 @@ export default function IntegrationsScreen() {
                 <Text style={{ fontWeight: '700', fontSize: 16, color: '#111827' }}>Apple Health</Text>
                 <Text style={{ color: '#6b7280', fontSize: 13 }}>
                   {hkEnabled && authorized
-                    ? 'Sincronizando entrenamientos automaticamente'
-                    : 'Importa workouts, FC y sueno de tu Apple Watch'}
+                    ? 'Sincronizando entrenamientos automáticamente'
+                    : 'Importa workouts, FC y sueño de tu Apple Watch'}
                 </Text>
               </View>
               <Switch

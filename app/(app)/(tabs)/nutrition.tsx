@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
+import { useState, useMemo } from 'react'
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, getMyProposals, type PendingNutritionAdjustment, type PlannedMealItem, type FoodProposalSummary } from '../../../src/api/nutrition'
+import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, getMyProposals, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
@@ -232,19 +232,120 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   POST_WORKOUT: 'Post-entreno',
 }
 
-function calcKcal(food: PlannedMealItem['food'], grams: number): number {
+function calcKcal(food: PlannedMealFood, grams: number): number {
   return Math.round((food.kcalPer100g * grams) / 100)
+}
+
+// ─── SwapPicker — inline food selector for swapping a planned meal ────────────
+
+function SwapPicker({
+  item,
+  allFoods,
+  onSwapped,
+  onCancel,
+}: {
+  item: PlannedMealItem
+  allFoods: PlannedMealFood[]
+  onSwapped: () => void
+  onCancel: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [swapping, setSwapping] = useState(false)
+
+  const originalKcal = calcKcal(item.food, item.grams)
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return allFoods.slice(0, 20)
+    const q = query.toLowerCase()
+    return allFoods.filter(f => f.name.toLowerCase().includes(q)).slice(0, 30)
+  }, [allFoods, query])
+
+  async function handlePick(food: PlannedMealFood) {
+    if (swapping) return
+    // Use same grams, check ±10% server-side; adjust grams to match original kcal if off
+    const grams = Math.round((originalKcal / food.kcalPer100g) * 100)
+    setSwapping(true)
+    try {
+      await swapPlannedMeal(item.id, food.id, grams)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      onSwapped()
+    } catch (err: any) {
+      Alert.alert('No permitido', err?.message ?? 'Este alimento no es equivalente en calorías (±10%).')
+    } finally {
+      setSwapping(false)
+    }
+  }
+
+  return (
+    <View style={{ backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#e5e7eb', padding: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
+          Sustituir · {originalKcal} kcal objetivo
+        </Text>
+        <TouchableOpacity onPress={onCancel}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Buscar alimento..."
+        placeholderTextColor="#9ca3af"
+        style={{
+          backgroundColor: 'white', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb',
+          paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, fontFamily: 'Inter_400Regular',
+          color: '#111827', marginBottom: 8,
+        }}
+      />
+      <View style={{ maxHeight: 200 }}>
+        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+          {filtered.map(food => {
+            const kcalAtSameGrams = calcKcal(food, item.grams)
+            const diff = Math.round(Math.abs(kcalAtSameGrams - originalKcal) / originalKcal * 100)
+            const ok = diff <= 10
+            return (
+              <TouchableOpacity
+                key={food.id}
+                onPress={() => handlePick(food)}
+                disabled={swapping}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  paddingVertical: 9, paddingHorizontal: 4,
+                  borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                  opacity: swapping ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', color: '#111827' }} numberOfLines={1}>
+                  {food.name}
+                </Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: ok ? '#16a34a' : '#9ca3af', marginLeft: 8 }}>
+                  {kcalAtSameGrams} kcal
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  )
 }
 
 function PlannedMealsSection({
   meals,
+  allFoods,
   onLogged,
+  onSwapped,
 }: {
   meals: PlannedMealItem[]
+  allFoods: PlannedMealFood[]
   onLogged: () => void
+  onSwapped: () => void
 }) {
   const [logging, setLogging] = useState<Set<string>>(new Set())
   const [logged, setLogged] = useState<Set<string>>(new Set())
+  const [swappingId, setSwappingId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   async function handleLog(id: string) {
     if (logging.has(id) || logged.has(id)) return
@@ -261,9 +362,20 @@ function PlannedMealsSection({
     }
   }
 
+  async function handleRemoveSwap(id: string) {
+    setRemovingId(id)
+    try {
+      await removeSwap(id)
+      onSwapped()
+    } catch {
+      Alert.alert('Error', 'No se pudo restaurar el alimento original.')
+    } finally {
+      setRemovingId(null)
+    }
+  }
+
   if (meals.length === 0) return null
 
-  // Group by mealType
   const grouped: Record<string, PlannedMealItem[]> = {}
   for (const m of meals) {
     if (!grouped[m.mealType]) grouped[m.mealType] = []
@@ -291,39 +403,85 @@ function PlannedMealsSection({
           {items.map((item) => {
             const isLogging = logging.has(item.id)
             const isDone = logged.has(item.id)
-            const kcal = calcKcal(item.food, item.grams)
+            const hasOverride = item.override !== null
+            const activeFood = hasOverride ? item.override!.overrideFood : item.food
+            const activeGrams = hasOverride ? item.override!.overrideGrams : item.grams
+            const kcal = calcKcal(activeFood, activeGrams)
+            const isSwapping = swappingId === item.id
+            const isRemoving = removingId === item.id
+
             return (
-              <View
-                key={item.id}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 12,
-                  paddingHorizontal: 20, paddingVertical: 12,
-                  borderTopWidth: 1, borderTopColor: '#f3f4f6',
-                  backgroundColor: isDone ? '#f0fdf4' : 'white',
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: isDone ? '#16a34a' : '#111827' }} numberOfLines={1}>
-                    {item.food.name}
-                  </Text>
-                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
-                    {item.grams}g · {kcal} kcal · P{Math.round((item.food.proteinPer100g * item.grams) / 100)}g
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleLog(item.id)}
-                  disabled={isLogging || isDone}
-                  activeOpacity={0.75}
+              <View key={item.id} style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                <View
                   style={{
-                    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
-                    backgroundColor: isDone ? '#dcfce7' : '#1e3a5f',
-                    opacity: isLogging ? 0.6 : 1,
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    paddingHorizontal: 20, paddingVertical: 12,
+                    backgroundColor: isDone ? '#f0fdf4' : hasOverride ? '#fff7ed' : 'white',
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: isDone ? '#16a34a' : 'white' }}>
-                    {isDone ? '✓ Listo' : isLogging ? '...' : 'Registrar'}
-                  </Text>
-                </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: isDone ? '#16a34a' : '#111827', flex: 1 }} numberOfLines={1}>
+                        {activeFood.name}
+                      </Text>
+                      {hasOverride && (
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>cambiado</Text>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 1 }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                        {activeGrams}g · {kcal} kcal · P{Math.round((activeFood.proteinPer100g * activeGrams) / 100)}g
+                      </Text>
+                    </View>
+                    {!isDone && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => setSwappingId(isSwapping ? null : item.id)}
+                          activeOpacity={0.7}
+                          style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: '#d1d5db' }}
+                        >
+                          <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>
+                            {isSwapping ? 'Cerrar' : 'Cambiar'}
+                          </Text>
+                        </TouchableOpacity>
+                        {hasOverride && (
+                          <TouchableOpacity
+                            onPress={() => handleRemoveSwap(item.id)}
+                            disabled={isRemoving}
+                            activeOpacity={0.7}
+                            style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fed7aa' }}
+                          >
+                            <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#ea580c' }}>
+                              {isRemoving ? '...' : 'Restaurar'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleLog(item.id)}
+                    disabled={isLogging || isDone}
+                    activeOpacity={0.75}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
+                      backgroundColor: isDone ? '#dcfce7' : '#1e3a5f',
+                      opacity: isLogging ? 0.6 : 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: isDone ? '#16a34a' : 'white' }}>
+                      {isDone ? '✓ Listo' : isLogging ? '...' : 'Registrar'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {isSwapping && (
+                  <SwapPicker
+                    item={item}
+                    allFoods={allFoods}
+                    onSwapped={() => { setSwappingId(null); onSwapped() }}
+                    onCancel={() => setSwappingId(null)}
+                  />
+                )}
               </View>
             )
           })}
@@ -700,6 +858,12 @@ export default function NutritionScreen() {
     queryFn: () => getPlannedMeals(getLocalDateString()),
     staleTime: 2 * 60_000,
   })
+  const { data: allFoodsData } = useQuery({
+    queryKey: ['foods'],
+    queryFn: getFoods,
+    staleTime: 10 * 60_000,
+    enabled: (plannedMealsData?.meals?.length ?? 0) > 0,
+  })
 
   if (!user?.features?.nutrition) {
     return <UpgradeWall icon="🥗" title="Plan nutricional" description="Accede a tu plan de nutrición periodizado por tipo de entrenamiento con el plan Pro." />
@@ -805,11 +969,13 @@ export default function NutritionScreen() {
               {(plannedMealsData?.meals ?? []).length > 0 && (
                 <PlannedMealsSection
                   meals={plannedMealsData!.meals}
+                  allFoods={allFoodsData ?? []}
                   onLogged={() => {
                     queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
                     queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
                     refetchPlannedMeals()
                   }}
+                  onSwapped={() => refetchPlannedMeals()}
                 />
               )}
 

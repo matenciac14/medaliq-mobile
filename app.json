@@ -41,13 +41,6 @@
       "expo-router",
       "expo-secure-store",
       [
-        "react-native-health",
-        {
-          "NSHealthShareUsageDescription": "Medaliq importa tus entrenamientos y frecuencia cardiaca desde Apple Watch para registrar tus sesiones automaticamente y pre-rellenar tu check-in semanal.",
-          "NSHealthUpdateUsageDescription": "Medaliq puede escribir datos de actividad en Apple Health."
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "backgroundColor": "#1e3a5f",

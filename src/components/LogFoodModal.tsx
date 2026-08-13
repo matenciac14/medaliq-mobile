@@ -38,7 +38,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   LEGUME: '🫘 Legumbres',
 }
 
-type Step = 'search' | 'detail' | 'save-template' | 'propose'
+type Step = 'search' | 'detail' | 'save-template' | 'propose' | 'recipe-builder'
 
 const DEFAULT_PROPOSE = { name: '', category: 'CARB', kcalPer100g: '', proteinPer100g: '', carbsPer100g: '', fatPer100g: '', country: '', notes: '' }
 
@@ -67,6 +67,9 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
   const [proposeSuccess, setProposeSuccess] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const [recipeItems, setRecipeItems] = useState<{ food: FoodItem; grams: string }[]>([])
+  const [recipeQuery, setRecipeQuery] = useState('')
+  const [recipeName, setRecipeName] = useState('')
 
   const { data: foods = [], isLoading: loadingFoods } = useQuery({
     queryKey: ['foods'],
@@ -87,6 +90,17 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
       refetchTemplates()
       setStep('detail')
       setTemplateName('')
+    },
+  })
+
+  const { mutate: saveRecipeMut, isPending: savingRecipe } = useMutation({
+    mutationFn: createMealTemplate,
+    onSuccess: () => {
+      refetchTemplates()
+      setStep('search')
+      setRecipeItems([])
+      setRecipeName('')
+      setRecipeQuery('')
     },
   })
 
@@ -164,6 +178,20 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     refetchTemplates()
   }
 
+  function handleAddToRecipe(food: FoodItem) {
+    setRecipeItems(prev => [...prev, { food, grams: String(Math.round(food.servingG)) }])
+    setRecipeQuery('')
+  }
+
+  function handleSaveRecipe() {
+    const validItems = recipeItems.filter(i => Number(i.grams) > 0)
+    if (!recipeName.trim() || validItems.length === 0) return
+    saveRecipeMut({
+      name: recipeName.trim(),
+      items: validItems.map(i => ({ foodId: i.food.id, grams: Number(i.grams) })),
+    })
+  }
+
   function handleClose() {
     setStep('search')
     setQuery('')
@@ -175,8 +203,32 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     setProposeSuccess(false)
     setShowScanner(false)
     setFilterCategory(null)
+    setRecipeItems([])
+    setRecipeQuery('')
+    setRecipeName('')
     onClose()
   }
+
+  // Recipe builder — filtered foods + running totals
+  const recipeFiltered = useMemo(() => {
+    if (!recipeQuery.trim()) return foods.slice(0, 20)
+    const q = recipeQuery.toLowerCase()
+    return foods.filter(f => f.name.toLowerCase().includes(q)).slice(0, 30)
+  }, [foods, recipeQuery])
+
+  const recipeTotals = recipeItems.reduce(
+    (acc, item) => {
+      const r = Number(item.grams) / 100
+      if (!isNaN(r) && r > 0) {
+        acc.kcal     += Math.round(item.food.kcalPer100g     * r)
+        acc.proteinG += Math.round(item.food.proteinPer100g  * r * 10) / 10
+        acc.carbsG   += Math.round(item.food.carbsPer100g    * r * 10) / 10
+        acc.fatG     += Math.round(item.food.fatPer100g      * r * 10) / 10
+      }
+      return acc
+    },
+    { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+  )
 
   // Macros calculados para la cantidad ingresada
   const preview = selectedFood && grams
@@ -203,7 +255,7 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
             borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {(step === 'detail' || step === 'save-template' || step === 'propose') && (
+              {(step === 'detail' || step === 'save-template' || step === 'propose' || step === 'recipe-builder') && (
                 <TouchableOpacity
                   onPress={() => step === 'save-template' ? setStep('detail') : setStep('search')}
                   style={{ padding: 4 }}
@@ -212,7 +264,11 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                 </TouchableOpacity>
               )}
               <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#111827' }}>
-                {step === 'search' ? 'Registrar comida' : step === 'save-template' ? 'Guardar plantilla' : step === 'propose' ? 'Proponer alimento' : selectedFood?.name ?? ''}
+                {step === 'search' ? 'Registrar comida'
+                  : step === 'save-template' ? 'Guardar plantilla'
+                  : step === 'propose' ? 'Proponer alimento'
+                  : step === 'recipe-builder' ? 'Nueva receta'
+                  : selectedFood?.name ?? ''}
               </Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={{ padding: 4 }}>
@@ -292,11 +348,21 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                   keyboardShouldPersistTaps="handled"
                 >
                   {/* Mis comidas (plantillas) — solo cuando no hay búsqueda */}
-                  {!query.trim() && templates.length > 0 && (
+                  {!query.trim() && (
                     <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-                        Mis comidas
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Mis comidas
+                        </Text>
+                        <TouchableOpacity onPress={() => { setRecipeItems([]); setRecipeName(''); setRecipeQuery(''); setStep('recipe-builder') }}>
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>+ Nueva receta</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {templates.length === 0 && (
+                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginBottom: 8 }}>
+                          Aún no tienes recetas guardadas.
+                        </Text>
+                      )}
                       {templates.map(t => {
                         const kcal = calcTemplateKcal(t)
                         return (
@@ -340,7 +406,9 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                           </View>
                         )
                       })}
-                      <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4, marginBottom: 12 }} />
+                      {templates.length > 0 && (
+                        <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4, marginBottom: 12 }} />
+                      )}
                     </View>
                   )}
 
@@ -636,6 +704,164 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
               </View>
             </>
           )}
+          {/* STEP: recipe-builder */}
+          {step === 'recipe-builder' && (
+            <>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Nombre de la receta */}
+                <TextInput
+                  value={recipeName}
+                  onChangeText={setRecipeName}
+                  placeholder="Nombre de la receta..."
+                  placeholderTextColor="#9ca3af"
+                  maxLength={100}
+                  autoFocus
+                  style={{
+                    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
+                    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16,
+                    fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827',
+                  }}
+                />
+
+                {/* Ingredientes actuales */}
+                {recipeItems.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                      Ingredientes
+                    </Text>
+                    {recipeItems.map((item, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }} numberOfLines={1}>
+                            {item.food.name}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                            {Math.round(item.food.kcalPer100g * Number(item.grams) / 100)} kcal
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <TextInput
+                            value={item.grams}
+                            onChangeText={v => setRecipeItems(prev => prev.map((it, i) => i === idx ? { ...it, grams: v } : it))}
+                            keyboardType="numeric"
+                            style={{
+                              width: 64, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8,
+                              paddingHorizontal: 8, paddingVertical: 6,
+                              fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827', textAlign: 'center',
+                            }}
+                          />
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>g</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => setRecipeItems(prev => prev.filter((_, i) => i !== idx))}
+                          style={{ width: 28, alignItems: 'center' }}
+                        >
+                          <Text style={{ fontSize: 16, color: '#d1d5db' }}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Totales */}
+                {recipeItems.length > 0 && (
+                  <View style={{ backgroundColor: '#1e3a5f', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                      Total receta
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[
+                        { label: 'kcal',    value: recipeTotals.kcal,     color: '#f97316' },
+                        { label: 'Prot.',   value: recipeTotals.proteinG,  color: '#93c5fd' },
+                        { label: 'Carbs',   value: recipeTotals.carbsG,    color: '#fde047' },
+                        { label: 'Grasa',   value: recipeTotals.fatG,      color: '#86efac' },
+                      ].map(m => (
+                        <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: m.color }}>{m.value}</Text>
+                          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{m.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Buscar y agregar ingrediente */}
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Agregar ingrediente
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  backgroundColor: '#f3f4f6', borderRadius: 12,
+                  paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+                }}>
+                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>🔍</Text>
+                  <TextInput
+                    value={recipeQuery}
+                    onChangeText={setRecipeQuery}
+                    placeholder="Buscar alimento..."
+                    placeholderTextColor="#9ca3af"
+                    style={{ flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827' }}
+                  />
+                  {recipeQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setRecipeQuery('')}>
+                      <Text style={{ fontSize: 16, color: '#9ca3af' }}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {recipeFiltered.map(food => (
+                  <TouchableOpacity
+                    key={food.id}
+                    onPress={() => handleAddToRecipe(food)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                        {Math.round(food.kcalPer100g * food.servingG / 100)} kcal · porción {Math.round(food.servingG)}g
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 20, color: '#d1d5db' }}>+</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Footer recipe-builder */}
+              <View style={{
+                paddingHorizontal: 20, paddingTop: 12,
+                paddingBottom: insets.bottom + 12,
+                borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                backgroundColor: 'white',
+              }}>
+                <TouchableOpacity
+                  onPress={handleSaveRecipe}
+                  disabled={savingRecipe || !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0}
+                  style={{
+                    backgroundColor: savingRecipe || !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0 ? '#e5e7eb' : '#1e3a5f',
+                    borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+                  }}
+                >
+                  {savingRecipe ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{
+                      color: !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0 ? '#9ca3af' : 'white',
+                      fontSize: 15, fontFamily: 'Inter_700Bold',
+                    }}>
+                      Guardar receta ({recipeItems.length} ingredientes)
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
           {/* STEP: propose */}
           {step === 'propose' && (
             proposeSuccess ? (

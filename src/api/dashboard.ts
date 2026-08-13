@@ -49,6 +49,7 @@ export type DashboardData = {
     hardestSessionRpe: number | null
     sleepHours: number | null
   } | null
+  lastCheckinDaysAgo: number | null
   weeklyWeightChange: number | null
   weightProgressPct: number | null
   currentVolume: number | null
@@ -60,7 +61,7 @@ export type DashboardData = {
     fatG: number
     label: string
   } | null
-  mode: 'TRAINING' | 'RECOVERY' | 'FREE'
+  mode: 'TRAINING' | 'RECOVERY' | 'FREE' | 'GYM'
   recoveryDaysLeft: number | null
   completedPlanName: string | null
   weeklyRoutine?: {
@@ -79,6 +80,14 @@ export type DashboardData = {
     energyLevel: number | null
   } | null
   hasEverLogged: boolean
+  // Coach & B2B info
+  coach: {
+    name: string
+    headline: string | null
+    initial: string
+  } | null
+  isB2B: boolean
+  workoutName: string | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {

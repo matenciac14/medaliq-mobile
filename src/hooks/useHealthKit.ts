@@ -1,6 +1,12 @@
 import { useState, useCallback } from 'react'
 import { Platform } from 'react-native'
-import AppleHealthKit, { HealthKitPermissions } from 'react-native-health'
+
+let AppleHealthKit: any = null
+try {
+  AppleHealthKit = require('react-native-health').default
+} catch {
+  // Module not available in Expo Go — hook degrades gracefully.
+}
 
 export interface HealthKitState {
   authorized: boolean
@@ -8,18 +14,20 @@ export interface HealthKitState {
   error: string | null
 }
 
-const PERMISSIONS: HealthKitPermissions = {
-  permissions: {
-    read: [
-      AppleHealthKit.Constants.Permissions.Workout,
-      AppleHealthKit.Constants.Permissions.HeartRate,
-      AppleHealthKit.Constants.Permissions.RestingHeartRate,
-      AppleHealthKit.Constants.Permissions.SleepAnalysis,
-      AppleHealthKit.Constants.Permissions.VO2Max,
-    ],
-    write: [],
-  },
-}
+const PERMISSIONS = AppleHealthKit
+  ? {
+      permissions: {
+        read: [
+          AppleHealthKit.Constants.Permissions.Workout,
+          AppleHealthKit.Constants.Permissions.HeartRate,
+          AppleHealthKit.Constants.Permissions.RestingHeartRate,
+          AppleHealthKit.Constants.Permissions.SleepAnalysis,
+          AppleHealthKit.Constants.Permissions.VO2Max,
+        ],
+        write: [],
+      },
+    }
+  : { permissions: { read: [], write: [] } }
 
 export function useHealthKit(): HealthKitState & { requestAuthorization: () => Promise<void> } {
   const [state, setState] = useState<HealthKitState>({
@@ -29,7 +37,7 @@ export function useHealthKit(): HealthKitState & { requestAuthorization: () => P
   })
 
   const requestAuthorization = useCallback(async () => {
-    if (Platform.OS !== 'ios') return
+    if (Platform.OS !== 'ios' || !AppleHealthKit) return
 
     setState((s) => ({ ...s, loading: true, error: null }))
 
