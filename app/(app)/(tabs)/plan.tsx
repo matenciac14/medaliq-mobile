@@ -591,51 +591,248 @@ export default function PlanScreen() {
     )
   }
 
-  if (!plan) {
+  // ── Completed State ────────────────────────────────────────────────
+  if (!plan && lastCompletedPlan) {
+    const adherencePct = lastCompletedPlan.sessionsTotal > 0
+      ? Math.round((lastCompletedPlan.sessionsLogged / lastCompletedPlan.sessionsTotal) * 100)
+      : 0
+    const completedDate = lastCompletedPlan.endDate
+      ? new Date(lastCompletedPlan.endDate).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null
+    const isB2B = user?.isB2B ?? false
+
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', paddingHorizontal: 24 }}>
-        {lastCompletedPlan ? (
-          <>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>🏆</Text>
-            <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center' }}>
-              ¡Plan completado!
-            </Text>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151', textAlign: 'center', marginTop: 8 }}>
-              {lastCompletedPlan.name}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 20, marginTop: 20 }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#f97316' }}>{lastCompletedPlan.totalWeeks}</Text>
-                <Text style={{ fontSize: 11, color: '#9ca3af' }}>semanas</Text>
+      <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {/* Header — navy gradient */}
+          <LinearGradient colors={['#1e3a5f', '#2d5a8e']} style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <View>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Plan</Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                  {lastCompletedPlan.name} · {lastCompletedPlan.totalWeeks} semanas
+                </Text>
               </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#22c55e' }}>{lastCompletedPlan.sessionsLogged}</Text>
-                <Text style={{ fontSize: 11, color: '#9ca3af' }}>/{lastCompletedPlan.sessionsTotal} sesiones</Text>
+              <View style={{ backgroundColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#86efac' }}>✓ COMPLETADO</Text>
               </View>
-              {lastCompletedPlan.endDate ? (
+            </View>
+            {completedDate && (
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, paddingVertical: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#fff' }}>
+                  Completado el {completedDate}
+                </Text>
+              </View>
+            )}
+          </LinearGradient>
+
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 16 }}>
+            {/* Celebration card */}
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#f1f5f9', padding: 24, alignItems: 'center', ...SHADOW }}>
+              <Text style={{ fontSize: 48, marginBottom: 12 }}>🏆</Text>
+              <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center' }}>
+                ¡Plan completado!
+              </Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+                {lastCompletedPlan.name} · {lastCompletedPlan.totalWeeks} semanas
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 32, marginTop: 16 }}>
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>
-                    {lastCompletedPlan.sessionsTotal > 0 ? Math.round((lastCompletedPlan.sessionsLogged / lastCompletedPlan.sessionsTotal) * 100) : 0}%
-                  </Text>
+                  <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.totalWeeks}</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>semanas</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.sessionsLogged}</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>sesiones</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{adherencePct}%</Text>
                   <Text style={{ fontSize: 11, color: '#9ca3af' }}>adherencia</Text>
                 </View>
-              ) : null}
+              </View>
             </View>
-            <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 20 }}>
-              Tu coach asignará el próximo plan.
+
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Resumen
             </Text>
-          </>
-        ) : (
-          <>
-            <Text style={{ fontSize: 40, marginBottom: 16 }}>📋</Text>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1e3a5f', textAlign: 'center' }}>
-              Sin plan activo
+
+            {/* KPIs */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Completadas</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.sessionsLogged}/{lastCompletedPlan.sessionsTotal}</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>sesiones</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Duración</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.totalWeeks}</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>semanas</Text>
+              </View>
+              <View style={{
+                flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, ...SHADOW,
+                borderWidth: adherencePct < 80 ? 2 : 1,
+                borderColor: adherencePct < 80 ? 'rgba(234,88,12,0.3)' : '#f1f5f9',
+              }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Adherencia</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{adherencePct}%</Text>
+                <Text style={{ fontSize: 10, color: adherencePct < 80 ? '#ef4444' : '#9ca3af', marginTop: 2 }}>
+                  {adherencePct < 80 ? '↓ meta 80%' : '✓ objetivo'}
+                </Text>
+              </View>
+            </View>
+
+            {/* CTA card */}
+            {isB2B ? (
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, ...SHADOW }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Tu coach asignará el próximo plan</Text>
+                <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
+                  Recibirás una notificación cuando tu entrenador lo haya preparado.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, gap: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>¿Listo para el siguiente desafío?</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/find-coach' as never)}
+                  style={{ backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' }}>Buscar entrenador →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    )
+  }
+
+  // ── Empty State ────────────────────────────────────────────────────
+  if (!plan) {
+    const isB2B = user?.isB2B ?? false
+
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {/* Header — navy gradient */}
+          <LinearGradient colors={['#1e3a5f', '#2d5a8e']} style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14 }}>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Plan</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Sin plan asignado</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Day Pills — current week */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {Array.from({ length: 7 }, (_, i) => {
+                const dow = i + 1
+                const isToday = dow === todayDow
+                return (
+                  <View key={dow} style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: isToday ? '#ea580c' : '#9ca3af' }}>
+                      {DAY_LETTERS[i]}
+                    </Text>
+                    <View style={{
+                      width: 40, height: 40, borderRadius: 20,
+                      alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: isToday ? '#ea580c' : '#fff',
+                      borderWidth: isToday ? 0 : 1,
+                      borderColor: '#e5e7eb',
+                    }}>
+                      <Text style={{
+                        fontSize: 15, fontFamily: 'Inter_700Bold',
+                        color: isToday ? '#fff' : '#9ca3af',
+                      }}>
+                        {(() => {
+                          const d = new Date()
+                          const diff = dow - todayDow
+                          d.setDate(d.getDate() + diff)
+                          return d.getDate()
+                        })()}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+
+          <View style={{ paddingHorizontal: 16, gap: 16 }}>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Sesión del día
             </Text>
-            <Text style={{ fontSize: 14, color: '#6b7280', fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 8 }}>
-              Completa el onboarding para generar tu plan personalizado.
+
+            {/* Sesión libre card */}
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, gap: 12, ...SHADOW }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <Text style={{ fontSize: 20 }}>📝</Text>
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827' }}>Sesión libre</Text>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>— min</Text>
+                </View>
+                <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#dbeafe' }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#1d4ed8' }}>Zona 2–3</Text>
+                </View>
+                <View style={{ backgroundColor: '#f0fdf4', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#15803d' }}>Libre</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: '#9ca3af' }}>Registra actividad libre — sin plan asignado</Text>
+              <TouchableOpacity
+                onPress={() => router.push('/log' as never)}
+                style={{ backgroundColor: '#ea580c', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' }}>Registrar sesión libre →</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Esta semana
             </Text>
-          </>
-        )}
+
+            {/* KPIs */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Esta semana</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>0</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>sesiones</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Tiempo</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>—</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>registrado</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Adherencia</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#ea580c' }}>—</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>sin meta activa</Text>
+              </View>
+            </View>
+
+            {/* CTA card */}
+            {isB2B ? (
+              <View style={{ backgroundColor: '#1e3a5f', borderRadius: 12, padding: 20 }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' }}>Tu coach está preparando tu plan</Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>
+                  Cuando tu entrenador asigne el plan, aparecerá aquí automáticamente.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, gap: 12, ...SHADOW }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>¿Quieres entrenar con un plan?</Text>
+                <Text style={{ fontSize: 11, color: '#9ca3af' }}>Un plan estructurado adapta cada sesión a tus métricas semanales.</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/find-coach' as never)}
+                  style={{ backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#fff' }}>Buscar entrenador →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </ScrollView>
       </View>
     )
   }
