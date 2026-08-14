@@ -568,6 +568,16 @@ export default function PlanScreen() {
   // Refetch when returning from any screen (e.g. after edit-session or log)
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
+  // Monday of current week — used by empty state week nav
+  const baseMonday = useMemo(() => {
+    const today = new Date()
+    const dow = today.getDay() === 0 ? 7 : today.getDay()
+    const mon = new Date(today)
+    mon.setDate(today.getDate() - (dow - 1))
+    mon.setHours(0, 0, 0, 0)
+    return mon
+  }, [])
+
   if (!user?.features?.plan) {
     // GYM users: redirect to gym tab
     if (user?.features?.gym) {
@@ -600,6 +610,7 @@ export default function PlanScreen() {
       ? new Date(lastCompletedPlan.endDate).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
       : null
     const isB2B = user?.isB2B ?? false
+    const nt = dash?.nutritionTarget ?? null
 
     return (
       <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
@@ -626,7 +637,35 @@ export default function PlanScreen() {
             )}
           </LinearGradient>
 
-          <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 16 }}>
+          {/* Day Pills — all green (completed) */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {Array.from({ length: 7 }, (_, i) => {
+                const baseDate = lastCompletedPlan.endDate ? new Date(lastCompletedPlan.endDate) : new Date()
+                const endDow = baseDate.getDay() === 0 ? 7 : baseDate.getDay()
+                const dayDate = new Date(baseDate)
+                dayDate.setDate(baseDate.getDate() - (endDow - 1) + i)
+                return (
+                  <View key={i} style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#22c55e' }}>
+                      {DAY_LETTERS[i]}
+                    </Text>
+                    <View style={{
+                      width: 40, height: 40, borderRadius: 20,
+                      alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: '#22c55e',
+                    }}>
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#fff' }}>
+                        {dayDate.getDate()}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+
+          <View style={{ paddingHorizontal: 16, gap: 16 }}>
             {/* Celebration card */}
             <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#f1f5f9', padding: 24, alignItems: 'center', ...SHADOW }}>
               <Text style={{ fontSize: 48, marginBottom: 12 }}>🏆</Text>
@@ -653,7 +692,7 @@ export default function PlanScreen() {
             </View>
 
             <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-              Resumen
+              Esta semana
             </Text>
 
             {/* KPIs */}
@@ -664,9 +703,9 @@ export default function PlanScreen() {
                 <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>sesiones</Text>
               </View>
               <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9', padding: 12, ...SHADOW }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Duración</Text>
-                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.totalWeeks}</Text>
-                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>semanas</Text>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 4 }}>Volumen</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#111827' }}>{lastCompletedPlan.totalWeeks * 4}</Text>
+                <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>en el plan</Text>
               </View>
               <View style={{
                 flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, ...SHADOW,
@@ -680,6 +719,11 @@ export default function PlanScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Nutrición Hoy */}
+            {nt && (
+              <NutritionCard kcal={nt.kcal} proteinG={nt.proteinG} carbsG={nt.carbsG} fatG={nt.fatG} />
+            )}
 
             {/* CTA card */}
             {isB2B ? (
@@ -709,6 +753,9 @@ export default function PlanScreen() {
   // ── Empty State ────────────────────────────────────────────────────
   if (!plan) {
     const isB2B = user?.isB2B ?? false
+    const nt = dash?.nutritionTarget ?? null
+    const weekSunday = new Date(baseMonday.getTime() + 6 * 86400000)
+    const weekNavLabel = `Semana del ${baseMonday.getDate()} – ${weekSunday.getDate()} ${MONTHS[weekSunday.getMonth()].toLowerCase().slice(0, 3)}`
 
     return (
       <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
@@ -719,6 +766,19 @@ export default function PlanScreen() {
               <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Plan</Text>
               <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Sin plan asignado</Text>
             </View>
+            {/* Week Nav bar */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, paddingVertical: 4, paddingHorizontal: 4,
+            }}>
+              <View style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="chevron-back" size={18} color="rgba(255,255,255,0.5)" />
+              </View>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#fff' }}>{weekNavLabel}</Text>
+              <View style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.5)" />
+              </View>
+            </View>
           </LinearGradient>
 
           {/* Day Pills — current week */}
@@ -727,6 +787,7 @@ export default function PlanScreen() {
               {Array.from({ length: 7 }, (_, i) => {
                 const dow = i + 1
                 const isToday = dow === todayDow
+                const dayDate = new Date(baseMonday.getTime() + i * 86400000)
                 return (
                   <View key={dow} style={{ alignItems: 'center', gap: 4 }}>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: isToday ? '#ea580c' : '#9ca3af' }}>
@@ -743,12 +804,7 @@ export default function PlanScreen() {
                         fontSize: 15, fontFamily: 'Inter_700Bold',
                         color: isToday ? '#fff' : '#9ca3af',
                       }}>
-                        {(() => {
-                          const d = new Date()
-                          const diff = dow - todayDow
-                          d.setDate(d.getDate() + diff)
-                          return d.getDate()
-                        })()}
+                        {dayDate.getDate()}
                       </Text>
                     </View>
                   </View>
@@ -759,7 +815,7 @@ export default function PlanScreen() {
 
           <View style={{ paddingHorizontal: 16, gap: 16 }}>
             <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-              Sesión del día
+              {DAY_SHORT[todayDow === 7 ? 6 : todayDow - 1]} {new Date().getDate()} · Sesión del día
             </Text>
 
             {/* Sesión libre card */}
@@ -810,6 +866,11 @@ export default function PlanScreen() {
                 <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>sin meta activa</Text>
               </View>
             </View>
+
+            {/* Nutrición Hoy */}
+            {nt && (
+              <NutritionCard kcal={nt.kcal} proteinG={nt.proteinG} carbsG={nt.carbsG} fatG={nt.fatG} />
+            )}
 
             {/* CTA card */}
             {isB2B ? (
