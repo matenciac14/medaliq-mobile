@@ -454,13 +454,76 @@ export default function CheckinScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View>
-          <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
-            Check-in
-          </Text>
-          <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
+              Check-in
+            </Text>
+            {statusData?.totalWeeks && (
+              <View style={{ backgroundColor: '#1a2744', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                  SEMANA {statusData.weekNumber} DE {statusData.totalWeeks}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular' }}>
             Cómo vas esta semana · 2 min
           </Text>
+
+          {/* Adherencia dots */}
+          {statusData?.weekSessions && statusData.weekSessions.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, i) => {
+                const dow = i === 6 ? 0 : i + 1
+                const session = statusData.weekSessions.find((s) => s.dayOfWeek === dow)
+                const done = session?.completed ?? false
+                const hasSession = !!session
+                return (
+                  <View key={day} style={{ alignItems: 'center', gap: 2 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>{day}</Text>
+                    <View style={{
+                      width: 24, height: 24, borderRadius: 12,
+                      backgroundColor: hasSession ? (done ? '#22c55e' : '#fef2f2') : '#f3f4f6',
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: hasSession && !done ? 1 : 0,
+                      borderColor: '#fca5a5',
+                    }}>
+                      {hasSession && (
+                        <Text style={{ fontSize: 12, color: done ? 'white' : '#ef4444' }}>
+                          {done ? '✓' : '✗'}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                )
+              })}
+              {(() => {
+                const total = statusData.weekSessions.length
+                const completed = statusData.weekSessions.filter((s) => s.completed).length
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+                return (
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444', marginLeft: 4 }}>
+                    {pct}%
+                  </Text>
+                )
+              })()}
+            </View>
+          )}
+
+          {/* Auto-data banner */}
+          {statusData?.hasAutoData && (
+            <View style={{
+              backgroundColor: '#eff6ff', borderRadius: 10, padding: 10,
+              flexDirection: 'row', alignItems: 'center', gap: 8,
+              borderWidth: 1, borderColor: '#bfdbfe',
+            }}>
+              <Text style={{ fontSize: 16 }}>📡</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#1d4ed8', flex: 1 }}>
+                Algunos datos fueron pre-llenados desde tu perfil de salud.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Check-in rápido */}

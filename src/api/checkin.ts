@@ -17,9 +17,17 @@ export type CheckinPayload = {
   thighsCm?: number
 }
 
+export type WeekSessionAdherence = {
+  dayOfWeek: number
+  completed: boolean
+}
+
 export type CheckinStatus = {
   submitted: boolean
   weekNumber: number
+  totalWeeks: number | null
+  weekSessions: WeekSessionAdherence[]
+  hasAutoData: boolean
   data: {
     id: string
     weightKg: number | null
