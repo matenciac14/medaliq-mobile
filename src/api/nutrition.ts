@@ -270,3 +270,18 @@ export async function applyNutritionTemplate(
 ): Promise<{ ok: boolean; created: number }> {
   return apiFetch(`/api/mobile/nutrition/templates/${templateId}/apply`, { method: 'POST', body: payload })
 }
+
+// ── Water tracking ─────────────────────────────────────────────────────────────
+
+export type WaterLogData = {
+  mlLogged: number
+  waterMlTarget: number
+}
+
+export async function getWaterLog(): Promise<WaterLogData> {
+  return apiFetch<WaterLogData>('/api/mobile/nutrition/water')
+}
+
+export async function logWater(delta: number): Promise<{ mlLogged: number }> {
+  return apiFetch<{ mlLogged: number }>('/api/mobile/nutrition/water', { method: 'POST', body: { delta } })
+}

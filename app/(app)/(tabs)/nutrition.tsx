@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, getMyProposals, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary } from '../../../src/api/nutrition'
+import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, getMyProposals, getWaterLog, logWater, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
@@ -119,19 +119,35 @@ function MealList({ mealPlan, dayType }: { mealPlan: any; dayType: string }) {
 
 // ─── HydrationSection ────────────────────────────────────────────────────────
 
-const HYDRATION_TIPS = [
-  'Al despertar: 500 ml con una pizca de sal marina',
-  'Durante el entreno: 150–200 ml cada 20 minutos',
-  'Post-sesión: 500 ml para recuperación inmediata',
-]
+const WATER_QUICK_ADD = [250, 500, 750]
 
-function HydrationSection({ waterMlTarget, fallbackL }: { waterMlTarget?: number; fallbackL?: number }) {
-  const totalL = waterMlTarget != null
-    ? (waterMlTarget / 1000)
-    : (fallbackL ?? 2)
+function HydrationSection({ waterMlTarget: targetFromNutrition }: { waterMlTarget?: number; fallbackL?: number }) {
+  const queryClient = useQueryClient()
+
+  const { data: waterData } = useQuery({
+    queryKey: ['water-log'],
+    queryFn: getWaterLog,
+    staleTime: 30_000,
+  })
+
+  const { mutate: addWater, isPending } = useMutation({
+    mutationFn: (delta: number) => logWater(delta),
+    onSuccess: () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      queryClient.invalidateQueries({ queryKey: ['water-log'] })
+    },
+  })
+
+  const mlLogged = waterData?.mlLogged ?? 0
+  const target = waterData?.waterMlTarget ?? targetFromNutrition ?? 2000
+  const pct = Math.min(100, Math.round((mlLogged / target) * 100))
+  const liters = (mlLogged / 1000).toFixed(1)
+  const targetL = (target / 1000).toFixed(1)
+  const isGoalReached = mlLogged >= target
 
   return (
-    <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+    <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: isGoalReached ? '#86efac' : '#e5e7eb', overflow: 'hidden' }}>
+      {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, paddingBottom: 14 }}>
         <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 22 }}>💧</Text>
@@ -141,26 +157,53 @@ function HydrationSection({ waterMlTarget, fallbackL }: { waterMlTarget?: number
             Hidratación
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.5 }}>
-              {totalL.toFixed(1)} L
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: isGoalReached ? '#16a34a' : '#1e3a5f', letterSpacing: -0.5 }}>
+              {liters} L
             </Text>
-            {waterMlTarget != null && (
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                ({waterMlTarget} ml objetivo)
-              </Text>
-            )}
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+              / {targetL} L objetivo
+            </Text>
           </View>
         </View>
+        <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: isGoalReached ? '#16a34a' : '#6b7280' }}>
+          {pct}%
+        </Text>
       </View>
-      <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 20, paddingVertical: 14, gap: 10 }}>
-        {HYDRATION_TIPS.map((tip, i) => (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#1d4ed8' }}>{i + 1}</Text>
-            </View>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', flex: 1, lineHeight: 19 }}>{tip}</Text>
-          </View>
+
+      {/* Progress bar */}
+      <View style={{ marginHorizontal: 20, marginBottom: 16, height: 8, backgroundColor: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+        <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: isGoalReached ? '#22c55e' : '#3b82f6', borderRadius: 4 }} />
+      </View>
+
+      {/* Quick add buttons */}
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingBottom: 16 }}>
+        {WATER_QUICK_ADD.map(ml => (
+          <TouchableOpacity
+            key={ml}
+            onPress={() => addWater(ml)}
+            disabled={isPending}
+            style={{
+              flex: 1, paddingVertical: 10, borderRadius: 12,
+              backgroundColor: '#eff6ff', alignItems: 'center',
+              borderWidth: 1, borderColor: '#bfdbfe',
+            }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1d4ed8' }}>+{ml} ml</Text>
+          </TouchableOpacity>
         ))}
+        {mlLogged > 0 && (
+          <TouchableOpacity
+            onPress={() => addWater(-250)}
+            disabled={isPending}
+            style={{
+              paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
+              backgroundColor: '#fef2f2', alignItems: 'center',
+              borderWidth: 1, borderColor: '#fecaca',
+            }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#ef4444' }}>−</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   )

@@ -338,25 +338,42 @@ function AddExerciseModal({
 }
 
 // Finish Session Modal
+type EnergyStateOption = 'EXHAUSTED' | 'NORMAL' | 'ENERGIZED'
+type DiscomfortOption = 'NONE' | 'MILD' | 'MODERATE'
+
+const ENERGY_OPTS: { value: EnergyStateOption; emoji: string; label: string }[] = [
+  { value: 'EXHAUSTED', emoji: '😮‍💨', label: 'Agotado' },
+  { value: 'NORMAL', emoji: '😊', label: 'Normal' },
+  { value: 'ENERGIZED', emoji: '💪', label: 'Con energía' },
+]
+
+const DISCOMFORT_OPTS: { value: DiscomfortOption; emoji: string; label: string }[] = [
+  { value: 'NONE', emoji: '✅', label: 'Sin molestias' },
+  { value: 'MILD', emoji: '⚡', label: 'Leve' },
+  { value: 'MODERATE', emoji: '⚠️', label: 'Moderada' },
+]
+
 function FinishModal({
   visible,
   completedCount,
   defaultDuration,
   defaultRpe,
   onConfirm,
-  onClose,
+  onSkip,
   submitting,
 }: {
   visible: boolean
   completedCount: number
   defaultDuration: number
   defaultRpe?: number
-  onConfirm: (rpe: number, durationMin: number, notes: string) => void
-  onClose: () => void
+  onConfirm: (data: { rpe: number; durationMin: number; notes: string; energyState?: EnergyStateOption; discomfort?: DiscomfortOption }) => void
+  onSkip: () => void
   submitting: boolean
 }) {
   const [rpe, setRpe] = useState(defaultRpe ?? 7)
   const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+  const [energyState, setEnergyState] = useState<EnergyStateOption | null>(null)
+  const [discomfort, setDiscomfort] = useState<DiscomfortOption | null>(null)
 
   // Sync defaultRpe when it arrives (exerciseRpeMap updates after first RPE is set)
   useEffect(() => { if (defaultRpe != null) setRpe(defaultRpe) }, [defaultRpe])
@@ -365,12 +382,37 @@ function FinishModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
-          <View>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Finalizar sesión</Text>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>
+        <ScrollView style={{ maxHeight: '90%' }} contentContainerStyle={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
+          {/* Header */}
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="checkmark-circle" size={28} color="#16a34a" />
+            </View>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Sesión completada</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
               {completedCount} series completadas
             </Text>
+          </View>
+
+          {/* Energy State */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>¿Cómo saliste?</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {ENERGY_OPTS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setEnergyState(opt.value)}
+                  style={{
+                    flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: 12,
+                    borderWidth: 2, borderColor: energyState === opt.value ? '#f97316' : '#e5e7eb',
+                    backgroundColor: energyState === opt.value ? '#fff7ed' : 'white',
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{opt.emoji}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: energyState === opt.value ? '#f97316' : '#6b7280' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* RPE */}
@@ -396,6 +438,27 @@ function FinishModal({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Muy fácil</Text>
               <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Máximo esfuerzo</Text>
+            </View>
+          </View>
+
+          {/* Discomfort */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>¿Alguna molestia?</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {DISCOMFORT_OPTS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setDiscomfort(opt.value)}
+                  style={{
+                    flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: 12,
+                    borderWidth: 2, borderColor: discomfort === opt.value ? '#f97316' : '#e5e7eb',
+                    backgroundColor: discomfort === opt.value ? '#fff7ed' : 'white',
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{opt.emoji}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: discomfort === opt.value ? '#f97316' : '#6b7280' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
@@ -434,25 +497,31 @@ function FinishModal({
           </View>
 
           {/* Buttons */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ gap: 10 }}>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={() => onConfirm({
+                rpe,
+                durationMin: parseInt(durationMin) || 60,
+                notes,
+                energyState: energyState ?? undefined,
+                discomfort: discomfort ?? undefined,
+              })}
               disabled={submitting}
-              style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onConfirm(rpe, parseInt(durationMin) || 60, notes)}
-              disabled={submitting}
-              style={{ flex: 2, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+              style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
             >
               <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                {submitting ? 'Guardando...' : 'Guardar sesión'}
+                {submitting ? 'Guardando...' : 'Guardar y continuar'}
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onSkip}
+              disabled={submitting}
+              style={{ paddingVertical: 10, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>Saltar por ahora</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   )
@@ -858,7 +927,8 @@ export default function GymSessionScreen() {
     setShowFinishModal(true)
   }
 
-  function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
+  function handleConfirmFinish(data: { rpe: number; durationMin: number; notes: string; energyState?: EnergyStateOption; discomfort?: DiscomfortOption }) {
+    const { rpe, durationMin, notes, energyState, discomfort } = data
     const completedSets: SetLog[] = session!.freeSession
       ? sets.map(s => {
           const fe = freeExercises.find(f => f.localId === s.workoutExerciseId)
@@ -899,6 +969,8 @@ export default function GymSessionScreen() {
       sets: completedSets,
       durationMin,
       rpe,
+      energyState,
+      discomfort,
       notes: notes.trim() || undefined,
       exerciseOverrides: overridesArr.length > 0 ? overridesArr : undefined,
     }
@@ -937,7 +1009,7 @@ export default function GymSessionScreen() {
         defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
         defaultRpe={avgExerciseRpe()}
         onConfirm={handleConfirmFinish}
-        onClose={() => setShowFinishModal(false)}
+        onSkip={() => setShowFinishModal(false)}
         submitting={finishing}
       />
       {swapTarget && (
@@ -1120,6 +1192,11 @@ export default function GymSessionScreen() {
 
           const swappedEx = exerciseOverrides.get(ex.id)
           const hasCompletedSets = sets.filter(s => s.workoutExerciseId === ex.id && s.completed).length > 0
+          const allPrevCompleted = ex.previousLogs.length > 0 && ex.previousLogs.every(l => l.completed)
+          const prevAvgWeight = allPrevCompleted && ex.previousLogs.some(l => l.weightKg != null)
+            ? ex.previousLogs.reduce((sum, l) => sum + (l.weightKg ?? 0), 0) / ex.previousLogs.filter(l => l.weightKg != null).length
+            : null
+          const suggestedWeight = ex.suggestedNextWeightKg ?? (prevAvgWeight != null ? Math.round((prevAvgWeight + 2.5) * 2) / 2 : null)
 
           return (
             <View style={{ gap: 12 }}>
@@ -1278,6 +1355,14 @@ export default function GymSessionScreen() {
 
                     {/* Kg column */}
                     <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      {suggestedWeight != null && set.weightKg === '' && !set.completed && (
+                        <TouchableOpacity
+                          onPress={() => updateSet(globalIdx, 'weightKg', String(suggestedWeight))}
+                          style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#86efac' }}
+                        >
+                          <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#16a34a' }}>↑ {suggestedWeight}kg</Text>
+                        </TouchableOpacity>
+                      )}
                       <TextInput
                         value={set.weightKg}
                         onChangeText={v => updateSet(globalIdx, 'weightKg', v)}

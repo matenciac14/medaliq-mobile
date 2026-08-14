@@ -275,7 +275,8 @@ Ver `roadmap-data.ts` como fuente canónica. Esta tabla es referencia rápida.
 | ✅ P2 | Historial unificado running+gym | ✅ | ✅ log-history.tsx (2026-07-24) |
 | ✅ P2 | Apply NutritionTemplate a semana | ✅ | ✅ nutrition-apply-template.tsx (2026-07-29) |
 | ✅ P2 | 1-tap log comidas planeadas de hoy | ✅ | ✅ log-today endpoint mobile (2026-07-29) |
-| 🟡 P2 | Water tracking | ✅ HydrationWidget web (2026-07-29) | ❌ pendiente /api/mobile/nutrition/water |
+| ✅ P2 | Water tracking | ✅ HydrationWidget web (2026-07-29) | ✅ GET/POST /api/mobile/nutrition/water + HydrationSection interactiva (2026-08-14) |
+| ✅ P2 | Sugerencia carga próxima sesión gym | ✅ | ✅ GYM-MOB-04: badge ↑Xkg en input (2026-08-14) |
 | 🟡 P2 | Push notifications en dispositivo real | ✅ Backend | Código listo — **requiere EAS rebuild** con projectId real |
 | 🟡 P2 | Strava en producción | ✅ Backend completo | ❌ pendiente env vars + webhook subscribe |
 | 🟡 P2 | Apple HealthKit / Google Health Connect | ❌ | ❌ pendiente librería + EAS bare workflow |

@@ -87,6 +87,7 @@ export type GymSessionData = {
     notes: string | null
     setType: string
     supersetWith: string | null
+    suggestedNextWeightKg: number | null
     exercise: {
       id: string
       name: string
@@ -101,6 +102,7 @@ export type GymSessionData = {
       setNumber: number
       weightKg: number | null
       repsCompleted: number | null
+      completed: boolean
     }[]
   }[]
 }
@@ -130,6 +132,8 @@ export type CompleteSessionPayload = {
   sets: SetLog[]
   rpe?: number
   durationMin?: number
+  energyState?: 'EXHAUSTED' | 'NORMAL' | 'ENERGIZED'
+  discomfort?: 'NONE' | 'MILD' | 'MODERATE'
   notes?: string
   exerciseOverrides?: ExerciseOverride[]
 }
