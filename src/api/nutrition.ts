@@ -110,6 +110,7 @@ export type FoodItem = {
   proteinPer100g: number
   carbsPer100g: number
   fatPer100g: number
+  fiberPer100g?: number | null
   servingG: number
   servingLabel: string | null
 }
