@@ -218,7 +218,7 @@ export default function RoutineEditScreen() {
             borderWidth: 1, borderColor: '#e5e7eb', gap: 12,
           }}>
             <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-              {DAY_LABELS_FULL[selectedDay.dow - 1]} — {selectedDay.activity === 'GYM' ? 'Gym' : 'Running'}
+              {DAY_LABELS_FULL[selectedDay.dow - 1]} — {selectedDay.activity === 'GYM' ? 'Fuerza' : 'Running'}
             </Text>
 
             {selectedDay.activity === 'GYM' && (

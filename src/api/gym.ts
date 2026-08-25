@@ -16,7 +16,7 @@ export async function getPublicTemplates(): Promise<PublicTemplate[]> {
 }
 
 export async function assignTemplate(templateId: string) {
-  return apiFetch('/api/gym/assign', { method: 'POST', body: { templateId } })
+  return apiFetch('/api/mobile/gym/assign', { method: 'POST', body: { templateId } })
 }
 
 export type RunningSession = {
@@ -171,6 +171,16 @@ export async function getExerciseAlternatives(exerciseId: string): Promise<Exerc
 
 export async function getTodayGymSession(): Promise<GymSessionData | null> {
   return apiFetch<GymSessionData | null>('/api/gym/session/today')
+}
+
+export type GymPR = {
+  exerciseName: string
+  estimatedOneRM: number
+}
+
+export async function getGymPRs(): Promise<GymPR[]> {
+  const res = await apiFetch<{ prs: GymPR[] }>('/api/mobile/gym/prs')
+  return res.prs
 }
 
 export type PRResult = {

@@ -727,7 +727,7 @@ function TuActividadCard({ router }: { router: ReturnType<typeof useRouter> }) {
                 Registra tu primera sesión
               </Text>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#ea580c', marginTop: 2 }}>
-                Running · Gym · Lo que practiques {'\u2192'}
+                Running · Entreno · Lo que practiques {'\u2192'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1126,7 +1126,7 @@ export default function DashboardScreen() {
                       style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
                     >
                       <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>
-                        {d.todaySession!.id === 'gym-today' ? 'Ir al Gym \u2192' : 'Registrar sesión'}
+                        {d.todaySession!.id === 'gym-today' ? 'Ir al Entreno \u2192' : 'Registrar sesión'}
                       </Text>
                     </TouchableOpacity>
                   </View>

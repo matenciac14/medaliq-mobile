@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
 import type { CompleteSessionPayload } from '@/api/gym'
 
 const DRAFT_PREFIX = 'gym_draft:'
@@ -45,11 +46,11 @@ export type PendingSync = {
 
 export async function savePendingSync(sessionKey: string, payload: CompleteSessionPayload): Promise<void> {
   const pending: PendingSync = { sessionKey, payload, savedAt: Date.now() }
-  await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pending))
+  await SecureStore.setItemAsync(PENDING_SYNC_KEY, JSON.stringify(pending))
 }
 
 export async function loadPendingSync(): Promise<PendingSync | null> {
-  const raw = await AsyncStorage.getItem(PENDING_SYNC_KEY)
+  const raw = await SecureStore.getItemAsync(PENDING_SYNC_KEY)
   if (!raw) return null
   try {
     return JSON.parse(raw) as PendingSync
@@ -59,5 +60,5 @@ export async function loadPendingSync(): Promise<PendingSync | null> {
 }
 
 export async function clearPendingSync(): Promise<void> {
-  await AsyncStorage.removeItem(PENDING_SYNC_KEY)
+  await SecureStore.deleteItemAsync(PENDING_SYNC_KEY)
 }

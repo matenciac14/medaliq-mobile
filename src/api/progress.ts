@@ -30,6 +30,15 @@ export type LastRunSession = {
   notes: string | null
 }
 
+export type ActivityGridEntry = { sessionCount: number; types: string[] }
+
+export type MuscleVolumeEntry = {
+  volume: number
+  sets: number
+  lastTrainedAt: string
+  fatigueLevel: 0 | 1 | 2 | 3
+}
+
 export type ProgressData = {
   weightPoints: { week: number; kg: number }[]
   hrPoints: { week: number; bpm: number }[]
@@ -55,8 +64,14 @@ export type ProgressData = {
   benchmarks: Benchmark[]
   gymPRs: GymPR[]
   gymPRHistory: GymPRHistorySeries[]
+  activityGrid: Record<string, ActivityGridEntry>
   totalCheckIns: number
   overallAdherencePct: number
+}
+
+export async function getMuscleVolume(days = 7): Promise<Record<string, MuscleVolumeEntry>> {
+  const res = await apiFetch<{ muscles: Record<string, MuscleVolumeEntry> }>(`/api/mobile/progress/muscles?days=${days}`)
+  return res.muscles
 }
 
 export async function getProgress(): Promise<ProgressData> {

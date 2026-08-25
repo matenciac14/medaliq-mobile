@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
-import { getProgress } from '../../src/api/progress'
+import { getProgress, getMuscleVolume, ActivityGridEntry } from '../../src/api/progress'
 import { useAuthStore } from '../../src/store/auth'
 import UpgradeWall from '../../src/components/UpgradeWall'
+import MuscleMap, { MuscleData } from '../../src/components/MuscleMap'
 
 const PHASE_COLOR: Record<string, string> = {
   BASE: '#1e3a5f',
@@ -46,11 +47,62 @@ function MiniBarChart({
   )
 }
 
+const HEATMAP_COLORS = ['#E5E7EB', '#FEF3C7', '#FED7AA', '#EA580C']
+
+function ActivityHeatmap({ grid }: { grid: Record<string, ActivityGridEntry> }) {
+  const today = new Date()
+  const start = new Date(today)
+  start.setDate(start.getDate() - 363)
+  // Normalize to Monday
+  const startDow = start.getDay() === 0 ? 6 : start.getDay() - 1
+  start.setDate(start.getDate() - startDow)
+
+  const weeks: string[][] = []
+  const cur = new Date(start)
+  while (cur <= today) {
+    const week: string[] = []
+    for (let d = 0; d < 7; d++) {
+      week.push(cur <= today ? cur.toISOString().split('T')[0] : '')
+      cur.setDate(cur.getDate() + 1)
+    }
+    weeks.push(week)
+  }
+
+  function cellColor(dateStr: string): string {
+    if (!dateStr) return 'transparent'
+    const entry = grid[dateStr]
+    if (!entry) return HEATMAP_COLORS[0]
+    const count = entry.sessionCount
+    if (count === 0) return HEATMAP_COLORS[0]
+    if (count === 1) return HEATMAP_COLORS[1]
+    if (count === 2) return HEATMAP_COLORS[2]
+    return HEATMAP_COLORS[3]
+  }
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        {weeks.map((week, wi) => (
+          <View key={wi} style={{ flexDirection: 'column', gap: 2 }}>
+            {week.map((day, di) => (
+              <View key={di} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: cellColor(day) }} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  )
+}
+
 export default function ProgressScreen() {
   const { user } = useAuthStore()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { data, isLoading } = useQuery({ queryKey: ['progress'], queryFn: getProgress })
+  const { data: muscleData } = useQuery({
+    queryKey: ['progress-muscles'],
+    queryFn: () => getMuscleVolume(7),
+  })
 
   if (!user?.features?.progress) {
     return <UpgradeWall icon="📊" title="Progreso" description="Visualiza tu evolución de peso, FC y adherencia semana a semana con el plan Pro." />
@@ -184,6 +236,32 @@ export default function ProgressScreen() {
             maxVal={Math.max(...hrData.map(d => d.value)) + 3}
             barColor="#ef4444"
           />
+        </View>
+      )}
+
+      {/* Actividad — heatmap 52 semanas */}
+      {data!.activityGrid && Object.keys(data!.activityGrid).length > 0 && (
+        <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>ACTIVIDAD — 52 SEMANAS</Text>
+          <ActivityHeatmap grid={data!.activityGrid} />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            {(['Sin actividad', '1 sesión', '2 sesiones', '3+ sesiones'] as const).map((label, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: HEATMAP_COLORS[i] }} />
+                <Text style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Músculos trabajados esta semana */}
+      {muscleData && Object.keys(muscleData).length > 0 && (
+        <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>
+            MÚSCULOS ESTA SEMANA
+          </Text>
+          <MuscleMap data={muscleData as MuscleData} />
         </View>
       )}
 

@@ -123,7 +123,12 @@ export default function ProfileScreen() {
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
           <MenuItem icon="mail-outline" label="Email" value={user?.email ?? ''} />
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
-          <MenuItem icon="medal-outline" label="Plan" value={planLabel[plan] ?? plan} />
+          <MenuItem
+            icon="medal-outline"
+            label="Mi suscripción"
+            value={planLabel[plan] ?? plan}
+            onPress={() => router.push('/(app)/pricing')}
+          />
         </View>
       </View>
 

@@ -16,7 +16,7 @@ const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA',
 
 const FREE_ACTIVITY_TYPES = [
   { type: 'RODAJE_Z2', label: 'Correr',      icon: '🏃' },
-  { type: 'FUERZA',    label: 'Gym',          icon: '💪' },
+  { type: 'FUERZA',    label: 'Fuerza',       icon: '💪' },
   { type: 'OTRO',      label: 'Funcional',   icon: '🤸' },
   { type: 'DESCANSO',  label: 'Descanso',    icon: '😴' },
 ]

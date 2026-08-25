@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
-import { getProgress } from '../../../src/api/progress'
+import { getProgress, getMuscleVolume } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import MuscleMap from '../../../src/components/MuscleMap'
 
 const PHASE_COLORS: Record<string, string> = {
   BASE: '#3b82f6',
@@ -49,6 +50,13 @@ export default function ProgressScreen() {
     queryKey: ['progress'],
     queryFn: getProgress,
     enabled: !!(user?.features?.progress),
+  })
+
+  const { data: muscleData } = useQuery({
+    queryKey: ['progress-muscles'],
+    queryFn: () => getMuscleVolume(7),
+    enabled: !!(user?.features?.gym),
+    staleTime: 5 * 60_000,
   })
 
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
@@ -106,7 +114,7 @@ export default function ProgressScreen() {
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <StatCard label="Check-ins" value={String(data.totalCheckIns)} />
         <StatCard label="Adherencia" value={`${data.overallAdherencePct}%`} sub="promedio" />
-        <StatCard label="Gym" value={String(data.gymSessionsCompleted)} sub="sesiones" />
+        <StatCard label="Fuerza" value={String(data.gymSessionsCompleted)} sub="sesiones" />
       </View>
 
       {/* Peso */}
@@ -414,6 +422,35 @@ export default function ProgressScreen() {
                 </View>
               )
             })}
+          </View>
+        )
+      })()}
+
+      {/* Mapa muscular — GYM-S2-03 */}
+      {muscleData && Object.keys(muscleData).length > 0 && (() => {
+        // Top 3 músculos más trabajados esta semana
+        const sorted = Object.entries(muscleData)
+          .filter(([, v]) => v.fatigueLevel > 0)
+          .sort((a, b) => (b[1].volume ?? 0) - (a[1].volume ?? 0))
+          .slice(0, 4)
+
+        return (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SectionHeader title="Músculos · esta semana" />
+              {sorted.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {sorted.map(([key]) => (
+                    <View key={key} style={{ backgroundColor: '#fff7ed', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ea580c', textTransform: 'capitalize' }}>
+                        {key}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <MuscleMap data={muscleData} />
           </View>
         )
       })()}

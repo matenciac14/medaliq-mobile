@@ -1063,7 +1063,7 @@ export default function NutritionScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#fff7ed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
                     <Text style={{ fontSize: 13 }}>🔥</Text>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
-                      Quemaste {data.gymKcalBurned} kcal en gym hoy
+                      Quemaste {data.gymKcalBurned} kcal en entreno hoy
                     </Text>
                   </View>
                 )}

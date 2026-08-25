@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
 import { getLastRunSession } from '../../src/api/progress'
+import SharePreviewModal from '../../src/components/SharePreviewModal'
+import type { ShareCardProps } from '../../src/components/ShareCard'
 
 const RUN_TYPES = [
   { type: 'RODAJE_Z2',    icon: '🟢', label: 'Rodaje Z2',   sub: 'Ritmo facil — conversacional' },
@@ -41,6 +43,8 @@ export default function LogRunScreen() {
   const [rpe, setRpe] = useState(0)
   const [notes, setNotes] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [shareCardProps, setShareCardProps] = useState<ShareCardProps | null>(null)
+  const [showShareModal, setShowShareModal] = useState(false)
 
   const { data: lastSessionData } = useQuery({
     queryKey: ['last-run-session', runType],
@@ -49,17 +53,10 @@ export default function LogRunScreen() {
     staleTime: 5 * 60 * 1000,
   })
 
-  useEffect(() => {
-    if (showSuccess) {
-      const timer = setTimeout(async () => {
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['dashboard'] }),
-        ])
-        router.back()
-      }, 1800)
-      return () => clearTimeout(timer)
-    }
-  }, [showSuccess])
+  async function handleDone() {
+    await queryClient.refetchQueries({ queryKey: ['dashboard'] })
+    router.back()
+  }
 
   const { mutate: submitLog, isPending } = useMutation({
     mutationFn: (payload: LogPayload) =>
@@ -83,34 +80,116 @@ export default function LogRunScreen() {
       Alert.alert('Falta dato', 'Ingresa una duracion valida (minimo 1 minuto).')
       return
     }
+    const parsedDistance = distanceKm ? parseFloat(distanceKm) : undefined
+    const parsedRpe = rpe > 0 ? rpe : undefined
+
+    const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+    const now = new Date()
+    const dateLabel = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
+
+    setShareCardProps({
+      variant: 'session',
+      sessionType: 'RUNNING',
+      durationMin: parsedDuration,
+      distanceKm: parsedDistance,
+      rpe: parsedRpe,
+      date: dateLabel,
+    })
+
     const payload: LogPayload = {
       sessionType: runType,
       completed: true,
       actualDurationMin: parsedDuration,
-      distanceKm: distanceKm ? parseFloat(distanceKm) : undefined,
-      rpe: rpe > 0 ? rpe : undefined,
+      distanceKm: parsedDistance,
+      rpe: parsedRpe,
       notes: notes.trim() || undefined,
     }
     submitLog(payload)
   }
 
-  if (showSuccess) {
+  if (showSuccess && shareCardProps) {
+    const parsedDuration = shareCardProps.durationMin
+    const parsedDistance = shareCardProps.distanceKm
+    const parsedRpe = shareCardProps.rpe
+
     return (
-      <View style={{ flex: 1, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 }}>
-        <View style={{
-          width: 88, height: 88, borderRadius: 44,
-          backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Ionicons name="checkmark" size={48} color="white" />
+      <>
+        <View style={{ flex: 1, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', gap: 20, paddingHorizontal: 32 }}>
+          <View style={{
+            width: 88, height: 88, borderRadius: 44,
+            backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Ionicons name="checkmark" size={48} color="white" />
+          </View>
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center' }}>
+              Corrida registrada!
+            </Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+              Tu entrenamiento ha sido guardado.
+            </Text>
+          </View>
+
+          {/* Stats */}
+          <View style={{
+            flexDirection: 'row', gap: 0,
+            backgroundColor: 'white', borderRadius: 16, padding: 16,
+            borderWidth: 1, borderColor: '#e5e7eb', width: '100%',
+          }}>
+            {parsedDuration != null && (
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{parsedDuration}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>min</Text>
+              </View>
+            )}
+            {parsedDistance != null && (
+              <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{parsedDistance.toFixed(1)}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>km</Text>
+              </View>
+            )}
+            {parsedRpe != null && (
+              <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: '#f97316' }}>{parsedRpe}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>RPE</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Acciones */}
+          <View style={{ width: '100%', gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => setShowShareModal(true)}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16,
+                alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <Text style={{ fontSize: 18, color: 'white' }}>↑</Text>
+              <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Compartir corrida</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDone}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#f1f5f9', borderRadius: 14, paddingVertical: 16,
+                alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb',
+              }}
+            >
+              <Text style={{ color: '#6b7280', fontSize: 16, fontFamily: 'Inter_600SemiBold' }}>Listo</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center' }}>
-          Corrida registrada!
-        </Text>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
-          Tu entrenamiento ha sido guardado correctamente.
-        </Text>
-        <ActivityIndicator color="#22c55e" style={{ marginTop: 8 }} />
-      </View>
+
+        {shareCardProps && (
+          <SharePreviewModal
+            visible={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            card={shareCardProps}
+          />
+        )}
+      </>
     )
   }
 

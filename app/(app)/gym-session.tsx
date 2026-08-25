@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Alert, Modal, Vibration, ActivityIndicator, Image, Animated, Share,
@@ -9,12 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
+import * as KeepAwake from 'expo-keep-awake'
 import {
-  getTodayGymSession, completeGymSession, searchExercises, getExerciseAlternatives,
-  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
+  getTodayGymSession, completeGymSession, searchExercises, getExerciseAlternatives, getGymPRs,
+  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult, GymPR,
 } from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
 import { useGymSessionStore } from '../../src/store/gymSession'
+import SharePreviewModal from '../../src/components/SharePreviewModal'
+import type { ShareCardProps } from '../../src/components/ShareCard'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
@@ -37,13 +40,10 @@ type FreeExercise = {
   gif?: string | null
 }
 
-let _nextLocalId = 1
-function newLocalId() { return `free-${_nextLocalId++}` }
-
 const SET_TYPE_CONFIG = {
   WORK:    { bg: 'transparent', text: '#374151', badge: null },
-  WARMUP:  { bg: '#fff7ed',     text: '#f97316', badge: 'W' },
-  DROPSET: { bg: '#ffe4e6',     text: '#e11d48', badge: '↓' },
+  WARMUP:  { bg: '#eff6ff',     text: '#3b82f6', badge: 'W' },
+  DROPSET: { bg: '#f5f3ff',     text: '#7c3aed', badge: 'D' },
 } as const
 
 function buildInitialSets(data: GymSessionData): LocalSet[] {
@@ -533,20 +533,24 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    let mounted = true
     intervalRef.current = setInterval(() => {
       setRemaining(prev => {
         if (prev <= 1) {
           clearInterval(intervalRef.current!)
           Vibration.vibrate([0, 300, 100, 300])
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          onDone()
+          if (mounted) onDone()
           return 0
         }
         return prev - 1
       })
     }, 1000)
-    return () => clearInterval(intervalRef.current!)
-  }, [])
+    return () => {
+      mounted = false
+      clearInterval(intervalRef.current!)
+    }
+  }, [onDone])
 
   function adjustTime(delta: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -598,7 +602,7 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
 // PR Celebration Modal — Recompensas Capa 3
 const CONFETTI = ['🎉', '🏆', '💪', '⭐', '🔥', '🎊']
 
-function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
+function PRModal({ prs, onClose, onShare }: { prs: PRResult[]; onClose: () => void; onShare: (pr: PRResult) => void }) {
   const scale = useRef(new Animated.Value(0.5)).current
   const opacity = useRef(new Animated.Value(0)).current
   const trophyBounce = useRef(new Animated.Value(0)).current
@@ -616,13 +620,9 @@ function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
     })
   }, [])
 
-  async function handleShare() {
-    const lines = prs.map(pr => `${pr.exerciseName ?? 'Ejercicio'}${pr.weightKg != null ? `: ${pr.weightKg} kg` : ''} 🏆`)
-    try {
-      await Share.share({
-        message: `¡Nuevos récords personales en MedalIQ! 💪\n${lines.join('\n')}`,
-      })
-    } catch { /* silently ignore */ }
+  function handleShare() {
+    // Compartir el PR más relevante (el primero de la lista)
+    onShare(prs[0])
   }
 
   return (
@@ -725,10 +725,29 @@ export default function GymSessionScreen() {
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
+  const [shareCardProps, setShareCardProps] = useState<ShareCardProps | null>(null)
   const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
   const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
   const [exerciseRpeMap, setExerciseRpeMap] = useState<Record<string, number>>({})
+  const [exerciseNotesMap, setExerciseNotesMap] = useState<Record<string, string>>({})
   const startTimeRef = useRef(Date.now())
+  const localIdRef = useRef(1)
+  const newLocalId = useCallback(() => `free-${localIdRef.current++}`, [])
+
+  function handleSharePR(pr: PRResult) {
+    const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+    const now = new Date()
+    const dateLabel = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
+    // Buscar estimatedOneRM en gymPRs para este ejercicio
+    const prData = gymPRs?.find(p => p.exerciseName === pr.exerciseName)
+    setShareCardProps({
+      variant: 'pr_gym',
+      exerciseName: pr.exerciseName ?? undefined,
+      weightKg: pr.weightKg ?? undefined,
+      estimatedOneRM: prData?.estimatedOneRM,
+      date: dateLabel,
+    })
+  }
 
   function isExerciseDone(exerciseId: string): boolean {
     const exSets = sets.filter(s => s.workoutExerciseId === exerciseId)
@@ -747,6 +766,18 @@ export default function GymSessionScreen() {
     queryKey: ['gym-today'],
     queryFn: getTodayGymSession,
   })
+
+  const { data: gymPRs } = useQuery<GymPR[]>({
+    queryKey: ['gym-prs'],
+    queryFn: getGymPRs,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Keep screen awake during gym session
+  useEffect(() => {
+    KeepAwake.activateKeepAwakeAsync()
+    return () => { KeepAwake.deactivateKeepAwake() }
+  }, [])
 
   // Restore draft or build fresh sets when session loads
   useEffect(() => {
@@ -961,6 +992,15 @@ export default function GymSessionScreen() {
           replacedExerciseName: ov.name,
         }
       })
+    const exerciseNotesText = Object.entries(exerciseNotesMap)
+      .filter(([, note]) => note.trim())
+      .map(([id, note]) => {
+        const exName = session!.exercises.find(e => e.id === id)?.exercise.name ?? id
+        return `${exName}: ${note.trim()}`
+      })
+      .join('\n')
+    const combinedNotes = [notes.trim(), exerciseNotesText].filter(Boolean).join('\n\n')
+
     const payload = {
       ...(session!.plannedSessionId
         ? { plannedSessionId: session!.plannedSessionId }
@@ -971,7 +1011,7 @@ export default function GymSessionScreen() {
       rpe,
       energyState,
       discomfort,
-      notes: notes.trim() || undefined,
+      notes: combinedNotes || undefined,
       exerciseOverrides: overridesArr.length > 0 ? overridesArr : undefined,
     }
     lastPayloadRef.current = payload
@@ -994,9 +1034,18 @@ export default function GymSessionScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
-      {prResults.length > 0 && (
-        <PRModal prs={prResults} onClose={() => { setPrResults([]); router.back() }} />
+      {prResults.length > 0 && !shareCardProps && (
+        <PRModal
+          prs={prResults}
+          onClose={() => { setPrResults([]); router.back() }}
+          onShare={handleSharePR}
+        />
       )}
+      <SharePreviewModal
+        visible={shareCardProps !== null}
+        card={shareCardProps ?? { variant: 'pr_gym' }}
+        onClose={() => setShareCardProps(null)}
+      />
       {restTimer.show && (
         <RestTimerModal
           seconds={restTimer.seconds}
@@ -1246,6 +1295,23 @@ export default function GymSessionScreen() {
                   {ex.restSeconds ? ` · ${ex.restSeconds}s descanso` : ''}
                 </Text>
 
+                {/* Sets progress bar */}
+                {(() => {
+                  const done = exSets.filter(s => s.completed).length
+                  const total = exSets.length
+                  if (total === 0) return null
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <View style={{ flex: 1, height: 4, backgroundColor: '#f3f4f6', borderRadius: 2, overflow: 'hidden' }}>
+                        <View style={{ width: `${(done / total) * 100}%`, height: 4, backgroundColor: done === total ? '#22c55e' : '#f97316', borderRadius: 2 }} />
+                      </View>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: done === total ? '#22c55e' : '#f97316', minWidth: 28, textAlign: 'right' }}>
+                        {done}/{total}
+                      </Text>
+                    </View>
+                  )
+                })()}
+
                 {/* Muscle group badges */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                   <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
@@ -1260,6 +1326,21 @@ export default function GymSessionScreen() {
                     </View>
                   ) : null}
                 </View>
+
+                {/* 1RM estimado */}
+                {(() => {
+                  const exerciseName = swappedEx?.name ?? ex.exercise.name
+                  const pr = gymPRs?.find(p => p.exerciseName === exerciseName)
+                  if (!pr) return null
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <Text style={{ fontSize: 11 }}>🏆</Text>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#f97316' }}>
+                        1RM est.: {pr.estimatedOneRM} kg
+                      </Text>
+                    </View>
+                  )
+                })()}
 
                 {/* GIF demo — EX-11: guía visual del movimiento */}
                 {!swappedEx && ex.exercise.gif ? (
@@ -1429,6 +1510,23 @@ export default function GymSessionScreen() {
                   value={exerciseRpeMap[ex.id]}
                   onChange={v => setExerciseRpeMap(prev => ({ ...prev, [ex.id]: v }))}
                 />
+              )}
+
+              {/* Nota por ejercicio */}
+              {isExerciseDone(ex.id) && (
+                <View style={{ backgroundColor: '#f9fafb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                    Nota del ejercicio
+                  </Text>
+                  <TextInput
+                    value={exerciseNotesMap[ex.id] ?? ''}
+                    onChangeText={v => setExerciseNotesMap(prev => ({ ...prev, [ex.id]: v }))}
+                    placeholder="Cómo fue este ejercicio..."
+                    placeholderTextColor="#d1d5db"
+                    multiline
+                    style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', minHeight: 36 }}
+                  />
+                </View>
               )}
 
               {/* Navigate exercises */}

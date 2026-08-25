@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,98 +9,184 @@ import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import { isSyncEnabled, queryRestingHeartRate, querySleepHours } from '../../../src/services/healthkit.service'
 
-type ScaleProps = {
+// ── Slider component (1–10) ────────────────────────────────────────────────
+
+type SliderProps = {
   label: string
   value: number
   onChange: (v: number) => void
-  low: string
-  high: string
-  color?: string
+  max?: number
+  color: string
+  unit?: string
+  helperText?: string
 }
 
-function ScaleSelector({ label, value, onChange, low, high, color = '#f97316' }: ScaleProps) {
+function MetricSlider({ label, value, onChange, max = 10, color, unit, helperText }: SliderProps) {
+  const pct = value > 0 ? ((value - 1) / (max - 1)) * 100 : 0
+
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 6 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{label}</Text>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color }}>
-          {value > 0 ? value : '–'}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{label}</Text>
+          {helperText && (
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#71808e', marginTop: 1 }}>{helperText}</Text>
+          )}
+        </View>
+        {value > 0 ? (
+          <View style={{ backgroundColor: '#f5f7fa', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 12 }}>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color }}>{value}{unit ? ` ${unit}` : ''}</Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: '#b3b3b3' }}>—</Text>
+        )}
       </View>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {[1, 2, 3, 4, 5].map(n => (
-          <TouchableOpacity
-            key={n}
-            onPress={() => {
-              Haptics.selectionAsync()
-              onChange(n)
-            }}
-            activeOpacity={0.8}
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: '#e6e6e6', position: 'relative', justifyContent: 'center' }}>
+        <View
+          style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: value > 0 ? `${pct}%` : '0%',
+            backgroundColor: color, borderRadius: 3,
+          }}
+        />
+        {/* Invisible range input area — tap zones */}
+        <View style={{ position: 'absolute', left: 0, right: 0, top: -16, bottom: -16, flexDirection: 'row' }}>
+          {Array.from({ length: max }, (_, i) => (
+            <TouchableOpacity
+              key={i}
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => { Haptics.selectionAsync(); onChange(i + 1) }}
+            />
+          ))}
+        </View>
+        {/* Custom thumb */}
+        {value > 0 && (
+          <View
             style={{
-              flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: value === n ? color : 'white',
-              borderWidth: 1.5,
-              borderColor: value === n ? color : '#e5e7eb',
+              position: 'absolute',
+              left: `${pct}%`,
+              marginLeft: -7,
+              width: 14, height: 14, borderRadius: 7,
+              backgroundColor: 'white',
+              borderWidth: 2, borderColor: color,
+              shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2,
+              elevation: 2,
             }}
-          >
-            <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: value === n ? 'white' : '#6b7280' }}>
-              {n}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>{low}</Text>
-        <Text style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>{high}</Text>
+          />
+        )}
       </View>
     </View>
   )
 }
+
+// ── Adherence day squares ───────────────────────────────────────────────────
+
+const DAYS = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'] as const
+const DAY_DOW = [1, 2, 3, 4, 5, 6, 0] // dayOfWeek mapping
+
+type AdherenceDayProps = {
+  weekSessions: { dayOfWeek: number; completed: boolean }[]
+}
+
+function AdherenceDays({ weekSessions }: AdherenceDayProps) {
+  const total = weekSessions.length
+  const completed = weekSessions.filter(s => s.completed).length
+
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ height: 1, backgroundColor: '#e5ecf2' }} />
+      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#99a6b2' }}>Adherencia al plan</Text>
+      <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6f859a' }}>
+        {completed} de {total} sesiones completadas esta semana
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+        {DAYS.map((day, i) => {
+          const dow = DAY_DOW[i]
+          const session = weekSessions.find(s => s.dayOfWeek === dow)
+          const hasSession = !!session
+          const done = session?.completed ?? false
+
+          const bg = !hasSession ? '#e5ecf2' : done ? '#22c35d' : 'rgba(234,88,9,0.18)'
+          const textColor = !hasSession ? '#6f859a' : done ? 'white' : '#ea5809'
+
+          return (
+            <View
+              key={day}
+              style={{
+                flex: 1, height: 44, borderRadius: 10,
+                backgroundColor: bg,
+                alignItems: 'center', justifyContent: 'center', gap: 2,
+              }}
+            >
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: textColor }}>{day}</Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: textColor }}>
+                {!hasSession ? '\u2014' : done ? '\u2713' : '\u2717'}
+              </Text>
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+// ── Trigger labels ──────────────────────────────────────────────────────────
+
+const TRIGGER_LABELS: Record<string, string> = {
+  fc_alta:             'FC reposo elevada',
+  sueno_bajo:          'Sueno insuficiente',
+  rpe_excesivo:        'RPE alto en fase BASE',
+  dolor_activo:        'Dolor / molestias activas',
+  energia_baja:        'Energia baja',
+  estres_alto:         'Estres elevado',
+  motivacion_baja:     'Motivacion muy baja',
+  nutricion_baja:      'Adherencia nutricional baja',
+  perdida_peso_rapida: 'Perdida de peso acelerada',
+  fatiga_acumulada:    'Fatiga acumulada (multiples senales)',
+}
+
+// ── Pain level options ──────────────────────────────────────────────────────
+
+const PAIN_OPTIONS = [
+  { label: 'Sin molestias', value: 0 },
+  { label: 'Leve', value: 3 },
+  { label: 'Moderada', value: 7 },
+] as const
+
+// ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function CheckinScreen() {
   const { user } = useAuthStore()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
 
-  const [weight, setWeight] = useState('')
-  const [hrResting, setHrResting] = useState('')
-  const [sleep, setSleep] = useState('')
+  // Form state — all scales 1–10
   const [energy, setEnergy] = useState(0)
-  const [soreness, setSoreness] = useState(0)
   const [stress, setStress] = useState(0)
   const [motivation, setMotivation] = useState(0)
-  const [hasPain, setHasPain] = useState(false)
+  const [sleepHours, setSleepHours] = useState('')
+  const [weight, setWeight] = useState('')
+  const [hrResting, setHrResting] = useState('')
+  const [nutritionAdherence, setNutritionAdherence] = useState(0)
+  const [painLevel, setPainLevel] = useState<number | null>(null)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<CheckinResult['adjustment'] | null>(null)
   const [suggestions, setSuggestions] = useState<CheckinSuggestion[]>([])
-  const [showMedidas, setShowMedidas] = useState(false)
-  const [waist, setWaist] = useState('')
-  const [arms, setArms] = useState('')
-  const [hips, setHips] = useState('')
-  const [thighs, setThighs] = useState('')
-  // Campos pre-llenados desde Apple Health
   const [hkPrefilled, setHkPrefilled] = useState<{ hr: boolean; sleep: boolean }>({ hr: false, sleep: false })
 
-  // Pre-fill FC y sueño desde HealthKit al abrir la pantalla
+  // HealthKit pre-fill
   useEffect(() => {
     if (Platform.OS !== 'ios') return
     ;(async () => {
       try {
         const enabled = await isSyncEnabled()
         if (!enabled) return
-        const [hr, sleepHrs] = await Promise.all([queryRestingHeartRate(), querySleepHours()])
-        if (hr) {
-          setHrResting(hr.toString())
-          setHkPrefilled(p => ({ ...p, hr: true }))
-        }
-        if (sleepHrs) {
-          setSleep(sleepHrs.toString())
-          setHkPrefilled(p => ({ ...p, sleep: true }))
-        }
-      } catch {
-        // HealthKit no disponible — no bloquear el formulario
-      }
+        const [hr, sleep] = await Promise.all([queryRestingHeartRate(), querySleepHours()])
+        if (hr) { setHrResting(hr.toString()); setHkPrefilled(p => ({ ...p, hr: true })) }
+        if (sleep) { setSleepHours(sleep.toString()); setHkPrefilled(p => ({ ...p, sleep: true })) }
+      } catch { /* HealthKit not available */ }
     })()
   }, [])
 
@@ -112,54 +198,41 @@ export default function CheckinScreen() {
 
   useFocusEffect(useCallback(() => { refetchStatus() }, [refetchStatus]))
 
-  if (!user?.features?.checkin) {
-    return <UpgradeWall icon="📋" title="Check-in semanal" description="Registra tu evolución semanal y recibe ajustes automáticos en tu plan con el plan Pro." />
-  }
+  // Derived
+  const weekSessions = statusData?.weekSessions ?? []
+  const adherencePct = useMemo(() => {
+    if (weekSessions.length === 0) return null
+    const completed = weekSessions.filter(s => s.completed).length
+    return Math.round((completed / weekSessions.length) * 100)
+  }, [weekSessions])
 
-  async function handleQuickSubmit() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    setLoading(true)
-    try {
-      const data = await submitCheckin({ energyLevel: 4, muscleSoreness: 2, stressLevel: 2, painLevel: 0 })
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      refetchStatus()
-      setResult(data.adjustment ?? null)
-      setSuggestions(data.suggestions ?? [])
-    } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'No se pudo guardar el check-in.')
-    } finally {
-      setLoading(false)
-    }
+  if (!user?.features?.checkin) {
+    return <UpgradeWall icon="clipboard" title="Check-in semanal" description="Registra tu evolucion semanal y recibe ajustes automaticos en tu plan con el plan Pro." />
   }
 
   async function handleSubmit() {
-    if (energy === 0 || soreness === 0 || stress === 0) {
-      Alert.alert('Faltan datos', 'Completa los tres indicadores antes de enviar.')
+    if (energy === 0 || stress === 0) {
+      Alert.alert('Faltan datos', 'Completa al menos energia y estres antes de enviar.')
       return
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setLoading(true)
     try {
       const data = await submitCheckin({
         energyLevel: energy,
-        muscleSoreness: soreness,
+        muscleSoreness: energy, // RPE auto — use energy as proxy when no auto RPE available
         stressLevel: stress,
-        painLevel: hasPain ? 8 : 0,         // boolean → 1-10 (>=5 activa flag en servidor)
-        motivationLevel: motivation > 0 ? motivation * 2 : undefined, // 1-5 → 1-10
+        motivationLevel: motivation > 0 ? motivation : undefined,
+        painLevel: painLevel ?? 0,
         weightKg: weight ? parseFloat(weight) : undefined,
         hrResting: hrResting ? parseInt(hrResting) : undefined,
-        sleepHours: sleep ? parseFloat(sleep) : undefined,
+        sleepHours: sleepHours ? parseFloat(sleepHours) : undefined,
+        nutritionAdherencePct: nutritionAdherence > 0 ? nutritionAdherence * 10 : undefined,
         notes: notes.trim() || undefined,
-        waistCm: waist ? parseFloat(waist) : undefined,
-        armsCm: arms ? parseFloat(arms) : undefined,
-        hipsCm: hips ? parseFloat(hips) : undefined,
-        thighsCm: thighs ? parseFloat(thighs) : undefined,
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       refetchStatus()
-      setWeight(''); setHrResting(''); setSleep(''); setEnergy(0); setSoreness(0); setStress(0); setMotivation(0); setHasPain(false); setNotes('')
-      setWaist(''); setArms(''); setHips(''); setThighs(''); setShowMedidas(false)
       setResult(data.adjustment ?? null)
       setSuggestions(data.suggestions ?? [])
     } catch (err: any) {
@@ -169,19 +242,7 @@ export default function CheckinScreen() {
     }
   }
 
-  // ── Resultado inmediato post-envío ───────────────────────────────
-  const TRIGGER_LABELS: Record<string, string> = {
-    fc_alta:             'FC reposo elevada',
-    sueno_bajo:          'Sueño insuficiente',
-    rpe_excesivo:        'RPE alto en fase BASE',
-    dolor_activo:        'Dolor / molestias activas',
-    energia_baja:        'Energía baja',
-    estres_alto:         'Estrés elevado',
-    motivacion_baja:     'Motivación muy baja',
-    nutricion_baja:      'Adherencia nutricional baja',
-    perdida_peso_rapida: 'Pérdida de peso acelerada',
-    fatiga_acumulada:    'Fatiga acumulada (múltiples señales)',
-  }
+  // ── Result screen (post-submit) ─────────────────────────────────────────
 
   if (result) {
     const hasIssues = result.triggers.length > 0
@@ -191,17 +252,24 @@ export default function CheckinScreen() {
     const bannerBg = result.severity === 'critical' ? '#fef2f2' : result.severity === 'warning' ? '#fffbeb' : '#f0fdf4'
     const bannerBorder = result.severity === 'critical' ? '#fecaca' : result.severity === 'warning' ? '#fde68a' : '#bbf7d0'
     const bannerText = result.severity === 'critical' ? '#991b1b' : result.severity === 'warning' ? '#92400e' : '#14532d'
-    const icon = result.severity === 'critical' ? '🚨' : result.severity === 'warning' ? '⚠️' : '✅'
+    const icon = result.severity === 'critical' ? '!' : result.severity === 'warning' ? '!' : ''
 
     return (
       <ScrollView
-        style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+        style={{ flex: 1, backgroundColor: '#f8fafc' }}
         contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 40, paddingHorizontal: 16, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={{ alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 40 }}>{icon}</Text>
+          <View style={{
+            width: 56, height: 56, borderRadius: 28,
+            backgroundColor: result.severity === 'critical' ? '#ef4444' : result.severity === 'warning' ? '#f59e0b' : '#22c35d',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Text style={{ fontSize: 24, color: 'white', fontFamily: 'Inter_700Bold' }}>
+              {result.severity === 'ok' ? '\u2713' : icon}
+            </Text>
+          </View>
           <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
             Check-in guardado
           </Text>
@@ -211,25 +279,23 @@ export default function CheckinScreen() {
           <View style={{ backgroundColor: bannerBg, borderRadius: 16, borderWidth: 1, borderColor: bannerBorder, padding: 18, gap: 4 }}>
             <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: bannerText }}>Todo en orden</Text>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: bannerText, lineHeight: 20 }}>
-              Sigue el plan como está — tus métricas están en rango óptimo.
+              Sigue el plan como esta — tus metricas estan en rango optimo.
             </Text>
           </View>
         ) : (
           <>
-            {/* Lo que detectamos */}
             <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 10 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Lo que detectamos
               </Text>
               {detectedLabels.map((label, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                  <Text style={{ color: '#f59e0b', fontSize: 16, lineHeight: 20 }}>·</Text>
+                  <Text style={{ color: '#f59e0b', fontSize: 16, lineHeight: 20 }}>{'\u00b7'}</Text>
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#374151', flex: 1, lineHeight: 20 }}>{label}</Text>
                 </View>
               ))}
             </View>
 
-            {/* Lo que ajustamos */}
             {result.adjustments.length > 0 && (
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
@@ -237,7 +303,7 @@ export default function CheckinScreen() {
                 </Text>
                 {result.adjustments.map((adj, i) => (
                   <View key={i} style={{ backgroundColor: bannerBg, borderRadius: 12, borderWidth: 1, borderColor: bannerBorder, padding: 14, flexDirection: 'row', gap: 8 }}>
-                    <Text style={{ color: bannerText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>→</Text>
+                    <Text style={{ color: bannerText, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>{'\u2192'}</Text>
                     <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: bannerText, flex: 1, lineHeight: 20 }}>{adj}</Text>
                   </View>
                 ))}
@@ -246,42 +312,13 @@ export default function CheckinScreen() {
           </>
         )}
 
-        {/* Valores numéricos exactos (CI-F-05) */}
-        {(result.planChanges?.volumeDeltaPct !== undefined || result.nutritionChanges?.newKcalHard !== undefined) && (
-          <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 10 }}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Valores aplicados
-            </Text>
-            {result.planChanges?.volumeDeltaPct !== undefined && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Volumen próxima semana</Text>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: result.planChanges.volumeDeltaPct < 0 ? '#92400e' : '#166534' }}>
-                  {result.planChanges.volumeDeltaPct > 0 ? '+' : ''}{result.planChanges.volumeDeltaPct}%
-                </Text>
-              </View>
-            )}
-            {result.nutritionChanges?.newKcalHard !== undefined && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Kcal día intenso</Text>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>{Math.round(result.nutritionChanges.newKcalHard)} kcal</Text>
-              </View>
-            )}
-            {result.nutritionChanges?.newKcalEasy !== undefined && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>Kcal día suave</Text>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>{Math.round(result.nutritionChanges.newKcalEasy)} kcal</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Sugerencias pendientes (planes COACH) */}
+        {/* Suggestions */}
         {suggestions.length > 0 && (
           <View style={{ gap: 10 }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
               Sugerencias de ajuste
             </Text>
-            {suggestions.map((s) => (
+            {suggestions.map(s => (
               <View key={s.id} style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
                 <View style={{ gap: 4 }}>
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{s.title}</Text>
@@ -291,11 +328,7 @@ export default function CheckinScreen() {
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={async () => {
-                      try {
-                        await acceptSuggestion(s.id)
-                        setSuggestions(prev => prev.filter(x => x.id !== s.id))
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-                      } catch { /* silenciar */ }
+                      try { await acceptSuggestion(s.id); setSuggestions(prev => prev.filter(x => x.id !== s.id)); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}
                     }}
                     style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
                   >
@@ -304,10 +337,7 @@ export default function CheckinScreen() {
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={async () => {
-                      try {
-                        await rejectSuggestion(s.id)
-                        setSuggestions(prev => prev.filter(x => x.id !== s.id))
-                      } catch { /* silenciar */ }
+                      try { await rejectSuggestion(s.id); setSuggestions(prev => prev.filter(x => x.id !== s.id)) } catch {}
                     }}
                     style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' }}
                   >
@@ -319,7 +349,6 @@ export default function CheckinScreen() {
           </View>
         )}
 
-        {/* CTA */}
         <TouchableOpacity
           onPress={() => { setResult(null); setSuggestions([]) }}
           activeOpacity={0.85}
@@ -331,45 +360,59 @@ export default function CheckinScreen() {
     )
   }
 
-  // ── Submitted state ─────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────
+
   if (statusLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
-        <ActivityIndicator color="#f97316" size="large" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
+        <ActivityIndicator color="#ea5809" size="large" />
       </View>
     )
   }
+
+  // ── Submitted state ──────────────────────────────────────────────────────
 
   if (statusData?.submitted && statusData.data) {
     const d = statusData.data
     const submittedAt = new Date(d.recordedAt).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
     const items = [
-      { label: 'Energía',      value: d.energyLevel != null ? `${d.energyLevel}/10` : null },
-      { label: 'Estrés',       value: d.stressLevel != null ? `${d.stressLevel}/10` : null },
+      { label: 'Energia',      value: d.energyLevel != null ? `${d.energyLevel}/10` : null },
+      { label: 'Estres',       value: d.stressLevel != null ? `${d.stressLevel}/10` : null },
       { label: 'RPE semana',   value: d.hardestSessionRpe != null ? `${d.hardestSessionRpe}/10` : null },
-      { label: 'Motivación',   value: d.motivationLevel != null ? `${d.motivationLevel}/10` : null },
-      { label: 'Sueño',        value: d.sleepHours != null ? `${d.sleepHours} h` : null },
+      { label: 'Motivacion',   value: d.motivationLevel != null ? `${d.motivationLevel}/10` : null },
+      { label: 'Sueno',        value: d.sleepHours != null ? `${d.sleepHours} h` : null },
       { label: 'Peso',         value: d.weightKg != null ? `${d.weightKg} kg` : null },
       { label: 'FC reposo',    value: d.hrResting != null ? `${d.hrResting} bpm` : null },
     ].filter(i => i.value != null) as { label: string; value: string }[]
 
     return (
       <ScrollView
-        style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+        style={{ flex: 1, backgroundColor: '#f8fafc' }}
         contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: 40, paddingHorizontal: 16, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        <View>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>Check-in</Text>
-          <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Semana {statusData.weekNumber}</Text>
+          {statusData.totalWeeks && (
+            <View style={{ backgroundColor: '#22c35d', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                SEMANA {statusData.weekNumber} DE {statusData.totalWeeks}
+              </Text>
+            </View>
+          )}
         </View>
 
+        {/* Success card */}
         <View style={{ backgroundColor: '#f0fdf4', borderRadius: 20, borderWidth: 1, borderColor: '#bbf7d0', padding: 20, alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 32 }}>✅</Text>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#22c35d', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 20, color: 'white', fontFamily: 'Inter_700Bold' }}>{'\u2713'}</Text>
+          </View>
           <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#14532d' }}>Check-in enviado</Text>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#4ade80' }}>{submittedAt}</Text>
         </View>
 
+        {/* Data summary */}
         {items.length > 0 && (
           <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 2, borderWidth: 1, borderColor: '#e5e7eb' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
@@ -381,28 +424,16 @@ export default function CheckinScreen() {
                 <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{item.value}</Text>
               </View>
             ))}
-            {d.notes && (
-              <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280', marginBottom: 4 }}>Notas</Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', lineHeight: 20 }}>{d.notes}</Text>
-              </View>
-            )}
           </View>
         )}
 
-        <View style={{ backgroundColor: '#f0f9ff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#bae6fd' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#0c4a6e', lineHeight: 20 }}>
-            Tu plan se ajustará automáticamente basándose en estos datos. Vuelve el viernes de la próxima semana para el siguiente check-in.
-          </Text>
-        </View>
-
-        {/* Sugerencias pendientes del check-in anterior */}
+        {/* Pending suggestions */}
         {(statusData?.pendingSuggestions ?? []).length > 0 && (
           <View style={{ gap: 10 }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4 }}>
-              Sugerencias de ajuste pendientes
+              Sugerencias pendientes
             </Text>
-            {(statusData!.pendingSuggestions ?? []).map((s) => (
+            {(statusData!.pendingSuggestions ?? []).map(s => (
               <View key={s.id} style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
                 <View style={{ gap: 4 }}>
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{s.title}</Text>
@@ -411,25 +442,14 @@ export default function CheckinScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={async () => {
-                      try {
-                        await acceptSuggestion(s.id)
-                        refetchStatus()
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-                      } catch { /* silenciar */ }
-                    }}
+                    onPress={async () => { try { await acceptSuggestion(s.id); refetchStatus(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {} }}
                     style={{ flex: 1, backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
                   >
                     <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Aceptar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.8}
-                    onPress={async () => {
-                      try {
-                        await rejectSuggestion(s.id)
-                        refetchStatus()
-                      } catch { /* silenciar */ }
-                    }}
+                    onPress={async () => { try { await rejectSuggestion(s.id); refetchStatus() } catch {} }}
                     style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' }}
                   >
                     <Text style={{ color: '#6b7280', fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Rechazar</Text>
@@ -439,132 +459,243 @@ export default function CheckinScreen() {
             ))}
           </View>
         )}
+
+        <View style={{ backgroundColor: '#f0f9ff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#bae6fd' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#0c4a6e', lineHeight: 20 }}>
+            Tu plan se ajustara automaticamente basandose en estos datos.
+          </Text>
+        </View>
       </ScrollView>
     )
   }
 
+  // ── Main form — matches Figma mobile check-in (3567:49) ──────────────────
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+      style={{ flex: 1, backgroundColor: '#f8fafc' }}
     >
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40, paddingHorizontal: 16, gap: 20 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={{ gap: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -0.5 }}>
-              Check-in
+        {/* ── HEADER (navy) ──────────────────────────────────────────────── */}
+        <View style={{
+          backgroundColor: '#1e3a5f',
+          paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: 16, gap: 8,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
+              Revision Semanal
             </Text>
             {statusData?.totalWeeks && (
-              <View style={{ backgroundColor: '#1a2744', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <View style={{ backgroundColor: '#22c35d', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
                 <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>
                   SEMANA {statusData.weekNumber} DE {statusData.totalWeeks}
                 </Text>
               </View>
             )}
           </View>
-          <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular' }}>
-            Cómo vas esta semana · 2 min
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.8)' }}>
+            Evalua tu semana y ajusta el plan
           </Text>
 
-          {/* Adherencia dots */}
-          {statusData?.weekSessions && statusData.weekSessions.length > 0 && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, i) => {
-                const dow = i === 6 ? 0 : i + 1
-                const session = statusData.weekSessions.find((s) => s.dayOfWeek === dow)
-                const done = session?.completed ?? false
-                const hasSession = !!session
-                return (
-                  <View key={day} style={{ alignItems: 'center', gap: 2 }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>{day}</Text>
-                    <View style={{
-                      width: 24, height: 24, borderRadius: 12,
-                      backgroundColor: hasSession ? (done ? '#22c55e' : '#fef2f2') : '#f3f4f6',
-                      alignItems: 'center', justifyContent: 'center',
-                      borderWidth: hasSession && !done ? 1 : 0,
-                      borderColor: '#fca5a5',
-                    }}>
-                      {hasSession && (
-                        <Text style={{ fontSize: 12, color: done ? 'white' : '#ef4444' }}>
-                          {done ? '✓' : '✗'}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                )
-              })}
-              {(() => {
-                const total = statusData.weekSessions.length
-                const completed = statusData.weekSessions.filter((s) => s.completed).length
-                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
-                return (
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444', marginLeft: 4 }}>
-                    {pct}%
-                  </Text>
-                )
-              })()}
-            </View>
-          )}
-
-          {/* Auto-data banner */}
-          {statusData?.hasAutoData && (
-            <View style={{
-              backgroundColor: '#eff6ff', borderRadius: 10, padding: 10,
-              flexDirection: 'row', alignItems: 'center', gap: 8,
-              borderWidth: 1, borderColor: '#bfdbfe',
-            }}>
-              <Text style={{ fontSize: 16 }}>📡</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#1d4ed8', flex: 1 }}>
-                Algunos datos fueron pre-llenados desde tu perfil de salud.
+          {/* Week adherence summary */}
+          {weekSessions.length > 0 && (
+            <View style={{ gap: 4 }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)' }}>
+                {weekSessions.filter(s => s.completed).length}/{weekSessions.length} sesiones completadas
+              </Text>
+              {/* Progress bar */}
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                <View style={{
+                  height: 4, borderRadius: 2, backgroundColor: '#22c35d',
+                  width: `${adherencePct ?? 0}%`,
+                }} />
+              </View>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: 'rgba(255,255,255,0.6)' }}>
+                {adherencePct}% adherencia{' '}
+                {adherencePct != null && (adherencePct >= 80 ? '\u00b7 sigue bien' : adherencePct >= 50 ? '\u00b7 puedes mejorar' : '\u00b7 animo, sigamos')}
               </Text>
             </View>
           )}
         </View>
 
-        {/* Check-in rápido */}
-        <TouchableOpacity
-          onPress={handleQuickSubmit}
-          disabled={loading}
-          activeOpacity={0.85}
-          style={{
-            backgroundColor: '#f0fdf4', borderRadius: 16, padding: 16,
-            borderWidth: 1.5, borderColor: '#bbf7d0',
+        {/* ── AUTO-DATA BANNER ────────────────────────────────────────────── */}
+        {statusData?.hasAutoData && (
+          <View style={{
+            backgroundColor: '#fff3e0', paddingHorizontal: 16, paddingVertical: 12,
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#14532d' }}>
-              ¿Semana sin novedades?
-            </Text>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#16a34a' }}>
-              Energía normal, sin dolores, cumpliste el plan.
-            </Text>
-          </View>
-          {loading
-            ? <ActivityIndicator color="#16a34a" />
-            : <View style={{
-                backgroundColor: '#16a34a', borderRadius: 10,
-                paddingHorizontal: 14, paddingVertical: 8, marginLeft: 12,
-              }}>
-                <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Todo bien →</Text>
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View style={{ width: 3, height: 32, borderRadius: 2, backgroundColor: '#ea5809' }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>
+                  Datos pre-llenados automaticamente
+                </Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6f859a', marginTop: 1 }}>
+                  Sesiones: {weekSessions.filter(s => s.completed).length}/{weekSessions.length}
+                </Text>
               </View>
-          }
-        </TouchableOpacity>
+            </View>
+            <View style={{ backgroundColor: 'rgba(34,195,93,0.2)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#22c35d' }}>Auto {'\u2713'}</Text>
+            </View>
+          </View>
+        )}
 
-        {/* Métricas físicas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Métricas opcionales
+        {/* ── DATOS AUTOMATICOS section ──────────────────────────────────── */}
+        <View style={{ backgroundColor: '#f0fdf4', paddingHorizontal: 16, paddingVertical: 16, gap: 12 }}>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#106f33', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            DATOS AUTOMATICOS {'\u2713'}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Peso (kg)</Text>
+
+          {/* RPE — auto from session data */}
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>RPE mas duro de la semana</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6f859a', marginTop: 1 }}>
+                  Ajusta el RPE de tu sesion mas dura
+                </Text>
+              </View>
+              <View style={{
+                width: 36, height: 36, borderRadius: 8,
+                backgroundColor: '#ea5809',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                  {statusData?.data?.hardestSessionRpe ?? '—'}
+                </Text>
+              </View>
+            </View>
+            {/* RPE slider placeholder — filled from session logs */}
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#e6e6e6' }}>
+              <View style={{
+                height: 6, borderRadius: 3, backgroundColor: '#ea5809',
+                width: statusData?.data?.hardestSessionRpe ? `${((statusData.data.hardestSessionRpe - 1) / 9) * 100}%` : '0%',
+              }} />
+            </View>
+          </View>
+
+          {/* Adherence days */}
+          {weekSessions.length > 0 && <AdherenceDays weekSessions={weekSessions} />}
+        </View>
+
+        {/* ── COMPLETA TU separator ──────────────────────────────────────── */}
+        <View style={{ backgroundColor: '#f5f7fa', paddingHorizontal: 16, paddingVertical: 8 }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6f859a', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+            COMPLETA TU
+          </Text>
+        </View>
+
+        {/* ── FORM FIELDS ────────────────────────────────────────────────── */}
+        <View style={{ backgroundColor: 'white', paddingHorizontal: 16 }}>
+          {/* Horas de sueno */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Horas de sueno</Text>
+              <TextInput
+                value={sleepHours}
+                onChangeText={(v) => { setSleepHours(v); setHkPrefilled(p => ({ ...p, sleep: false })) }}
+                placeholder="7.5"
+                placeholderTextColor="#d1d5db"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                style={{
+                  backgroundColor: hkPrefilled.sleep ? '#fff1f2' : '#f5f7fa',
+                  borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
+                  fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1e3a5f',
+                  width: 90, textAlign: 'center',
+                  borderWidth: hkPrefilled.sleep ? 1 : 0, borderColor: '#fecdd3',
+                }}
+              />
+            </View>
+            {sleepHours ? (
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: '#e6e6e6' }}>
+                <View style={{
+                  height: 6, borderRadius: 3,
+                  backgroundColor: 'rgba(30,58,95,0.45)',
+                  width: `${Math.min(100, (parseFloat(sleepHours) / 10) * 100)}%`,
+                }} />
+              </View>
+            ) : null}
+            {hkPrefilled.sleep && (
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444', marginTop: 4 }}>
+                Apple Health
+              </Text>
+            )}
+          </View>
+
+          {/* Nivel de estres */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <MetricSlider
+              label="Nivel de estres"
+              value={stress}
+              onChange={setStress}
+              color="#1e3a5f"
+            />
+          </View>
+
+          {/* Nivel de motivacion */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <MetricSlider
+              label="Nivel de motivacion"
+              value={motivation}
+              onChange={setMotivation}
+              color="#ea5809"
+            />
+          </View>
+
+          {/* Energia general */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <MetricSlider
+              label="Energia general"
+              value={energy}
+              onChange={setEnergy}
+              color="#1e3a5f"
+              helperText="Como fue tu energia esta semana? (1-10)"
+            />
+          </View>
+
+          {/* FC reposo */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>FC reposo (bpm)</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8fa3bc', marginTop: 1 }}>
+                  Frecuencia cardiaca al despertar
+                </Text>
+              </View>
+              <TextInput
+                value={hrResting}
+                onChangeText={(v) => { setHrResting(v); setHkPrefilled(p => ({ ...p, hr: false })) }}
+                placeholder="60"
+                placeholderTextColor="#d1d5db"
+                keyboardType="number-pad"
+                inputMode="numeric"
+                style={{
+                  backgroundColor: hkPrefilled.hr ? '#fff1f2' : '#f5f7fa',
+                  borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
+                  fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1e3a5f',
+                  width: 90, textAlign: 'center',
+                  borderWidth: hkPrefilled.hr ? 1 : 0, borderColor: '#fecdd3',
+                }}
+              />
+            </View>
+            {hkPrefilled.hr && (
+              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444', marginTop: 4 }}>
+                Apple Health
+              </Text>
+            )}
+          </View>
+
+          {/* Peso actual */}
+          <View style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5ecf2' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Peso actual</Text>
               <TextInput
                 value={weight}
                 onChangeText={setWeight}
@@ -573,276 +704,95 @@ export default function CheckinScreen() {
                 keyboardType="decimal-pad"
                 inputMode="decimal"
                 style={{
-                  backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
+                  backgroundColor: '#f5f7fa', borderRadius: 10,
+                  paddingHorizontal: 12, paddingVertical: 6,
+                  fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1e3a5f',
+                  width: 90, textAlign: 'center',
                 }}
               />
             </View>
-            <View style={{ flex: 1, gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>FC reposo (bpm)</Text>
-                {hkPrefilled.hr && (
-                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444' }}>
-                    📲 Apple Health
+          </View>
+
+          {/* Adherencia nutricional */}
+          <View style={{ paddingVertical: 16 }}>
+            <MetricSlider
+              label="Adherencia nutricional"
+              value={nutritionAdherence}
+              onChange={setNutritionAdherence}
+              color="#1e3a5f"
+            />
+          </View>
+        </View>
+
+        {/* ── MOLESTIAS section ──────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 20, gap: 10 }}>
+          <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Alguna molestia?</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {PAIN_OPTIONS.map(opt => {
+              const selected = painLevel === opt.value
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => { Haptics.selectionAsync(); setPainLevel(opt.value) }}
+                  activeOpacity={0.8}
+                  style={{
+                    flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center',
+                    backgroundColor: selected ? '#1e3a5f' : 'white',
+                    borderWidth: 1.5, borderColor: selected ? '#1e3a5f' : '#1e3a5f',
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 13, fontFamily: 'Inter_600SemiBold',
+                    color: selected ? 'white' : '#1e3a5f',
+                  }}>
+                    {opt.label}
                   </Text>
-                )}
-              </View>
-              <TextInput
-                value={hrResting}
-                onChangeText={(v) => { setHrResting(v); setHkPrefilled(p => ({ ...p, hr: false })) }}
-                placeholder="58"
-                placeholderTextColor="#d1d5db"
-                keyboardType="number-pad"
-                inputMode="numeric"
-                style={{
-                  backgroundColor: hkPrefilled.hr ? '#fff1f2' : '#f9fafb',
-                  borderRadius: 10, paddingHorizontal: 14,
-                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1,
-                  borderColor: hkPrefilled.hr ? '#fecdd3' : '#e5e7eb',
-                }}
-              />
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Sueño (h)</Text>
-                {hkPrefilled.sleep && (
-                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ef4444' }}>
-                    📲 Apple Health
-                  </Text>
-                )}
-              </View>
-              <TextInput
-                value={sleep}
-                onChangeText={(v) => { setSleep(v); setHkPrefilled(p => ({ ...p, sleep: false })) }}
-                placeholder="7.5"
-                placeholderTextColor="#d1d5db"
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                style={{
-                  backgroundColor: hkPrefilled.sleep ? '#fff1f2' : '#f9fafb',
-                  borderRadius: 10, paddingHorizontal: 14,
-                  paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                  color: '#111827', borderWidth: 1,
-                  borderColor: hkPrefilled.sleep ? '#fecdd3' : '#e5e7eb',
-                }}
-              />
-            </View>
-            <View style={{ flex: 1 }} />
+                </TouchableOpacity>
+              )
+            })}
           </View>
         </View>
 
-        {/* Medidas corporales */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setShowMedidas(v => !v) }}
-            activeOpacity={0.8}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
-          >
-            <View>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Medidas corporales
-              </Text>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
-                Opcional · para seguimiento de progreso
-              </Text>
-            </View>
-            <Text style={{ fontSize: 18, color: '#9ca3af' }}>{showMedidas ? '−' : '+'}</Text>
-          </TouchableOpacity>
-          {showMedidas && (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}>
-              <View style={{ height: 1, backgroundColor: '#f3f4f6', marginBottom: 4 }} />
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Cintura (cm)</Text>
-                  <TextInput
-                    value={waist}
-                    onChangeText={setWaist}
-                    placeholder="80"
-                    placeholderTextColor="#d1d5db"
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    style={{
-                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
-                    }}
-                  />
-                </View>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Brazos (cm)</Text>
-                  <TextInput
-                    value={arms}
-                    onChangeText={setArms}
-                    placeholder="35"
-                    placeholderTextColor="#d1d5db"
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    style={{
-                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
-                    }}
-                  />
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Caderas (cm)</Text>
-                  <TextInput
-                    value={hips}
-                    onChangeText={setHips}
-                    placeholder="95"
-                    placeholderTextColor="#d1d5db"
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    style={{
-                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
-                    }}
-                  />
-                </View>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>Muslos (cm)</Text>
-                  <TextInput
-                    value={thighs}
-                    onChangeText={setThighs}
-                    placeholder="55"
-                    placeholderTextColor="#d1d5db"
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    style={{
-                      backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14,
-                      paddingVertical: 13, fontSize: 16, fontFamily: 'Inter_400Regular',
-                      color: '#111827', borderWidth: 1, borderColor: '#e5e7eb',
-                    }}
-                  />
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Escalas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 20, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Cómo te sientes
-          </Text>
-          <ScaleSelector
-            label="Energía general"
-            value={energy}
-            onChange={setEnergy}
-            low="Agotado"
-            high="Excelente"
-            color="#f97316"
-          />
-          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-          <ScaleSelector
-            label="Dolor muscular"
-            value={soreness}
-            onChange={setSoreness}
-            low="Sin dolor"
-            high="Muy fuerte"
-            color="#ef4444"
-          />
-          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-          <ScaleSelector
-            label="Estrés / carga mental"
-            value={stress}
-            onChange={setStress}
-            low="Tranquilo"
-            high="Muy estresado"
-            color="#8b5cf6"
-          />
-          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-          <ScaleSelector
-            label="Motivación"
-            value={motivation}
-            onChange={setMotivation}
-            low="Sin ganas"
-            high="Muy motivado"
-            color="#22c55e"
-          />
-        </View>
-
-        {/* Molestia o dolor */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Molestia o dolor
-          </Text>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }}>
-            ¿Tuviste alguna molestia física esta semana?
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setHasPain(false) }}
-              activeOpacity={0.8}
-              style={{
-                flex: 1, paddingVertical: 13, borderRadius: 10, alignItems: 'center',
-                backgroundColor: !hasPain ? '#22c55e' : 'white',
-                borderWidth: 1.5, borderColor: !hasPain ? '#22c55e' : '#e5e7eb',
-              }}
-            >
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: !hasPain ? 'white' : '#6b7280' }}>
-                No
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setHasPain(true) }}
-              activeOpacity={0.8}
-              style={{
-                flex: 1, paddingVertical: 13, borderRadius: 10, alignItems: 'center',
-                backgroundColor: hasPain ? '#ef4444' : 'white',
-                borderWidth: 1.5, borderColor: hasPain ? '#ef4444' : '#e5e7eb',
-              }}
-            >
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: hasPain ? 'white' : '#6b7280' }}>
-                Sí
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Notas */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Notas (opcional)
-          </Text>
+        {/* ── NOTES ──────────────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="Lesión leve, semana pesada en trabajo, dormí mal..."
-            placeholderTextColor="#d1d5db"
+            placeholder="Algo que tu coach deba saber? (opcional)"
+            placeholderTextColor="#b3b3b3"
             multiline
-            numberOfLines={3}
+            numberOfLines={2}
             textAlignVertical="top"
             style={{
-              backgroundColor: '#f9fafb', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
+              backgroundColor: '#f9fafb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
               fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827',
-              borderWidth: 1, borderColor: '#e5e7eb', minHeight: 80,
+              borderWidth: 1, borderColor: '#e5e7eb', minHeight: 56,
             }}
           />
         </View>
 
-        {/* CTA */}
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={loading}
-          activeOpacity={0.85}
-          style={{
-            backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 18,
-            alignItems: 'center', opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading
-            ? <ActivityIndicator color="white" />
-            : <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>Enviar check-in</Text>
-          }
-        </TouchableOpacity>
+        {/* ── CTA ────────────────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 24, gap: 12, paddingBottom: 20 }}>
+          <TouchableOpacity
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#ea5809', borderRadius: 14, paddingVertical: 18,
+              alignItems: 'center', opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading
+              ? <ActivityIndicator color="white" />
+              : <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>
+                  Enviar revision semanal {'\u2192'}
+                </Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={{ alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Saltar por ahora</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )

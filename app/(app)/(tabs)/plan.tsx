@@ -579,11 +579,6 @@ export default function PlanScreen() {
   }, [])
 
   if (!user?.features?.plan) {
-    // GYM users: redirect to gym tab
-    if (user?.features?.gym) {
-      router.replace('/(app)/(tabs)/gym')
-      return null
-    }
     return (
       <UpgradeWall
         icon="📅"

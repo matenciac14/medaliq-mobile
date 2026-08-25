@@ -4,13 +4,13 @@ export type CheckinPayload = {
   weightKg?: number
   hrResting?: number
   sleepHours?: number
-  energyLevel: number
-  muscleSoreness: number
-  stressLevel: number
-  painLevel?: number       // 1-10 (hasPain deriva server-side: painLevel >= 5)
-  motivationLevel?: number // 1-10
+  energyLevel: number           // 1-10
+  muscleSoreness: number        // 1-10 (RPE)
+  stressLevel?: number          // 1-10
+  painLevel?: number            // 0-10 (0=sin dolor, 3=leve, 7=moderada)
+  motivationLevel?: number      // 1-10
+  nutritionAdherencePct?: number // 0-100
   notes?: string
-  // Medidas corporales (observacionales — no disparan ajustes de plan)
   waistCm?: number
   armsCm?: number
   hipsCm?: number

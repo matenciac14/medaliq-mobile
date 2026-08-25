@@ -5,10 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, type PublicTemplate, type GymDayDetail, type GymWeekDetail, type RunningSession } from '../../../src/api/gym'
+import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, type PublicTemplate, type GymDayDetail, type GymWeekDetail, type RunningSession, type GymSessionData } from '../../../src/api/gym'
+import { getMuscleVolume } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
 import { useGymSessionStore } from '../../../src/store/gymSession'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import MuscleMap, { MuscleData } from '../../../src/components/MuscleMap'
 
 const DOW_LABELS = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D']
 const MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
@@ -149,7 +151,7 @@ function RunningChip({ session }: { session: RunningSession }) {
       <Text style={{ fontSize: 14 }}>{isHard ? '⚡' : '🏃'}</Text>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          {isHard ? 'Doble carga hoy' : 'Running + Gym hoy'}
+          {isHard ? 'Doble carga hoy' : 'Running + Entreno hoy'}
         </Text>
         <Text style={{ fontSize: 11, color, fontFamily: 'Inter_500Medium', marginTop: 1 }}>
           {label}{session.durationMin ? ` · ${session.durationMin}min` : ''}{session.zoneTarget ? ` · ${session.zoneTarget}` : ''}
@@ -440,7 +442,7 @@ function TemplatePickerScreen({ insets }: { insets: { top: number; bottom: numbe
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <View style={{ gap: 4 }}>
-            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>Gym</Text>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>Entreno</Text>
             <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular' }}>
               Elige tu rutina y empieza hoy
             </Text>
@@ -506,8 +508,15 @@ export default function GymScreen() {
     retry: false,
   })
 
+  const { data: weeklyMuscles } = useQuery({
+    queryKey: ['progress-muscles'],
+    queryFn: () => getMuscleVolume(7),
+    staleTime: 10 * 60 * 1000,
+    enabled: !isError,
+  })
+
   if (!user?.features?.gym) {
-    return <UpgradeWall icon="🏋️" title="Gym tracker" description="Registra tus sesiones de gym, sigue la progresión de cargas y accede a rutinas con el plan Pro." />
+    return <UpgradeWall icon="🏋️" title="Entreno" description="Registra tus sesiones de entreno, sigue la progresión de cargas y accede a rutinas con el plan Pro." />
   }
 
   if (isLoading) {
@@ -552,7 +561,7 @@ export default function GymScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <View>
             <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-              Gym
+              Entreno
             </Text>
             <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
               {session.workoutDay.label}
@@ -590,7 +599,7 @@ export default function GymScreen() {
           <Text style={{ fontSize: 22 }}>🏃</Text>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1d4ed8' }}>
-              {['INTERVALOS', 'TIRADA_LARGA', 'SIMULACRO', 'TEST', 'TEMPO', 'FARTLEK'].includes(session.plannedRunToday.type) ? 'Doble carga hoy' : 'Running + Gym hoy'}
+              {['INTERVALOS', 'TIRADA_LARGA', 'SIMULACRO', 'TEST', 'TEMPO', 'FARTLEK'].includes(session.plannedRunToday.type) ? 'Doble carga hoy' : 'Running + Entreno hoy'}
             </Text>
             <Text style={{ fontSize: 12, color: '#2563eb', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
               {session.plannedRunToday.type.replace(/_/g, ' ')}
@@ -617,6 +626,25 @@ export default function GymScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Muscle preview — muscles targeted today */}
+      {session.exercises.length > 0 && (() => {
+        const muscleData: MuscleData = {}
+        for (const ex of session.exercises) {
+          if (ex.exercise.bodyPart) muscleData[ex.exercise.bodyPart] = { fatigueLevel: 3 }
+          if (ex.exercise.target) muscleData[ex.exercise.target] = { fatigueLevel: 3 }
+        }
+        return (
+          <View style={{ paddingHorizontal: 16 }}>
+            <View style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 16 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
+                Músculos de hoy
+              </Text>
+              <MuscleMap data={muscleData} />
+            </View>
+          </View>
+        )
+      })()}
 
       {/* Muscle group pills */}
       {session.workoutDay.muscleGroups.length > 0 && (
@@ -661,6 +689,61 @@ export default function GymScreen() {
         </View>
       )}
 
+      {/* Músculos trabajados esta semana (acumulado 7 días) */}
+      {weeklyMuscles && Object.keys(weeklyMuscles).length > 0 && (
+        <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 16 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
+              Músculos esta semana
+            </Text>
+            <MuscleMap data={weeklyMuscles as MuscleData} />
+          </View>
+        </View>
+      )}
+
+      {/* Progresión planeada — próximas 4 semanas por ejercicio */}
+      {session && session.exercises.some(ex => ex.previousLogs.some(l => l.weightKg != null)) && (
+        <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                Progresión planeada
+              </Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+                Proyección +2.5 kg/semana
+              </Text>
+            </View>
+            {session.exercises.map((ex) => {
+              const prevWeight = ex.previousLogs.find(l => l.setNumber === 1 && l.completed)?.weightKg
+              if (!prevWeight) return null
+              const base = ex.suggestedNextWeightKg ?? Math.round((prevWeight + 2.5) * 2) / 2
+              const weeks = [base, base + 2.5, base + 5, base + 7.5]
+              return (
+                <View key={ex.id} style={{ paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f', marginBottom: 8 }}>
+                    {ex.exercise.name}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <View style={{ alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, flex: 1 }}>
+                      <Text style={{ fontSize: 9, color: '#9ca3af', fontFamily: 'Inter_500Medium' }}>Ant.</Text>
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#6b7280' }}>{prevWeight}kg</Text>
+                    </View>
+                    {weeks.map((w, i) => (
+                      <View key={i} style={{ alignItems: 'center', backgroundColor: i === 0 ? '#fff7ed' : '#f9fafb', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, flex: 1, borderWidth: i === 0 ? 1 : 0, borderColor: '#fed7aa' }}>
+                        <Text style={{ fontSize: 9, color: i === 0 ? '#f97316' : '#9ca3af', fontFamily: i === 0 ? 'Inter_700Bold' : 'Inter_500Medium' }}>
+                          {i === 0 ? 'Hoy' : `S+${i + 1}`}
+                        </Text>
+                        <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: i === 0 ? '#f97316' : '#374151' }}>{w}kg</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
       {/* Acciones rápidas */}
       <View style={{ paddingHorizontal: 16, gap: 8 }}>
         <TouchableOpacity
@@ -673,7 +756,7 @@ export default function GymScreen() {
             <Text style={{ fontSize: 18 }}>📋</Text>
             <View>
               <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Historial de sesiones</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>Running y gym — todas mis sesiones</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>Running y entreno — todas mis sesiones</Text>
             </View>
           </View>
           <Text style={{ fontSize: 20, color: '#9ca3af' }}>›</Text>
