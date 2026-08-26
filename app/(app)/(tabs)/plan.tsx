@@ -13,6 +13,7 @@ import { getPlan, type PlannedSession, type PlanData, type LastCompletedPlan } f
 import { getDashboard } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import CalendarStrip, { type DayCell } from '../../../src/components/CalendarStrip'
 
 // ── Constants ────────────────────────────────────────────────────────
 import { SESSION_ICONS, SESSION_LABELS } from '../../../src/constants/sessions'
@@ -110,99 +111,7 @@ function formatWeekRange(monday: Date): string {
   return `${monday.getDate()} ${MONTHS[monday.getMonth()]} – ${sun.getDate()} ${MONTHS[sun.getMonth()]}`
 }
 
-// ── CalendarStrip ────────────────────────────────────────────────────
-
-type DayInfo = {
-  dow: number; letter: string; dateNum: number
-  type: string | null; done: boolean; isToday: boolean; canLog: boolean
-}
-
-function CalendarStrip({ days, selectedDow, onSelect, completedCount, totalTraining }: {
-  days: DayInfo[]
-  selectedDow: number
-  onSelect: (dow: number) => void
-  completedCount: number
-  totalTraining: number
-}) {
-  const pct = totalTraining > 0 ? completedCount / totalTraining : 0
-
-  return (
-    <View style={{ backgroundColor: 'white' }}>
-      {/* Progress bar */}
-      <View style={{ marginHorizontal: 16, marginTop: 14, height: 2, backgroundColor: '#e5e7eb', borderRadius: 1, overflow: 'hidden' }}>
-        <View style={{ height: 2, width: `${pct * 100}%` as any, backgroundColor: '#22c55e', borderRadius: 1 }} />
-      </View>
-
-      {/* Day cells */}
-      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
-        {days.map(day => {
-          const isSelected = day.dow === selectedDow
-          const isRest = !day.type || day.type === 'DESCANSO'
-          const isSelectedNonToday = isSelected && !day.isToday
-          const circleColor = day.done && !isRest
-            ? '#22c55e'
-            : day.isToday
-              ? '#f97316'
-              : isSelectedNonToday
-                ? 'transparent'
-                : day.canLog
-                  ? '#fff7ed'
-                  : 'transparent'
-          const numColor = day.done || day.isToday
-            ? 'white'
-            : isSelectedNonToday ? '#1e3a5f'
-            : day.canLog ? '#f97316' : '#6b7280'
-          const letterBold = day.isToday || isSelected
-          const hasBorder = day.canLog && !day.done && !day.isToday && !isSelectedNonToday
-          const circleBorderWidth = day.isToday || isSelectedNonToday ? 2 : hasBorder ? 1.5 : 0
-          const circleBorderColor = day.isToday && isSelected
-            ? '#1e3a5f'
-            : day.isToday
-              ? 'rgba(249,115,22,0.35)'
-              : isSelectedNonToday ? '#1e3a5f' : '#f97316'
-
-          return (
-            <TouchableOpacity
-              key={day.dow}
-              style={{ flex: 1, alignItems: 'center', gap: 4 }}
-              onPress={() => { Haptics.selectionAsync(); onSelect(day.dow) }}
-              activeOpacity={0.7}
-            >
-              <Text style={{
-                fontSize: 10,
-                fontFamily: letterBold ? 'Inter_700Bold' : 'Inter_500Medium',
-                color: day.isToday ? '#f97316' : isSelected ? '#1e3a5f' : '#9ca3af',
-              }}>
-                {day.letter}
-              </Text>
-              <View style={{
-                width: 34, height: 34, borderRadius: 17,
-                backgroundColor: circleColor,
-                alignItems: 'center', justifyContent: 'center',
-                borderWidth: circleBorderWidth,
-                borderColor: circleBorderColor,
-              }}>
-                {day.done && !isRest ? (
-                  <Text style={{ fontSize: 14, color: 'white' }}>✓</Text>
-                ) : (
-                  <Text style={{
-                    fontSize: 13,
-                    fontFamily: day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
-                    color: numColor,
-                  }}>
-                    {day.dateNum}
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-
-      <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
-    </View>
-  )
-}
+// CalendarStrip imported from src/components/CalendarStrip
 
 // ── SessionDetailCard ────────────────────────────────────────────────
 
@@ -582,7 +491,7 @@ export default function PlanScreen() {
     return (
       <UpgradeWall
         icon="📅"
-        title="Mi Plan"
+        title="Mi Temporada"
         description="Accede a tu plan periodizado, CalendarStrip interactivo y métricas semanales con el plan Pro."
       />
     )
@@ -614,7 +523,7 @@ export default function PlanScreen() {
           <LinearGradient colors={['#1e3a5f', '#2d5a8e']} style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <View>
-                <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Plan</Text>
+                <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Temporada</Text>
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
                   {lastCompletedPlan.name} · {lastCompletedPlan.totalWeeks} semanas
                 </Text>
@@ -758,7 +667,7 @@ export default function PlanScreen() {
           {/* Header — navy gradient */}
           <LinearGradient colors={['#1e3a5f', '#2d5a8e']} style={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 14 }}>
             <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Plan</Text>
+              <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' }}>Mi Temporada</Text>
               <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Sin plan asignado</Text>
             </View>
             {/* Week Nav bar */}
@@ -911,7 +820,7 @@ export default function PlanScreen() {
   })
 
   // Calendar strip days
-  const stripDays: DayInfo[] = Array.from({ length: 7 }, (_, i) => {
+  const stripDays: DayCell[] = Array.from({ length: 7 }, (_, i) => {
     const dow     = i + 1
     const session = week?.sessions.find(s => s.dayOfWeek === dow)
     const isToday  = isCurrentWeek && dow === todayDow
@@ -1030,7 +939,7 @@ export default function PlanScreen() {
         {/* Title + Phase badge */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}>
-            Mi Plan
+            Mi Temporada
           </Text>
           <View style={{
             backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 20,

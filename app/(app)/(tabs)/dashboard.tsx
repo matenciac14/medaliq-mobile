@@ -1,20 +1,27 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Modal } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getDashboard, getWeekSessions, type WeekSession, type DashboardData } from '../../../src/api/dashboard'
 import { apiFetch } from '../../../src/api/client'
 import { getNotifications } from '../../../src/api/notifications'
 import { useAuthStore } from '../../../src/store/auth'
+import SharePreviewModal from '../../../src/components/SharePreviewModal'
+import type { ShareCardProps } from '../../../src/components/ShareCard'
 
 import { SESSION_ICONS, SESSION_LABELS } from '../../../src/constants/sessions'
 import CoachCard from '../../../src/components/dashboard/CoachCard'
 import HeroCarga from '../../../src/components/dashboard/HeroCarga'
 import NutritionBanner from '../../../src/components/dashboard/NutritionBanner'
+import CalendarStrip, { type DayCell } from '../../../src/components/CalendarStrip'
+
+const STREAK_MILESTONE_KEY = 'medaliq:streak_milestone_seen'
+const STREAK_MILESTONES = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52]
 
 const PHASE_DISPLAY: Record<string, string> = {
   BASE: 'BASE', DESARROLLO: 'DESARROLLO', ESPECIFICO: 'ESPECÍFICO', AFINAMIENTO: 'AFINAMIENTO',
@@ -54,352 +61,33 @@ function getCurrentWeekLabel(): string {
   return `${fmt(mon)} – ${fmt(sun)}`
 }
 
-// -- Dot detail card (shared between DotWeekStrip and WeeklyStrip) ----------
-function DotDetail({ session, onLog }: { session: WeekSession; onLog?: (s: WeekSession) => void }) {
-  const hasSession = !!session.type && session.type !== 'DESCANSO'
-  const isRest = session.type === 'DESCANSO'
-  const label = hasSession ? (SESSION_LABELS[session.type!] ?? session.type!) : isRest ? 'Descanso' : 'Sin sesión'
-  const emoji = hasSession ? (SESSION_ICONS[session.type!] ?? '🏅') : isRest ? '😴' : null
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
-      {emoji && <Text style={{ fontSize: 18 }}>{emoji}</Text>}
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{label}</Text>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 3 }}>
-          {hasSession && session.durationMin != null && session.durationMin > 0 && (
-            <View style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>{session.durationMin} min</Text>
-            </View>
-          )}
-          {hasSession && session.zoneTarget && session.zoneTarget !== 'N/A' && session.type !== 'FUERZA' && (
-            <View style={{ backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Zona {session.zoneTarget}</Text>
-            </View>
-          )}
-          {session.done && hasSession && (
-            <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#16a34a' }}>✓ Completada</Text>
-            </View>
-          )}
-        </View>
-      </View>
-      {hasSession && !session.done && onLog && session.id && (
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); onLog(session) }}
-          style={{ backgroundColor: '#ea580c', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}
-        >
-          <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>Registrar</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  )
-}
-
-// -- Figma-style dot week strip (FREE mode) --------------------------------
-function DotWeekStrip({ sessions, weekOffset, setWeekOffset, completedCount, totalTraining }: {
-  sessions: WeekSession[]
-  weekOffset: number
-  setWeekOffset: (fn: (w: number) => number) => void
-  completedCount: number
-  totalTraining: number
-}) {
+function sessionsToCalendarDays(sessions: WeekSession[], weekOffset: number): DayCell[] {
+  const now = new Date()
+  const jsDay = now.getDay() === 0 ? 7 : now.getDay()
+  const mon = new Date(now)
+  mon.setDate(now.getDate() - (jsDay - 1) + weekOffset * 7)
   const isCurrentWeek = weekOffset === 0
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+  const todayIdx = isCurrentWeek ? sessions.findIndex(s => s.isToday) : -1
 
-  const { data: weekData } = useQuery({
-    queryKey: ['week-sessions', weekOffset],
-    queryFn: () => getWeekSessions(weekOffset),
-    enabled: weekOffset !== 0,
+  return sessions.map(s => {
+    const d = new Date(mon)
+    d.setDate(mon.getDate() + s.dayIndex)
+    const hasSession = !!s.type && s.type !== 'DESCANSO'
+    const isPastUnlogged = isCurrentWeek && hasSession && !s.done && s.dayIndex < todayIdx && !!s.id
+    return {
+      dow: s.dayIndex,
+      letter: DOT_DAY_LETTERS[s.dayIndex],
+      dateNum: d.getDate(),
+      type: s.type,
+      done: s.done,
+      isToday: s.isToday,
+      canLog: isPastUnlogged,
+    }
   })
-
-  const displaySessions = isCurrentWeek ? sessions : (weekData?.weekSessions ?? sessions)
-  const weekLabel = isCurrentWeek ? getCurrentWeekLabel() : (weekData?.weekLabel ?? '...')
-  const completed = isCurrentWeek ? completedCount : (weekData?.completedCount ?? 0)
-  const total = isCurrentWeek ? totalTraining : (weekData?.totalTraining ?? 0)
-
-  const selectedSession = selectedIdx !== null ? displaySessions.find(s => s.dayIndex === selectedIdx) ?? null : null
-
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 18, padding: 14, ...SHADOW }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#111827', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          ESTA SEMANA
-        </Text>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>
-          {completed} registros
-        </Text>
-      </View>
-      {/* Week nav — arrows at edges, label + "Hoy" centered */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w - 1); setSelectedIdx(null) }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="chevron-back" size={18} color="#6b7280" />
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
-            {weekLabel}
-          </Text>
-          {!isCurrentWeek && (
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setWeekOffset(() => 0); setSelectedIdx(null) }}
-              style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#fff7ed' }}
-            >
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>Hoy</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w + 1); setSelectedIdx(null) }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
-      {/* Progress bar */}
-      {total > 0 && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <View style={{ flex: 1, height: 5, backgroundColor: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ height: 5, width: `${total > 0 ? (completed / total) * 100 : 0}%` as any, backgroundColor: '#22c55e', borderRadius: 3 }} />
-          </View>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', fontVariant: ['tabular-nums'] }}>
-            {completed}/{total}
-          </Text>
-        </View>
-      )}
-      {/* Dot cells */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {displaySessions.map((s) => {
-          const hasSession = !!s.type && s.type !== 'DESCANSO'
-          const isSelected = selectedIdx === s.dayIndex
-          const dotBg = s.done && hasSession
-            ? '#22c55e'
-            : s.isToday
-            ? 'white'
-            : hasSession
-            ? '#1e3a5f'
-            : '#f3f4f6'
-          const dotBorder = isSelected ? '#1e3a5f' : s.isToday ? '#ea580c' : 'transparent'
-          const dotText = s.done && hasSession
-            ? 'white'
-            : s.isToday
-            ? '#ea580c'
-            : hasSession
-            ? 'white'
-            : '#9ca3af'
-
-          return (
-            <TouchableOpacity
-              key={s.dayIndex}
-              onPress={() => { Haptics.selectionAsync(); setSelectedIdx(isSelected ? null : s.dayIndex) }}
-              style={{ alignItems: 'center', gap: 6, flex: 1 }}
-            >
-              <Text style={{
-                fontSize: 11, fontFamily: s.isToday ? 'Inter_700Bold' : 'Inter_600SemiBold',
-                color: s.isToday ? '#ea580c' : '#9ca3af',
-              }}>
-                {DOT_DAY_LETTERS[s.dayIndex]}
-              </Text>
-              <View style={{
-                width: 38, height: 38, borderRadius: 10,
-                backgroundColor: dotBg,
-                borderWidth: s.isToday || isSelected ? 2 : 0,
-                borderColor: dotBorder,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: dotText }}>
-                  {s.done && hasSession ? '\u2713' : hasSession ? (SESSION_ICONS[s.type!] ?? '·') : '·'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-      {/* Detail card for selected day */}
-      {selectedSession && (selectedSession.type || selectedSession.isToday) && (
-        <DotDetail session={selectedSession} />
-      )}
-    </View>
-  )
 }
 
-// -- Full weekly strip (B2B/Pro with plan) ----------------------------------
-// Unified: same 38x38 dot structure as DotWeekStrip, with PRO/B2B extras
-function WeeklyStrip({ mainData, onLogSession }: {
-  mainData: { weekSessions: WeekSession[]; completedCount: number; totalTraining: number; volumeDeltaPct: number | null }
-  onLogSession: (s: WeekSession) => void
-}) {
-  const [weekOffset, setWeekOffset] = useState(0)
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
-  const isCurrentWeek = weekOffset === 0
 
-  const { data: weekData } = useQuery({
-    queryKey: ['week-sessions', weekOffset],
-    queryFn: () => getWeekSessions(weekOffset),
-    enabled: weekOffset !== 0,
-  })
 
-  const sessions = isCurrentWeek ? mainData.weekSessions : (weekData?.weekSessions ?? mainData.weekSessions)
-  const completed = isCurrentWeek ? mainData.completedCount : (weekData?.completedCount ?? 0)
-  const total = isCurrentWeek ? mainData.totalTraining : (weekData?.totalTraining ?? 0)
-  const weekLabel = isCurrentWeek ? getCurrentWeekLabel() : (weekData?.weekLabel ?? '...')
-  const pct = total > 0 ? completed / total : 0
-
-  const todayIdx = isCurrentWeek
-    ? (sessions.find(s => s.isToday)?.dayIndex ?? -1)
-    : -1
-
-  const hasPastUnlogged = isCurrentWeek && sessions.some(s => !s.done && s.dayIndex < todayIdx && s.type && s.type !== 'DESCANSO')
-
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 18, padding: 14, ...SHADOW }}>
-      {/* Header — same structure as DotWeekStrip */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#111827', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          ESTA SEMANA
-        </Text>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>
-          {completed}/{total} sesiones
-        </Text>
-      </View>
-      {/* Week nav — arrows at edges, label + "Hoy" centered */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w - 1) }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="chevron-back" size={18} color="#6b7280" />
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
-            {weekLabel}
-          </Text>
-          {!isCurrentWeek && (
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setWeekOffset(() => 0) }}
-              style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#fff7ed' }}
-            >
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>Hoy</Text>
-            </TouchableOpacity>
-          )}
-          {isCurrentWeek && mainData.volumeDeltaPct != null && (
-            <View style={{ backgroundColor: mainData.volumeDeltaPct >= 0 ? '#f0fdf4' : '#fff1f2', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: mainData.volumeDeltaPct >= 0 ? '#16a34a' : '#dc2626' }}>
-                {mainData.volumeDeltaPct >= 0 ? '+' : ''}{mainData.volumeDeltaPct}% vol
-              </Text>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setWeekOffset((w: number) => w + 1) }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
-      {/* Progress bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <View style={{ flex: 1, height: 5, backgroundColor: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
-          <View style={{ height: 5, width: `${pct * 100}%` as any, backgroundColor: '#22c55e', borderRadius: 3 }} />
-        </View>
-        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', fontVariant: ['tabular-nums'] }}>
-          {completed}/{total}
-        </Text>
-      </View>
-      {/* Dot cells — same 38x38 structure as DotWeekStrip */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {sessions.map((s) => {
-          const hasSession = !!s.type && s.type !== 'DESCANSO'
-          const isFuture = isCurrentWeek && s.dayIndex > todayIdx
-          const isPast = isCurrentWeek && s.dayIndex < todayIdx
-          const canLog = isCurrentWeek && hasSession && !s.done && !isFuture && !!s.id
-
-          const dotBg = s.done && hasSession
-            ? '#22c55e'
-            : s.isToday
-            ? 'white'
-            : canLog && isPast
-            ? '#fff7ed'
-            : hasSession
-            ? isFuture ? '#1e3a5f' : '#1e3a5f'
-            : '#f3f4f6'
-          const dotBorder = s.isToday ? '#ea580c'
-            : canLog && isPast ? '#f97316'
-            : 'transparent'
-          const dotText = s.done && hasSession
-            ? 'white'
-            : s.isToday
-            ? '#ea580c'
-            : canLog && isPast
-            ? '#f97316'
-            : hasSession
-            ? 'white'
-            : '#9ca3af'
-
-          const dotContent = s.done && hasSession
-            ? '\u2713'
-            : canLog && isPast
-            ? '!'
-            : hasSession
-            ? (SESSION_ICONS[s.type!] ?? '·')
-            : '·'
-
-          const isSelected = selectedIdx === s.dayIndex
-          const selBorder = isSelected ? '#1e3a5f' : dotBorder
-
-          return (
-            <TouchableOpacity
-              key={s.dayIndex}
-              onPress={() => {
-                Haptics.selectionAsync()
-                if (canLog) { onLogSession(s); return }
-                setSelectedIdx(isSelected ? null : s.dayIndex)
-              }}
-              activeOpacity={0.7}
-              style={{ alignItems: 'center', gap: 6, flex: 1 }}
-            >
-              <Text style={{
-                fontSize: 11, fontFamily: s.isToday ? 'Inter_700Bold' : 'Inter_600SemiBold',
-                color: s.isToday ? '#ea580c' : '#9ca3af',
-              }}>
-                {DOT_DAY_LETTERS[s.dayIndex]}
-              </Text>
-              <View style={{
-                width: 38, height: 38, borderRadius: 10,
-                backgroundColor: dotBg,
-                borderWidth: s.isToday || (canLog && isPast) || isSelected ? 2 : 0,
-                borderColor: selBorder,
-                alignItems: 'center', justifyContent: 'center',
-                opacity: isFuture && hasSession ? 0.4 : 1,
-              }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: dotText }}>
-                  {dotContent}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-      {hasPastUnlogged && (
-        <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#f97316', marginTop: 8, textAlign: 'center' }}>
-          Toca ! para registrar sesiones pasadas
-        </Text>
-      )}
-      {/* Detail card for selected day */}
-      {selectedIdx !== null && (() => {
-        const sel = sessions.find(s => s.dayIndex === selectedIdx)
-        return sel && (sel.type || sel.isToday) ? <DotDetail session={sel} onLog={onLogSession} /> : null
-      })()}
-    </View>
-  )
-}
 
 // -- Hero Cards ---------------------------------------------------------------
 const FORM_COLORS = {
@@ -697,6 +385,79 @@ function FreeTodayCardFigma({ router }: { router: ReturnType<typeof useRouter> }
   )
 }
 
+// -- Quick session feedback (Figma: ¿Cómo te sentiste?) ----------------------
+function QuickSessionFeedback({ sessionType, durationMin, zoneTarget, logId }: {
+  sessionType: string
+  durationMin: number
+  zoneTarget: string
+  logId: string | null
+}) {
+  const [selected, setSelected] = useState<'tired' | 'regular' | 'strong' | null>(null)
+  const label = SESSION_LABELS[sessionType] ?? sessionType.toLowerCase().replace(/_/g, ' ')
+  const icon = SESSION_ICONS[sessionType] ?? '\uD83C\uDFC5'
+  const zone = zoneTarget && zoneTarget !== 'N/A' && zoneTarget !== 'LIBRE' ? ` · ${zoneTarget}` : ''
+
+  const handleSelect = async (feeling: 'tired' | 'regular' | 'strong') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setSelected(feeling)
+    if (logId) {
+      const rpeMap = { tired: 3, regular: 5, strong: 8 }
+      try { await apiFetch(`/api/mobile/log/session/${logId}/rpe`, { method: 'PATCH', body: JSON.stringify({ rpe: rpeMap[feeling] }) }) } catch {}
+    }
+  }
+
+  const options = [
+    { key: 'tired' as const, icon: '\uD83C\uDF19', label: 'Cansado' },
+    { key: 'regular' as const, icon: '\u23F0', label: 'Regular' },
+    { key: 'strong' as const, icon: '\uD83D\uDCAA', label: 'Fuerte' },
+  ]
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ height: 3, backgroundColor: '#22c55e' }} />
+      <View style={{ padding: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: 'white', fontSize: 10, fontFamily: 'Inter_700Bold' }}>{'\u2713'}</Text>
+          </View>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Sesión de hoy
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <Text style={{ fontSize: 20 }}>{icon}</Text>
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+            {label} · {durationMin} min{zone}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textAlign: 'center', marginBottom: 10 }}>
+          {'\u00BF'}Cómo te sentiste?
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {options.map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => handleSelect(opt.key)}
+              activeOpacity={0.8}
+              style={{
+                flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12,
+                borderWidth: selected === opt.key ? 2 : 1,
+                borderColor: selected === opt.key ? '#1e3a5f' : '#e5e7eb',
+                backgroundColor: selected === opt.key ? '#f0f4f8' : 'white',
+              }}
+            >
+              <Text style={{ fontSize: 20, marginBottom: 4 }}>{opt.icon}</Text>
+              <Text style={{ fontSize: 11, fontFamily: selected === opt.key ? 'Inter_700Bold' : 'Inter_600SemiBold', color: selected === opt.key ? '#1e3a5f' : '#6b7280' }}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  )
+}
+
 // -- Figma "TU ACTIVIDAD" section -------------------------------------------
 function TuActividadCard({ router }: { router: ReturnType<typeof useRouter> }) {
   return (
@@ -785,6 +546,31 @@ function FindCoachCard({ router }: { router: ReturnType<typeof useRouter> }) {
   )
 }
 
+function buildWeekShareProps(weekSessions: WeekSession[], completedCount: number, totalTraining: number): ShareCardProps {
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+  const now = new Date()
+  const dow = now.getDay() === 0 ? 7 : now.getDay()
+  const mon = new Date(now); mon.setDate(now.getDate() - (dow - 1))
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+  const weekStart = `${mon.getDate()} ${months[mon.getMonth()]}`
+  const weekEnd = `${sun.getDate()} ${months[sun.getMonth()]} ${sun.getFullYear()}`
+  const dayStates = weekSessions.map((s): 0|1|2|3 => {
+    if (!s.done) return 0
+    if (s.type === 'INTERVALOS' || s.type === 'FUERZA') return 3
+    if (s.type === 'TEMPO' || s.type === 'FARTLEK') return 2
+    return 1
+  })
+  return {
+    variant: 'weekly',
+    weekStart,
+    weekEnd,
+    dayStates,
+    sessionsCompleted: completedCount,
+    sessionsTotal: totalTraining,
+    date: `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`,
+  }
+}
+
 const RUN_TYPE_LABELS: Record<string, string> = {
   RODAJE_Z2: 'Rodaje Z2', FARTLEK: 'Fartlek', TEMPO: 'Tempo',
   INTERVALOS: 'Intervalos', TIRADA_LARGA: 'Tirada larga', OTRO: 'Sesion libre',
@@ -795,6 +581,20 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
   const { user } = useAuthStore()
   const [freeWeekOffset, setFreeWeekOffset] = useState(0)
+  const [calendarSelectedIdx, setCalendarSelectedIdx] = useState<number | null>(null)
+  const [showStreakModal, setShowStreakModal] = useState(false)
+  const [streakShareProps, setStreakShareProps] = useState<ShareCardProps | null>(null)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const milestoneCheckedRef = useRef(false)
+  // SHARE-07: season completed
+  const [showSeasonModal, setShowSeasonModal] = useState(false)
+  const [seasonShareProps, setSeasonShareProps] = useState<ShareCardProps | null>(null)
+  const [showSeasonShareModal, setShowSeasonShareModal] = useState(false)
+  const seasonCheckedRef = useRef(false)
+  // SHARE-08: Sunday share
+  const [showSundayShare, setShowSundayShare] = useState(false)
+  const [sundayShareProps, setSundayShareProps] = useState<ShareCardProps | null>(null)
+  const isSunday = new Date().getDay() === 0
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['dashboard'],
@@ -807,6 +607,66 @@ export default function DashboardScreen() {
     staleTime: 30_000,
   })
   const unreadCount = notifData?.unreadCount ?? 0
+
+  // Milestone detection — show once per milestone level
+  useEffect(() => {
+    if (!data || milestoneCheckedRef.current) return
+    const ws = data.weekStreak ?? 0
+    if (!STREAK_MILESTONES.includes(ws)) return
+    milestoneCheckedRef.current = true
+
+    AsyncStorage.getItem(STREAK_MILESTONE_KEY).then(stored => {
+      const lastSeen = parseInt(stored ?? '0') || 0
+      if (ws > lastSeen) {
+        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+        const now = new Date()
+        setStreakShareProps({
+          variant: 'streak',
+          streakWeeks: ws,
+          streakDays: data.streakDays,
+          date: `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`,
+        })
+        setShowStreakModal(true)
+      }
+    }).catch(() => {/* ignore */})
+  }, [data])
+
+  function handleDismissStreak() {
+    const ws = data?.weekStreak ?? 0
+    if (ws > 0) AsyncStorage.setItem(STREAK_MILESTONE_KEY, String(ws)).catch(() => {/* ignore */})
+    setShowStreakModal(false)
+  }
+
+  // SHARE-07: show season-completed modal once per plan
+  useEffect(() => {
+    if (!data?.justCompletedPlan || seasonCheckedRef.current) return
+    seasonCheckedRef.current = true
+    const plan = data.justCompletedPlan
+    const key = `medaliq:season_completed_seen:${plan.name}`
+    AsyncStorage.getItem(key).then(seen => {
+      if (!seen) {
+        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+        const now = new Date()
+        setSeasonShareProps({
+          variant: 'season',
+          seasonNumber: plan.seasonNumber,
+          planName: plan.name,
+          totalWeeks: plan.totalWeeks,
+          totalSessions: plan.totalSessions,
+          totalKm: plan.totalKm ?? undefined,
+          adherencePct: plan.adherencePct ?? undefined,
+          date: `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`,
+        })
+        setShowSeasonModal(true)
+      }
+    }).catch(() => {/* ignore */})
+  }, [data])
+
+  function handleDismissSeason() {
+    const plan = data?.justCompletedPlan
+    if (plan) AsyncStorage.setItem(`medaliq:season_completed_seen:${plan.name}`, '1').catch(() => {/* ignore */})
+    setShowSeasonModal(false)
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -848,6 +708,7 @@ export default function DashboardScreen() {
   const modeLabel = isFree ? 'FREE' : d.isB2B ? 'B2B' : 'PRO'
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: '#f1f5f9' }}
       contentContainerStyle={{ paddingBottom: 28, gap: 12 }}
@@ -857,68 +718,92 @@ export default function DashboardScreen() {
       {/* -- Gradient Header ------------------------------------------------ */}
       <LinearGradient
         colors={['#1e3a5f', '#2d5a8e']}
-        style={{ paddingTop: insets.top + 16, paddingBottom: 22, paddingHorizontal: 20, gap: 6 }}
+        style={{ paddingTop: insets.top + 12, paddingBottom: 6, paddingHorizontal: 20 }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <Text
-            numberOfLines={1}
-            style={{ flex: 1, fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}
-          >
-            {getGreeting()}, {firstName}
-          </Text>
-          {/* Mode badge (outlined) */}
-          <View style={{ borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: 'white', textTransform: 'uppercase', letterSpacing: 1 }}>
-              {modeLabel}
+        {/* TopGroup */}
+        <View style={{ gap: 4 }}>
+          {/* GreetingRow: greeting + icons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Text
+              numberOfLines={1}
+              style={{ flex: 1, fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.3 }}
+            >
+              {getGreeting()}!
             </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              {d.streakDays >= 2 ? (
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 3,
+                  borderWidth: 1, borderColor: 'rgba(249,115,22,0.5)', borderRadius: 10,
+                  paddingHorizontal: 7, paddingVertical: 3,
+                }}>
+                  <Text style={{ fontSize: 11 }}>🔥</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#f97316' }}>{d.streakDays}</Text>
+                </View>
+              ) : (
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 3,
+                  borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10,
+                  paddingHorizontal: 7, paddingVertical: 3,
+                }}>
+                  <Text style={{ fontSize: 11, opacity: 0.5 }}>🔥</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'rgba(255,255,255,0.3)' }}>{d.streakDays}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); router.push('/(app)/notifications') }}
+                style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="notifications-outline" size={22} color="white" />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -2, right: -4,
+                    backgroundColor: '#f97316', borderRadius: 8,
+                    minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center',
+                    paddingHorizontal: 3,
+                  }}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-          {/* Bell icon */}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.push('/(app)/notifications') }}
-            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="notifications-outline" size={22} color="white" />
-            {unreadCount > 0 && (
-              <View style={{
-                position: 'absolute', top: 4, right: 2,
-                backgroundColor: '#f97316', borderRadius: 8,
-                minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center',
-                paddingHorizontal: 3,
-              }}>
-                <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {/* UserName */}
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.8)' }}>
+            {firstName}
+          </Text>
         </View>
-        {/* Date */}
-        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>
+
+        {/* DateLabel — centered */}
+        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#999', textAlign: 'center', marginTop: 6 }}>
           {formatDate()}
         </Text>
-        {/* Pills row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-          {d.planData && (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-                Semana {d.planData.currentWeek}/{d.planData.totalWeeks} · {PHASE_DISPLAY[d.planData.phase] ?? d.planData.phase}
-              </Text>
-            </View>
-          )}
-          {d.streakDays > 0 ? (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-                {'\uD83D\uDD25'} {d.streakDays} días · racha
-              </Text>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.5)' }}>
-                {'\u2014'} sin racha aún
-              </Text>
-            </View>
-          )}
+
+        {/* WeekNav */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', marginTop: 6,
+          backgroundColor: '#1e3a5f', borderRadius: 8, overflow: 'hidden',
+        }}>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setFreeWeekOffset((w: number) => w - 1) }}
+            style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}
+          >
+            <Ionicons name="chevron-back" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+          <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, fontFamily: 'Inter_500Medium', color: 'white' }}>
+            {d.planData
+              ? `Semana ${d.planData.currentWeek} · ${getCurrentWeekLabel()}`
+              : getCurrentWeekLabel()}
+          </Text>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setFreeWeekOffset((w: number) => w + 1) }}
+            style={{ width: 36, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}
+          >
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
@@ -929,17 +814,40 @@ export default function DashboardScreen() {
         {/* ============================================================== */}
         {isFree && !d.todaySession && (
           <>
-            {/* HOY card */}
-            <FreeTodayCardFigma router={router} />
-
-            {/* ESTA SEMANA — dot strip */}
-            <DotWeekStrip
-              sessions={d.weekSessions}
-              weekOffset={freeWeekOffset}
-              setWeekOffset={setFreeWeekOffset}
+            {/* CalendarStrip — before HOY card per Figma */}
+            <CalendarStrip
+              days={sessionsToCalendarDays(d.weekSessions, freeWeekOffset)}
+              selectedDow={calendarSelectedIdx}
+              onSelect={setCalendarSelectedIdx}
               completedCount={d.completedCount}
               totalTraining={d.totalTraining}
             />
+
+            {/* HOY card */}
+            <FreeTodayCardFigma router={router} />
+
+            {/* SHARE-08: Sunday weekly share */}
+            {isSunday && d.completedCount > 0 && (
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#1e3a5f', borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' }}
+              >
+                <View style={{ width: 3, position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#ea580c' }} />
+                <Text style={{ fontSize: 22 }}>{'\uD83D\uDCC5'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                    {d.completedCount}/{d.totalTraining} sesiones esta semana
+                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                    Comparte tu resumen semanal {'\u2197'}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: '#ea580c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>Compartir</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* TU ACTIVIDAD */}
             {!d.hasEverLogged && <TuActividadCard router={router} />}
@@ -973,6 +881,31 @@ export default function DashboardScreen() {
               </View>
             )}
 
+            {/* Insights Pro upsell */}
+            {d.hasEverLogged && (
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/pricing' as any)}
+                activeOpacity={0.85}
+                style={{ backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', ...SHADOW }}
+              >
+                <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                    {'\u2728'} Insights Pro
+                  </Text>
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827', marginBottom: 8 }}>
+                    Desbloquea con Plan Pro
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {['Check-in', 'RPE', 'Zonas'].map(label => (
+                      <View key={label} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* META DE PESO */}
             <HeroPeso
               metrics={d.metrics}
@@ -997,6 +930,9 @@ export default function DashboardScreen() {
               </View>
             )}
 
+            {/* Registro de hoy */}
+            <TodayLogCard initial={d.todayLog ?? null} />
+
             {/* Desbloquea Pro + Encuentra coach */}
             <DesbloquearProCard router={router} />
             <FindCoachCard router={router} />
@@ -1008,65 +944,28 @@ export default function DashboardScreen() {
         {/* ============================================================== */}
         {(!isFree || d.todaySession) && (
           <>
-            {/* Orientacion post-onboarding */}
-            {!d.hasEverLogged && user?.onboardingCompleted && (
-              <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
-                <View style={{ height: 3, backgroundColor: '#f97316' }} />
-                <View style={{ padding: 18, gap: 14 }}>
-                  <View style={{ gap: 4 }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
-                      Por donde empezar?
-                    </Text>
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', lineHeight: 19 }}>
-                      Tu cuenta esta lista. Aqui los tres primeros pasos para comenzar tu seguimiento.
-                    </Text>
-                  </View>
-                  <View style={{ gap: 10 }}>
-                    <TouchableOpacity
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/plan') }}
-                      activeOpacity={0.85}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
-                    >
-                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 20 }}>{'\uD83D\uDCC5'}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Ver tu plan</Text>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Sesiones de esta semana</Text>
-                      </View>
-                      <Text style={{ fontSize: 16, color: '#d1d5db' }}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/gym') }}
-                      activeOpacity={0.85}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
-                    >
-                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 20 }}>{'\uD83D\uDCAA'}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Registrar sesión de gym</Text>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Pesas, series y repeticiones</Text>
-                      </View>
-                      <Text style={{ fontSize: 16, color: '#d1d5db' }}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/nutrition') }}
-                      activeOpacity={0.85}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderRadius: 14, padding: 14 }}
-                    >
-                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 20 }}>{'\uD83E\uDD57'}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Ver tu nutricion</Text>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>Macros y plan de comidas</Text>
-                      </View>
-                      <Text style={{ fontSize: 16, color: '#d1d5db' }}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+            {/* Calendar Strip — before TodaySession per Figma */}
+            {d.weekSessions.length > 0 && (
+              <CalendarStrip
+                days={sessionsToCalendarDays(d.weekSessions, freeWeekOffset)}
+                selectedDow={calendarSelectedIdx}
+                onSelect={(dow) => {
+                  const s = d.weekSessions.find(ws => ws.dayIndex === dow)
+                  const hasSession = s && s.type && s.type !== 'DESCANSO'
+                  const todayIdx = d.weekSessions.findIndex(ws => ws.isToday)
+                  const isPastUnlogged = hasSession && !s.done && dow < todayIdx && !!s.id
+                  if (isPastUnlogged) {
+                    router.push({
+                      pathname: '/(app)/log',
+                      params: { sessionId: s.id!, type: s.type!, duration: String(s.durationMin ?? ''), zone: s.zoneTarget ?? '2' },
+                    })
+                    return
+                  }
+                  setCalendarSelectedIdx(dow === calendarSelectedIdx ? null : dow)
+                }}
+                completedCount={d.completedCount}
+                totalTraining={d.totalTraining}
+              />
             )}
 
             {/* Today session card */}
@@ -1080,17 +979,27 @@ export default function DashboardScreen() {
                     <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.55)', letterSpacing: 1, textTransform: 'uppercase' }}>
                       HOY
                     </Text>
-                    <View style={{ backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#86efac' }}>
-                        {'\u25CF'} Zona {d.todaySession.zoneTarget}
-                      </Text>
-                    </View>
+                    {d.todaySession.zoneTarget ? (
+                      <View style={{ backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#86efac' }}>
+                          {'\u25CF'} Zona {d.todaySession.zoneTarget}
+                        </Text>
+                      </View>
+                    ) : d.todaySession.id === 'gym-today' ? (
+                      <View style={{ backgroundColor: 'rgba(234,89,12,0.28)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#fdba74' }}>
+                          {'\u25CF'} Fuerza
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Text style={{ fontSize: 34 }}>{SESSION_ICONS[d.todaySession.type] ?? '\uD83C\uDFC5'}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-                        {d.todaySession.durationMin} min
+                        {d.todaySession.id === 'gym-today' && d.workoutName
+                          ? d.workoutName
+                          : `${d.todaySession.durationMin} min`}
                       </Text>
                     </View>
                     {d.todaySession.completed && (
@@ -1100,10 +1009,22 @@ export default function DashboardScreen() {
                     )}
                   </View>
                   <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter_400Regular' }}>
-                    {d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
+                    {d.todaySession.id === 'gym-today' ? 'Entreno de fuerza' : d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
                   </Text>
                 </LinearGradient>
-                {!d.todaySession.completed && (
+                {d.todaySession.completed ? (
+                  d.todaySession.id === 'gym-today' && (
+                    <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/gym') }}
+                        activeOpacity={0.85}
+                        style={{ backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                      >
+                        <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Ver resumen {'\u2192'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                ) : (
                   <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
                     <TouchableOpacity
                       onPress={() => {
@@ -1162,22 +1083,37 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            {/* Weekly Strip */}
-            {d.weekSessions.length > 0 && (
-              <WeeklyStrip
-                mainData={{ weekSessions: d.weekSessions, completedCount: d.completedCount, totalTraining: d.totalTraining, volumeDeltaPct: d.volumeDeltaPct }}
-                onLogSession={(s) => {
-                  router.push({
-                    pathname: '/(app)/log',
-                    params: {
-                      sessionId: s.id!,
-                      type: s.type!,
-                      duration: String(s.durationMin ?? ''),
-                      zone: s.zoneTarget ?? '2',
-                    },
-                  })
-                }}
+            {/* Quick feedback — ¿Cómo te sentiste? (Figma: sesión completada) */}
+            {d.todaySession?.completed && (
+              <QuickSessionFeedback
+                sessionType={d.todaySession.type}
+                durationMin={d.todaySession.durationMin}
+                zoneTarget={d.todaySession.zoneTarget}
+                logId={null}
               />
+            )}
+
+            {/* SHARE-08: Sunday weekly share */}
+            {isSunday && d.completedCount > 0 && (
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#1e3a5f', borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' }}
+              >
+                <View style={{ width: 3, position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#ea580c' }} />
+                <Text style={{ fontSize: 22 }}>{'\uD83D\uDCC5'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
+                    {d.completedCount}/{d.totalTraining} sesiones esta semana
+                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                    Comparte tu resumen semanal {'\u2197'}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: '#ea580c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>Compartir</Text>
+                </View>
+              </TouchableOpacity>
             )}
 
             {/* Coach card (B2B) */}
@@ -1303,5 +1239,154 @@ export default function DashboardScreen() {
         )}
       </View>
     </ScrollView>
+
+    {/* ── Streak Milestone Modal ─────────────────────────────────────── */}
+    <Modal
+      visible={showStreakModal}
+      transparent
+      animationType="fade"
+      onRequestClose={handleDismissStreak}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
+        <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 16 }}>
+          <Text style={{ fontSize: 52 }}>{'\uD83D\uDD25'}</Text>
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center' }}>
+              {streakShareProps?.streakWeeks} semanas seguidas
+            </Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
+              {d.streakDays} días de racha activa. Sigue así — eso es disciplina real.
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8, backgroundColor: '#fff7ed', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center' }}>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{d.streakDays}</Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>días racha</Text>
+            </View>
+            <View style={{ width: 1, backgroundColor: '#fed7aa' }} />
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{streakShareProps?.streakWeeks}</Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>semanas</Text>
+            </View>
+          </View>
+
+          <View style={{ width: '100%', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => { setShowShareModal(true) }}
+              activeOpacity={0.85}
+              style={{ backgroundColor: '#ea580c', borderRadius: 14, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+            >
+              <Text style={{ fontSize: 16, color: 'white' }}>{'\u2191'}</Text>
+              <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Compartir logro</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDismissStreak}
+              activeOpacity={0.85}
+              style={{ backgroundColor: '#f1f5f9', borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#6b7280', fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
+    {/* ── Streak Share Preview Modal ─────────────────────────────────── */}
+    {streakShareProps && (
+      <SharePreviewModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        card={streakShareProps}
+        title="Compartir racha"
+      />
+    )}
+
+    {/* ── Temporada Completada Modal (SHARE-07) ──────────────────────── */}
+    <Modal
+      visible={showSeasonModal}
+      transparent
+      animationType="slide"
+      onRequestClose={handleDismissSeason}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <View style={{ backgroundColor: '#1a2744', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', gap: 18 }}>
+          <Text style={{ fontSize: 52 }}>{'\uD83C\uDFC6'}</Text>
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#FFCC37', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Temporada {seasonShareProps?.seasonNumber ?? 1} completada
+            </Text>
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_900Black', color: 'white', textAlign: 'center' }}>
+              {seasonShareProps?.planName ?? 'Plan completado'}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', width: '100%', gap: 0 }}>
+            {seasonShareProps?.totalWeeks != null && (
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#FFCC37' }}>{seasonShareProps.totalWeeks}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>semanas</Text>
+              </View>
+            )}
+            {(seasonShareProps?.totalSessions ?? 0) > 0 && (
+              <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)' }}>
+                <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#FFCC37' }}>{seasonShareProps?.totalSessions}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>sesiones</Text>
+              </View>
+            )}
+            {seasonShareProps?.totalKm != null && (
+              <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)' }}>
+                <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#FFCC37' }}>{seasonShareProps.totalKm}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>km totales</Text>
+              </View>
+            )}
+            {seasonShareProps?.adherencePct != null && (
+              <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)' }}>
+                <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#FFCC37' }}>{seasonShareProps.adherencePct}%</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)' }}>adherencia</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={{ width: '100%', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setShowSeasonShareModal(true)}
+              activeOpacity={0.85}
+              style={{ backgroundColor: '#ea580c', borderRadius: 14, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+            >
+              <Text style={{ fontSize: 16, color: 'white' }}>{'\u2191'}</Text>
+              <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Compartir temporada</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDismissSeason}
+              activeOpacity={0.85}
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
+    {seasonShareProps && (
+      <SharePreviewModal
+        visible={showSeasonShareModal}
+        onClose={() => setShowSeasonShareModal(false)}
+        card={seasonShareProps}
+        title="Compartir temporada"
+      />
+    )}
+
+    {/* ── Sunday Weekly Share Modal (SHARE-08) ───────────────────────── */}
+    {sundayShareProps && (
+      <SharePreviewModal
+        visible={showSundayShare}
+        onClose={() => setShowSundayShare(false)}
+        card={sundayShareProps}
+        title="Compartir semana"
+      />
+    )}
+    </>
   )
 }

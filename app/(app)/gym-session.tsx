@@ -1044,7 +1044,8 @@ export default function GymSessionScreen() {
       <SharePreviewModal
         visible={shareCardProps !== null}
         card={shareCardProps ?? { variant: 'pr_gym' }}
-        onClose={() => setShareCardProps(null)}
+        title="Compartir récord"
+        onClose={() => { setShareCardProps(null); setPrResults([]); router.back() }}
       />
       {restTimer.show && (
         <RestTimerModal

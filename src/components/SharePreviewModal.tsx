@@ -21,9 +21,10 @@ interface Props {
   visible: boolean
   onClose: () => void
   card: ShareCardProps
+  title?: string
 }
 
-export default function SharePreviewModal({ visible, onClose, card }: Props) {
+export default function SharePreviewModal({ visible, onClose, card, title }: Props) {
   const shotRef = useRef<ViewShot>(null)
   const [sharing, setSharing] = useState(false)
 
@@ -54,7 +55,7 @@ export default function SharePreviewModal({ visible, onClose, card }: Props) {
         {/* Handle */}
         <View style={s.handle} />
 
-        <Text style={s.title}>Compartir logro</Text>
+        <Text style={s.title}>{title ?? 'Compartir logro'}</Text>
         <Text style={s.subtitle}>Tu tarjeta aparecerá en Instagram, WhatsApp y más</Text>
 
         {/* Preview escalada — el ViewShot captura al tamaño real */}

@@ -87,11 +87,16 @@ export default function LogRunScreen() {
     const now = new Date()
     const dateLabel = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
 
+    const avgPaceSecPerKm = parsedDistance && parsedDistance > 0
+      ? Math.round((parsedDuration * 60) / parsedDistance)
+      : undefined
+
     setShareCardProps({
       variant: 'session',
       sessionType: 'RUNNING',
       durationMin: parsedDuration,
       distanceKm: parsedDistance,
+      avgPaceSecPerKm,
       rpe: parsedRpe,
       date: dateLabel,
     })
@@ -187,6 +192,7 @@ export default function LogRunScreen() {
             visible={showShareModal}
             onClose={() => setShowShareModal(false)}
             card={shareCardProps}
+            title="Compartir corrida"
           />
         )}
       </>

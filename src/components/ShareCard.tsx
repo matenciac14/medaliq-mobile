@@ -37,9 +37,11 @@ export interface ShareCardProps {
   rpe?: number                  // 7
   planName?: string             // "Plan Base 12 sem"
   distanceKm?: number           // solo RUNNING
+  avgPaceSecPerKm?: number      // solo RUNNING — calculado como (durationMin*60)/distanceKm
 
   // Racha Semanal
   streakWeeks?: number          // 12
+  streakDays?: number           // 84 — días consecutivos de actividad
 
   // Temporada Completada
   seasonNumber?: number         // 1
@@ -126,7 +128,12 @@ function SessionCard(p: ShareCardProps) {
     ? { val: p.distanceKm != null ? `${p.distanceKm} km` : '—', label: 'distancia' }
     : { val: p.exerciseCount != null ? `${p.exerciseCount}` : '—', label: 'ejercicios' }
   const stat2 = isRunning
-    ? { val: '—', label: 'ritmo' }
+    ? {
+        val: p.avgPaceSecPerKm != null
+          ? `${Math.floor(p.avgPaceSecPerKm / 60)}:${String(p.avgPaceSecPerKm % 60).padStart(2, '0')}`
+          : '—',
+        label: 'min/km',
+      }
     : { val: p.totalLoadKg != null ? `${(p.totalLoadKg / 1000).toFixed(1)}t` : '—', label: 'carga total' }
   const stat3 = { val: p.rpe != null ? `RPE ${p.rpe}` : '—', label: 'esfuerzo' }
 
@@ -173,6 +180,7 @@ function StatCell({ val, label }: { val: string; label: string }) {
 // ── Variante 3 — Racha Semanal ────────────────────────────────────────────────
 function StreakCard(p: ShareCardProps) {
   const weeks = p.streakWeeks ?? 0
+  const days = p.streakDays
   const dotsRows = Math.ceil(weeks / 4)
 
   return (
@@ -186,7 +194,11 @@ function StreakCard(p: ShareCardProps) {
           {weeks}
         </Text>
         <Text style={[s.exerciseName, { letterSpacing: 10, fontSize: 16 }]}>SEMANAS</Text>
-        <Text style={s.subtext}>Consecutivas sin fallar</Text>
+        {days != null ? (
+          <Text style={s.subtext}>{days} días de racha activa</Text>
+        ) : (
+          <Text style={s.subtext}>Consecutivas sin fallar</Text>
+        )}
         <View style={s.dotsGrid}>
           {Array.from({ length: dotsRows }, (_, r) => (
             <View key={r} style={s.dotsRow}>

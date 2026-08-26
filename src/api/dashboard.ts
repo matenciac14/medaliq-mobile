@@ -40,6 +40,7 @@ export type DashboardData = {
   checkinPending: boolean
   // hero cards
   streakDays: number
+  weekStreak: number
   raceDays: number | null
   isRecomp: boolean
   formStatus: 'good' | 'moderate' | 'rest'
@@ -88,6 +89,14 @@ export type DashboardData = {
   } | null
   isB2B: boolean
   workoutName: string | null
+  justCompletedPlan: {
+    name: string
+    totalWeeks: number
+    totalSessions: number
+    totalKm: number | null
+    seasonNumber: number
+    adherencePct: number | null
+  } | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {
