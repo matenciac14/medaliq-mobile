@@ -19,43 +19,51 @@ type Props = {
   totalTraining: number
 }
 
-export default function CalendarStrip({ days, selectedDow, onSelect, completedCount, totalTraining }: Props) {
-  const pct = totalTraining > 0 ? completedCount / totalTraining : 0
+export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
+  // Progress bar: count completed non-rest days for fill width
+  const totalActive = days.filter(d => d.type && d.type !== 'DESCANSO').length
+  const doneCount = days.filter(d => d.done && d.type && d.type !== 'DESCANSO').length
+  const fillPct = totalActive > 0 ? (doneCount / totalActive) * 100 : 0
 
   return (
     <View style={{ backgroundColor: 'white' }}>
-      {/* Progress bar */}
-      <View style={{ marginHorizontal: 16, marginTop: 14, height: 2, backgroundColor: '#e5e7eb', borderRadius: 1, overflow: 'hidden' }}>
-        <View style={{ height: 2, width: `${pct * 100}%` as any, backgroundColor: '#22c55e', borderRadius: 1 }} />
+      {/* Continuous progress bar */}
+      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+        <View style={{ height: 2, backgroundColor: '#e5e7eb', borderRadius: 1 }}>
+          <View style={{ height: 2, backgroundColor: '#22c35d', borderRadius: 1, width: `${fillPct}%` as any }} />
+        </View>
       </View>
 
       {/* Day cells */}
-      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
+      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16 }}>
         {days.map(day => {
           const isSelected = day.dow === selectedDow
           const isRest = !day.type || day.type === 'DESCANSO'
-          const isSelectedNonToday = isSelected && !day.isToday
-          const circleColor = day.done && !isRest
-            ? '#22c55e'
+          const isDone = day.done && !isRest
+
+          // Letter color
+          const letterColor = isDone
+            ? '#22c35d'
+            : day.isToday || isSelected
+              ? '#1e3a5f'
+              : '#8c9eb2'
+          const letterWeight = day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_500Medium'
+
+          // Circle styles
+          const circleColor = isDone
+            ? '#22c35d'
             : day.isToday
-              ? '#f97316'
-              : isSelectedNonToday
-                ? 'transparent'
-                : day.canLog
-                  ? '#fff7ed'
-                  : 'transparent'
-          const numColor = day.done || day.isToday
-            ? 'white'
-            : isSelectedNonToday ? '#1e3a5f'
-            : day.canLog ? '#f97316' : '#6b7280'
-          const letterBold = day.isToday || isSelected
-          const hasBorder = day.canLog && !day.done && !day.isToday && !isSelectedNonToday
-          const circleBorderWidth = day.isToday || isSelectedNonToday ? 2 : hasBorder ? 1.5 : 0
-          const circleBorderColor = day.isToday && isSelected
-            ? '#1e3a5f'
-            : day.isToday
-              ? 'rgba(249,115,22,0.35)'
-              : isSelectedNonToday ? '#1e3a5f' : '#f97316'
+              ? '#1e3a5f'
+              : isSelected
+                ? '#e5edf2'
+                : '#e5edf2'
+          const circleBorder = day.isToday && isSelected
+            ? { borderWidth: 2, borderColor: '#f97316' }
+            : {}
+
+          // Number color
+          const numColor = isDone || day.isToday ? 'white' : isSelected ? '#1e3a5f' : '#8c9eb2'
+          const numWeight = day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular'
 
           return (
             <TouchableOpacity
@@ -66,8 +74,8 @@ export default function CalendarStrip({ days, selectedDow, onSelect, completedCo
             >
               <Text style={{
                 fontSize: 10,
-                fontFamily: letterBold ? 'Inter_700Bold' : 'Inter_500Medium',
-                color: day.isToday ? '#f97316' : isSelected ? '#1e3a5f' : '#9ca3af',
+                fontFamily: letterWeight,
+                color: letterColor,
               }}>
                 {day.letter}
               </Text>
@@ -75,15 +83,14 @@ export default function CalendarStrip({ days, selectedDow, onSelect, completedCo
                 width: 34, height: 34, borderRadius: 17,
                 backgroundColor: circleColor,
                 alignItems: 'center', justifyContent: 'center',
-                borderWidth: circleBorderWidth,
-                borderColor: circleBorderColor,
+                ...circleBorder,
               }}>
-                {day.done && !isRest ? (
-                  <Text style={{ fontSize: 14, color: 'white' }}>✓</Text>
+                {isDone ? (
+                  <Text style={{ fontSize: 12, color: 'white', fontFamily: 'Inter_700Bold' }}>✓</Text>
                 ) : (
                   <Text style={{
-                    fontSize: 13,
-                    fontFamily: day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
+                    fontSize: 12,
+                    fontFamily: numWeight,
                     color: numColor,
                   }}>
                     {day.dateNum}
@@ -94,8 +101,6 @@ export default function CalendarStrip({ days, selectedDow, onSelect, completedCo
           )
         })}
       </View>
-
-      <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
     </View>
   )
 }

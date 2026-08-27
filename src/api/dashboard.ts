@@ -2,6 +2,7 @@ import { apiFetch } from './client'
 
 export type TodaySession = {
   id: string
+  logId: string | null
   type: string
   durationMin: number
   zoneTarget: string
@@ -97,6 +98,7 @@ export type DashboardData = {
     seasonNumber: number
     adherencePct: number | null
   } | null
+  pendingSuggestionsCount: number
 }
 
 export async function getDashboard(): Promise<DashboardData> {

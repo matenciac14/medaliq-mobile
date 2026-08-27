@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MedaliqLogo } from '../../src/components/MedaliqLogo'
 import {
   View,
   Text,
@@ -84,9 +85,7 @@ export default function RegisterScreen() {
           alignItems: 'center',
           paddingTop: insets.top,
         }}>
-          <Text style={{ fontSize: 32, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-            Medal<Text style={{ color: '#f97316' }}>iq</Text>
-          </Text>
+          <MedaliqLogo variant="dark" size="lg" />
           <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.55)', marginTop: 8 }}>
             Empieza gratis, sin tarjeta.
           </Text>
