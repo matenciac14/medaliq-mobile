@@ -73,7 +73,7 @@ export default function HydrationWidget() {
             ) : (
               <>
                 <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#3b82f6', lineHeight: 19 }}>{liters}</Text>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#8c99a6' }}>/ {targetL} L</Text>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>/ {targetL} L</Text>
               </>
             )}
           </View>

@@ -1,18 +1,10 @@
 // DASH-MEAL-01 — Widget de comidas del dia (4 slots)
 // Muestra Desayuno/Almuerzo/Cena/Snack con estado logged/pending
 
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { apiFetch } from '../../api/client'
-
-type MealSlot = {
-  key: string
-  label: string
-  emoji: string
-  kcal: number | null
-}
 
 const SLOTS: { key: string; label: string; emoji: string }[] = [
   { key: 'BREAKFAST', label: 'Desayuno', emoji: '🌅' },
@@ -21,29 +13,24 @@ const SLOTS: { key: string; label: string; emoji: string }[] = [
   { key: 'SNACK',     label: 'Snack',    emoji: '🍎' },
 ]
 
-export default function MealSlotsWidget() {
-  const router = useRouter()
-  const [slots, setSlots] = useState<MealSlot[]>(
-    SLOTS.map(s => ({ ...s, kcal: null }))
-  )
-  const [loading, setLoading] = useState(true)
+type Props = {
+  logs?: { mealType: string; kcal: number }[] | null
+}
 
-  useEffect(() => {
-    apiFetch<{ logs: { mealType: string; kcal: number }[] }>('/api/mobile/nutrition/log')
-      .then(data => {
-        const logs = data.logs ?? []
-        const kcalByType: Record<string, number> = {}
-        for (const log of logs) {
-          kcalByType[log.mealType] = (kcalByType[log.mealType] ?? 0) + (log.kcal ?? 0)
-        }
-        setSlots(SLOTS.map(s => ({
-          ...s,
-          kcal: kcalByType[s.key] ? Math.round(kcalByType[s.key]) : null,
-        })))
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+export default function MealSlotsWidget({ logs }: Props) {
+  const router = useRouter()
+  const loading = !logs
+
+  const slots = useMemo(() => {
+    const kcalByType: Record<string, number> = {}
+    for (const log of logs ?? []) {
+      kcalByType[log.mealType] = (kcalByType[log.mealType] ?? 0) + (log.kcal ?? 0)
+    }
+    return SLOTS.map(s => ({
+      ...s,
+      kcal: kcalByType[s.key] ? Math.round(kcalByType[s.key]) : null,
+    }))
+  }, [logs])
 
   return (
     <View style={{

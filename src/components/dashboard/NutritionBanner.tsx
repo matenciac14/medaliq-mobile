@@ -1,11 +1,10 @@
 // KcalHeroCard/[Progress] — Circular ring progress + macros (matches Figma 5325:139)
-// Fetches consumed data from /api/mobile/nutrition/log, receives target from props
 
-import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import * as Haptics from 'expo-haptics'
-import { apiFetch } from '../../api/client'
+
+type Consumed = { kcal: number; proteinG: number; carbsG: number; fatG: number }
 
 type Props = {
   kcal: number
@@ -13,10 +12,9 @@ type Props = {
   carbsG: number
   fatG: number
   label: string
+  consumed?: Consumed | null
   onPress: () => void
 }
-
-type Consumed = { kcal: number; proteinG: number; carbsG: number; fatG: number }
 
 function RingProgress({ size, stroke, pct, color, bgColor }: {
   size: number; stroke: number; pct: number; color: string; bgColor: string
@@ -50,28 +48,19 @@ function MacroRing({ label, current, target, color, bgColor }: {
   return (
     <View style={{ alignItems: 'center', gap: 4, flex: 1 }}>
       <RingProgress size={40} stroke={4} pct={pct} color={color} bgColor={bgColor} />
-      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#1f3b5e' }}>
+      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
         {current}g
       </Text>
-      <Text style={{ fontSize: 9, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>
+      <Text style={{ fontSize: 9, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
         {label}
       </Text>
     </View>
   )
 }
 
-export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, onPress }: Props) {
-  const [consumed, setConsumed] = useState<Consumed>({ kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    apiFetch<{ totals: Consumed }>('/api/mobile/nutrition/log')
-      .then(d => {
-        if (d.totals) setConsumed(d.totals)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, consumed: consumedProp, onPress }: Props) {
+  const consumed = consumedProp ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
+  const loading = !consumedProp
 
   const remaining = Math.max(0, kcal - consumed.kcal)
   const kcalPct = kcal > 0 ? (consumed.kcal / kcal) * 100 : 0
@@ -82,7 +71,9 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, onPress 
       activeOpacity={0.85}
       style={{
         backgroundColor: 'white', borderRadius: 20, overflow: 'hidden',
-        borderWidth: 1, borderColor: '#f0f2f5',
+        borderWidth: 1, borderColor: '#f3f4f6',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
       }}
     >
       <View style={{ flexDirection: 'row', padding: 20, gap: 20 }}>
@@ -91,13 +82,13 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, onPress 
           <RingProgress size={120} stroke={10} pct={kcalPct} color="#f97316" bgColor="#fef3e2" />
           <View style={{ position: 'absolute', alignItems: 'center' }}>
             {loading ? (
-              <Text style={{ fontSize: 12, color: '#8c99a6' }}>...</Text>
+              <Text style={{ fontSize: 12, color: '#9ca3af' }}>...</Text>
             ) : (
               <>
-                <Text style={{ fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1f3b5e', lineHeight: 24 }}>
+                <Text style={{ fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1e3a5f', lineHeight: 24 }}>
                   {remaining.toLocaleString()}
                 </Text>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
                   restantes
                 </Text>
               </>
@@ -109,19 +100,19 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, onPress 
         <View style={{ flex: 1, justifyContent: 'center', gap: 10 }}>
           {/* Title block */}
           <View style={{ gap: 2 }}>
-            <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72 }}>
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#9ca3af', letterSpacing: 0.72 }}>
               CALORIAS DE HOY
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1f3b5e' }}>
+              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
                 {kcal.toLocaleString()}
               </Text>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8c99a6' }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
                 kcal objetivo
               </Text>
             </View>
             {!loading && (
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
                 {consumed.kcal.toLocaleString()} kcal consumidas
               </Text>
             )}

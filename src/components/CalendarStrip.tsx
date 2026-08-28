@@ -20,50 +20,64 @@ type Props = {
 }
 
 export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
-  // Progress bar: count completed non-rest days for fill width
-  const totalActive = days.filter(d => d.type && d.type !== 'DESCANSO').length
-  const doneCount = days.filter(d => d.done && d.type && d.type !== 'DESCANSO').length
-  const fillPct = totalActive > 0 ? (doneCount / totalActive) * 100 : 0
-
   return (
     <View style={{ backgroundColor: 'white' }}>
-      {/* Continuous progress bar */}
-      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-        <View style={{ height: 2, backgroundColor: '#e5e7eb', borderRadius: 1 }}>
-          <View style={{ height: 2, backgroundColor: '#22c35d', borderRadius: 1, width: `${fillPct}%` as any }} />
-        </View>
+      {/* Segmented progress bar — one segment per day */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 8, gap: 3 }}>
+        {days.map(day => {
+          const isRest = !day.type || day.type === 'DESCANSO'
+          const isDone = day.done && !isRest
+          return (
+            <View
+              key={`seg-${day.dow}`}
+              style={{
+                flex: 1, height: 3, borderRadius: 1.5,
+                backgroundColor: isDone ? '#22c55e' : '#e5e7eb',
+              }}
+            />
+          )
+        })}
       </View>
 
       {/* Day cells */}
-      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16 }}>
+      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 12 }}>
         {days.map(day => {
           const isSelected = day.dow === selectedDow
           const isRest = !day.type || day.type === 'DESCANSO'
           const isDone = day.done && !isRest
+          const hasSession = !!day.type && day.type !== 'DESCANSO'
 
-          // Letter color
-          const letterColor = isDone
-            ? '#22c35d'
-            : day.isToday || isSelected
-              ? '#1e3a5f'
-              : '#8c9eb2'
-          const letterWeight = day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_500Medium'
-
-          // Circle styles
-          const circleColor = isDone
-            ? '#22c35d'
-            : day.isToday
-              ? '#1e3a5f'
+          // Circle bg
+          const circleColor = day.isToday
+            ? '#ea580c'
+            : isDone
+              ? '#22c55e'
               : isSelected
-                ? '#e5edf2'
-                : '#e5edf2'
-          const circleBorder = day.isToday && isSelected
-            ? { borderWidth: 2, borderColor: '#f97316' }
-            : {}
+                ? 'white'
+                : hasSession
+                  ? '#1e3a5f'
+                  : 'white'
+
+          // Circle border
+          const circleBorder = isSelected && !day.isToday && !isDone
+            ? { borderWidth: 2, borderColor: '#1e3a5f' }
+            : !hasSession && !day.isToday && !isDone
+              ? { borderWidth: 1, borderColor: '#e5e7eb' }
+              : {}
 
           // Number color
-          const numColor = isDone || day.isToday ? 'white' : isSelected ? '#1e3a5f' : '#8c9eb2'
-          const numWeight = day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular'
+          const numColor = day.isToday || isDone || hasSession
+            ? 'white'
+            : isSelected
+              ? '#1e3a5f'
+              : '#9ca3af'
+
+          // Letter color
+          const letterColor = day.isToday
+            ? '#ea580c'
+            : isSelected
+              ? '#1e3a5f'
+              : '#9ca3af'
 
           return (
             <TouchableOpacity
@@ -73,24 +87,24 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
               activeOpacity={0.7}
             >
               <Text style={{
-                fontSize: 10,
-                fontFamily: letterWeight,
+                fontSize: 11,
+                fontFamily: day.isToday || isSelected ? 'Inter_600SemiBold' : 'Inter_500Medium',
                 color: letterColor,
               }}>
                 {day.letter}
               </Text>
               <View style={{
-                width: 34, height: 34, borderRadius: 17,
+                width: 40, height: 40, borderRadius: 20,
                 backgroundColor: circleColor,
                 alignItems: 'center', justifyContent: 'center',
                 ...circleBorder,
               }}>
-                {isDone ? (
-                  <Text style={{ fontSize: 12, color: 'white', fontFamily: 'Inter_700Bold' }}>✓</Text>
+                {isDone && !day.isToday ? (
+                  <Text style={{ fontSize: 15, color: 'white', fontFamily: 'Inter_700Bold' }}>✓</Text>
                 ) : (
                   <Text style={{
-                    fontSize: 12,
-                    fontFamily: numWeight,
+                    fontSize: 15,
+                    fontFamily: day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
                     color: numColor,
                   }}>
                     {day.dateNum}

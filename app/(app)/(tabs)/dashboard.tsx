@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Modal } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Modal } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -20,6 +20,15 @@ import NutritionBanner from '../../../src/components/dashboard/NutritionBanner'
 import HydrationWidget from '../../../src/components/dashboard/HydrationWidget'
 import MealSlotsWidget from '../../../src/components/dashboard/MealSlotsWidget'
 import CalendarStrip, { type DayCell } from '../../../src/components/CalendarStrip'
+import SundayShareBanner from '../../../src/components/dashboard/SundayShareBanner'
+import RecentActivityCard from '../../../src/components/dashboard/RecentActivityCard'
+import QuickSessionFeedback from '../../../src/components/dashboard/QuickSessionFeedback'
+import FreeTodayCard from '../../../src/components/dashboard/FreeTodayCard'
+import DesbloquearProCard from '../../../src/components/dashboard/DesbloquearProCard'
+import FindCoachCard from '../../../src/components/dashboard/FindCoachCard'
+import ProMetricsCard from '../../../src/components/dashboard/ProMetricsCard'
+import FreeMetricsCard from '../../../src/components/dashboard/FreeMetricsCard'
+import TodayLogCard from '../../../src/components/dashboard/TodayLogCard'
 
 const STREAK_MILESTONE_KEY = 'medaliq:streak_milestone_seen'
 const STREAK_MILESTONES = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52]
@@ -88,377 +97,6 @@ function sessionsToCalendarDays(sessions: WeekSession[], weekOffset: number): Da
 }
 
 
-
-
-// -- Consolidated Metrics Cards (match web MobileCardsSection) ----------------
-
-const FORM_ACCENT = {
-  good:     { accent: '#22c55e', statusText: '#166534', chipBg: '#dcfce7', chipText: '#166534', label: 'Buena forma' },
-  moderate: { accent: '#f59e0b', statusText: '#92400e', chipBg: '#fef3c7', chipText: '#92400e', label: 'Moderado' },
-  rest:     { accent: '#ef4444', statusText: '#991b1b', chipBg: '#fee2e2', chipText: '#991b1b', label: 'Descanso' },
-}
-
-function MetricCol({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color }}>{value}</Text>
-        {unit ? <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{unit}</Text> : null}
-      </View>
-      <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{label}</Text>
-    </View>
-  )
-}
-
-function ProMetricsCard({ formStatus, formMessage, lastCheckIn, formCheckInDaysAgo, currentWeight, targetWeight, weeklyWeightChange, weightProgressPct, currentVolume, volumeDeltaPct, isRecomp, raceDays }: {
-  formStatus: 'good' | 'moderate' | 'rest'
-  formMessage: string
-  lastCheckIn: { hardestSessionRpe: number | null; energyLevel: number | null; sleepHours: number | null } | null
-  formCheckInDaysAgo: number | null
-  currentWeight: number | null
-  targetWeight: number | null
-  weeklyWeightChange: number | null
-  weightProgressPct: number | null
-  currentVolume: number | null
-  volumeDeltaPct: number | null
-  isRecomp: boolean
-  raceDays: number | null
-}) {
-  const c = FORM_ACCENT[formStatus]
-  const daysLabel = formCheckInDaysAgo === 0 ? 'hoy' : formCheckInDaysAgo === 1 ? 'ayer' : formCheckInDaysAgo != null ? `hace ${formCheckInDaysAgo} d` : ''
-
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#f3f4f6', ...SHADOW }}>
-      <View style={{ height: 3, backgroundColor: c.accent }} />
-      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
-        {/* Row 1: status + chip + ago */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: c.statusText }}>{formMessage}</Text>
-            <View style={{ backgroundColor: c.chipBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: c.chipText }}>{c.label}</Text>
-            </View>
-          </View>
-          {daysLabel ? <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{daysLabel}</Text> : null}
-        </View>
-
-        {/* Row 2: 4 metrics */}
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          <MetricCol label="Peso" value={currentWeight ? currentWeight.toFixed(1) : '--'} unit="kg" color="#1e3a5f" />
-          <MetricCol label="RPE" value={lastCheckIn?.hardestSessionRpe != null ? String(lastCheckIn.hardestSessionRpe) : '--'} unit="/10" color="#ea580c" />
-          <MetricCol label="Energia" value={lastCheckIn?.energyLevel != null ? `${lastCheckIn.energyLevel}/5` : '--'} unit="" color="#22c55e" />
-          <MetricCol label="Carga" value={currentVolume != null ? String(currentVolume) : '--'} unit="km" color="#1e3a5f" />
-        </View>
-
-        {/* Row 3: race countdown or weight progress */}
-        {raceDays != null && raceDays > 0 && !isRecomp && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eff6ff', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-            <Text style={{ fontSize: 12 }}>🏁</Text>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f', flex: 1 }}>{raceDays} dias para tu carrera</Text>
-            {weightProgressPct != null && (
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Peso {weightProgressPct}%</Text>
-            )}
-          </View>
-        )}
-
-        {isRecomp && currentWeight != null && targetWeight != null && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eff6ff', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-            <Text style={{ fontSize: 12 }}>🎯</Text>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f', flex: 1 }}>
-              {Math.abs(currentWeight - targetWeight).toFixed(1)} kg restantes
-            </Text>
-            {weeklyWeightChange != null && (
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: weeklyWeightChange < 0 ? '#22c55e' : '#ef4444' }}>
-                {weeklyWeightChange > 0 ? '+' : ''}{weeklyWeightChange.toFixed(1)} kg/sem
-              </Text>
-            )}
-          </View>
-        )}
-
-        {volumeDeltaPct != null && (
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: volumeDeltaPct >= 0 ? '#22c55e' : '#ef4444' }}>
-            {volumeDeltaPct >= 0 ? '↑' : '↓'} {Math.abs(volumeDeltaPct)}% carga vs sem. anterior
-          </Text>
-        )}
-      </View>
-    </View>
-  )
-}
-
-function FreeMetricsCard({ currentWeight, targetWeight, weeklyWeightChange, weightProgressPct }: {
-  currentWeight: number | null
-  targetWeight: number | null
-  weeklyWeightChange: number | null
-  weightProgressPct: number | null
-}) {
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#f3f4f6', ...SHADOW }}>
-      <View style={{ height: 3, backgroundColor: '#1e3a5f' }} />
-      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Tu progreso</Text>
-          {weeklyWeightChange != null && (
-            <View style={{ backgroundColor: weeklyWeightChange < 0 ? '#dcfce7' : '#fee2e2', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: weeklyWeightChange < 0 ? '#166534' : '#ef4444' }}>
-                {weeklyWeightChange > 0 ? '+' : ''}{weeklyWeightChange.toFixed(1)} kg/sem
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          <MetricCol label="Peso" value={currentWeight ? currentWeight.toFixed(1) : '--'} unit="kg" color="#1e3a5f" />
-          <MetricCol label="Meta" value={targetWeight ? String(targetWeight) : '--'} unit="kg" color="#22c55e" />
-          <MetricCol label="Progreso" value={weightProgressPct != null ? String(weightProgressPct) : '--'} unit="%" color="#1e3a5f" />
-        </View>
-      </View>
-    </View>
-  )
-}
-
-// DAILY-02 -- widget de registro diario (peso + energia)
-function TodayLogCard({ initial }: { initial: { weightKg: number | null; energyLevel: number | null } | null }) {
-  const [weightInput, setWeightInput] = useState(initial?.weightKg != null ? String(initial.weightKg) : '')
-  const [energy, setEnergy] = useState<number | null>(initial?.energyLevel ?? null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [open, setOpen] = useState(!initial)
-
-  async function save() {
-    const weightKg = weightInput ? parseFloat(weightInput) : undefined
-    if (!weightKg && !energy) return
-    setSaving(true)
-    try {
-      await apiFetch('/api/mobile/metrics/log', {
-        method: 'POST',
-        body: JSON.stringify({ ...(weightKg && { weightKg }), ...(energy && { energyLevel: energy }) }),
-      })
-      setSaved(true)
-      setOpen(false)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 14, gap: 10 }}>
-      <TouchableOpacity onPress={() => setOpen(o => !o)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 15 }}>📋</Text>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Registro de hoy</Text>
-          {(initial || saved) && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#22c55e' }} />}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {initial?.weightKg && !open && (
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#374151' }}>{initial.weightKg} kg</Text>
-          )}
-          {initial?.energyLevel && !open && (
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#f97316' }}>E{initial.energyLevel}/5</Text>
-          )}
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
-        </View>
-      </TouchableOpacity>
-
-      {open && (
-        <View style={{ gap: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280', width: 60 }}>Peso (kg)</Text>
-            <TextInput
-              value={weightInput}
-              onChangeText={setWeightInput}
-              placeholder="ej. 70.5"
-              placeholderTextColor="#d1d5db"
-              keyboardType="decimal-pad"
-              style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827', backgroundColor: '#f9fafb' }}
-            />
-          </View>
-          <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Energia</Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {[1,2,3,4,5].map(n => (
-                <TouchableOpacity
-                  key={n}
-                  onPress={() => { Haptics.selectionAsync(); setEnergy(n) }}
-                  style={{ flex: 1, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: energy === n ? '#f97316' : '#f3f4f6' }}
-                >
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: energy === n ? 'white' : '#6b7280' }}>{n}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center' }}>1 = sin energía · 5 = excelente</Text>
-          </View>
-          <TouchableOpacity
-            onPress={save}
-            disabled={saving}
-            style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>{saving ? 'Guardando...' : 'Guardar'}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  )
-}
-
-// -- Figma FREE "Today" card (centered, no session) -------------------------
-function FreeTodayCardFigma({ router }: { router: ReturnType<typeof useRouter> }) {
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
-      <View style={{ height: 3, backgroundColor: '#ea580c' }} />
-      <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
-        {/* HOY label */}
-        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#ea580c', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-          ● HOY
-        </Text>
-        {/* Icon + title */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ fontSize: 28 }}>🎯</Text>
-          <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
-            Sin sesión
-          </Text>
-        </View>
-        <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-          Sin sesión planificada
-        </Text>
-        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-          Registra tu entrenamiento de hoy
-        </Text>
-        <TouchableOpacity
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/log-run') }}
-          activeOpacity={0.85}
-          style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 10, alignItems: 'center', width: '100%', marginTop: 2 }}
-        >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
-            Registrar actividad →
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  )
-}
-
-// -- Quick session feedback (Figma: ¿Cómo te sentiste?) ----------------------
-function QuickSessionFeedback({ sessionType, durationMin, zoneTarget, logId }: {
-  sessionType: string
-  durationMin: number
-  zoneTarget: string
-  logId: string | null
-}) {
-  const [selected, setSelected] = useState<'tired' | 'regular' | 'strong' | null>(null)
-  const label = SESSION_LABELS[sessionType] ?? sessionType.toLowerCase().replace(/_/g, ' ')
-  const icon = SESSION_ICONS[sessionType] ?? '\uD83C\uDFC5'
-  const zone = zoneTarget && zoneTarget !== 'N/A' && zoneTarget !== 'LIBRE' ? ` · ${zoneTarget}` : ''
-
-  const handleSelect = async (feeling: 'tired' | 'regular' | 'strong') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    setSelected(feeling)
-    if (logId) {
-      const rpeMap = { tired: 3, regular: 5, strong: 8 }
-      try { await apiFetch(`/api/mobile/log/session/${logId}`, { method: 'PATCH', body: JSON.stringify({ rpe: rpeMap[feeling] }) }) } catch {}
-    }
-  }
-
-  const options = [
-    { key: 'tired' as const, icon: '\uD83C\uDF19', label: 'Cansado' },
-    { key: 'regular' as const, icon: '\u23F0', label: 'Regular' },
-    { key: 'strong' as const, icon: '\uD83D\uDCAA', label: 'Fuerte' },
-  ]
-
-  return (
-    <View style={{ backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', ...SHADOW }}>
-      <View style={{ height: 3, backgroundColor: '#22c55e' }} />
-      <View style={{ padding: 14 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: 'white', fontSize: 10, fontFamily: 'Inter_700Bold' }}>{'\u2713'}</Text>
-          </View>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Sesión de hoy
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <Text style={{ fontSize: 20 }}>{icon}</Text>
-          <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
-            {label} · {durationMin} min{zone}
-          </Text>
-        </View>
-        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280', textAlign: 'center', marginBottom: 10 }}>
-          {'\u00BF'}Cómo te sentiste?
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {options.map(opt => (
-            <TouchableOpacity
-              key={opt.key}
-              onPress={() => handleSelect(opt.key)}
-              activeOpacity={0.8}
-              style={{
-                flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12,
-                borderWidth: selected === opt.key ? 2 : 1,
-                borderColor: selected === opt.key ? '#1e3a5f' : '#e5e7eb',
-                backgroundColor: selected === opt.key ? '#f0f4f8' : 'white',
-              }}
-            >
-              <Text style={{ fontSize: 20, marginBottom: 4 }}>{opt.icon}</Text>
-              <Text style={{ fontSize: 11, fontFamily: selected === opt.key ? 'Inter_700Bold' : 'Inter_600SemiBold', color: selected === opt.key ? '#1e3a5f' : '#6b7280' }}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  )
-}
-
-// WeekActivityCard and TuActividadCard removed — replaced by FreeMetricsCard + RecentActivity inline
-
-// -- Figma DS "Card Desbloquea Pro" (3186:31) — warm light bg ----------------
-function DesbloquearProCard({ router }: { router: ReturnType<typeof useRouter> }) {
-  return (
-    <TouchableOpacity
-      onPress={() => router.push('/(app)/pricing' as any)}
-      activeOpacity={0.85}
-      style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: 'rgba(234,89,9,0.3)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-    >
-      <View style={{ flex: 1, gap: 3 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 14 }}>{'\u26A1'}</Text>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#993300' }}>
-            Desbloquea Plan Pro
-          </Text>
-        </View>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8c4d1a' }}>
-          Check-in · zonas · progreso
-        </Text>
-      </View>
-      <View style={{ backgroundColor: '#ea5909', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, width: 72, alignItems: 'center' }}>
-        <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Ver Pro</Text>
-      </View>
-    </TouchableOpacity>
-  )
-}
-
-// -- Figma DS "Banner_Entrenador" (3405:63) — navy + accent bar --------------
-function FindCoachCard({ router }: { router: ReturnType<typeof useRouter> }) {
-  return (
-    <TouchableOpacity
-      onPress={() => router.push('/(app)/find-coach' as any)}
-      activeOpacity={0.85}
-      style={{ backgroundColor: '#1e3a5f', borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 14, overflow: 'hidden' }}
-    >
-      <View style={{ width: 4, alignSelf: 'stretch', backgroundColor: '#ea5809' }} />
-      <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
-        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-          🎯  Encuentra tu entrenador
-        </Text>
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#b2cce5' }}>
-          Planes personalizados con un experto
-        </Text>
-      </View>
-      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#ea5809' }}>Ver coaches {'\u2192'}</Text>
-    </TouchableOpacity>
-  )
-}
-
 function buildWeekShareProps(weekSessions: WeekSession[], completedCount: number, totalTraining: number): ShareCardProps {
   const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
   const now = new Date()
@@ -484,9 +122,49 @@ function buildWeekShareProps(weekSessions: WeekSession[], completedCount: number
   }
 }
 
-const RUN_TYPE_LABELS: Record<string, string> = {
-  RODAJE_Z2: 'Rodaje Z2', FARTLEK: 'Fartlek', TEMPO: 'Tempo',
-  INTERVALOS: 'Intervalos', TIRADA_LARGA: 'Tirada larga', OTRO: 'Sesion libre',
+// -- RecoveryCard (matches web TodaySessionMobile RecoveryCard) ----------------
+function RecoveryCardMobile({ planName, recoveryDaysLeft, router }: {
+  planName: string | null
+  recoveryDaysLeft: number | null
+  router: ReturnType<typeof useRouter>
+}) {
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+      <View style={{ height: 3, backgroundColor: '#22c55e' }} />
+      <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 18 }}>🏆</Text>
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#22c55e', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+            Temporada completada
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ fontSize: 28 }}>🎖️</Text>
+          <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
+            ¡Completado!
+          </Text>
+        </View>
+        <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+          {planName ?? 'Plan terminado'}
+        </Text>
+        {recoveryDaysLeft != null && recoveryDaysLeft > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 12 }}>⏱</Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#15803d' }}>
+              Recuperación activa · {recoveryDaysLeft} días restantes
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/(tabs)/progress' as any) }}
+          activeOpacity={0.85}
+          style={{ backgroundColor: '#22c55e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4 }}
+        >
+          <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Ver resumen de temporada →</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
 }
 
 export default function DashboardScreen() {
@@ -520,6 +198,12 @@ export default function DashboardScreen() {
     staleTime: 30_000,
   })
   const unreadCount = notifData?.unreadCount ?? 0
+
+  const { data: nutritionLogData } = useQuery({
+    queryKey: ['nutrition-log-today'],
+    queryFn: () => apiFetch<{ totals: { kcal: number; proteinG: number; carbsG: number; fatG: number }; logs: { mealType: string; kcal: number }[] }>('/api/mobile/nutrition/log'),
+    staleTime: 60_000,
+  })
 
   // Milestone detection — show once per milestone level
   useEffect(() => {
@@ -693,31 +377,31 @@ export default function DashboardScreen() {
         </View>
 
         {/* DateLabel — centered */}
-        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#999', textAlign: 'center', marginTop: 6 }}>
+        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 6 }}>
           {formatDate()}
         </Text>
 
-        {/* WeekNav */}
+        {/* WeekNav — matches web WeekNavBar variant="dark" */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', marginTop: 6, marginHorizontal: 16,
-          height: 26,
+          backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, height: 40,
         }}>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); setFreeWeekOffset((w: number) => w - 1) }}
-            style={{ width: 26, height: 26, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, marginLeft: 2 }}
           >
-            <Ionicons name="chevron-back" size={14} color="#1e3a5f" />
+            <Ionicons name="chevron-back" size={16} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
-          <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, fontFamily: 'Inter_500Medium', color: '#1e3a5f' }}>
+          <Text style={{ flex: 1, textAlign: 'center', fontSize: 13, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
             {d.planData
               ? `Semana ${d.planData.currentWeek}  ·  ${getCurrentWeekLabel()}`
               : getCurrentWeekLabel()}
           </Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); setFreeWeekOffset((w: number) => w + 1) }}
-            style={{ width: 26, height: 26, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, marginRight: 2 }}
           >
-            <Ionicons name="chevron-forward" size={14} color="#1e3a5f" />
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -739,29 +423,15 @@ export default function DashboardScreen() {
             />
 
             {/* HOY card */}
-            <FreeTodayCardFigma router={router} />
+            <FreeTodayCard router={router} />
 
             {/* SHARE-08: Sunday weekly share */}
             {isSunday && d.completedCount > 0 && (
-              <TouchableOpacity
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#1e3a5f', borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' }}
-              >
-                <View style={{ width: 3, position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#ea580c' }} />
-                <Text style={{ fontSize: 22 }}>{'\uD83D\uDCC5'}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                    {d.completedCount}/{d.totalTraining} sesiones esta semana
-                  </Text>
-                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-                    Comparte tu resumen semanal {'\u2197'}
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: '#ea580c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
-                  <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>Compartir</Text>
-                </View>
-              </TouchableOpacity>
+              <SundayShareBanner
+                completedCount={d.completedCount}
+                totalTraining={d.totalTraining}
+                onPress={() => { setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
+              />
             )}
 
             {/* Nutricion */}
@@ -772,6 +442,7 @@ export default function DashboardScreen() {
                 carbsG={d.nutritionTarget.carbsG}
                 fatG={d.nutritionTarget.fatG}
                 label={d.nutritionTarget.label}
+                consumed={nutritionLogData?.totals ?? null}
                 onPress={() => router.push('/(app)/(tabs)/nutrition')}
               />
             )}
@@ -780,7 +451,7 @@ export default function DashboardScreen() {
             <HydrationWidget />
 
             {/* Alimentacion */}
-            <MealSlotsWidget />
+            <MealSlotsWidget logs={nutritionLogData?.logs ?? null} />
 
             {/* Metricas — peso */}
             <FreeMetricsCard
@@ -795,39 +466,7 @@ export default function DashboardScreen() {
 
             {/* Actividad reciente */}
             {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
-              <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#f3f4f6', ...SHADOW }}>
-                <View style={{ height: 3, backgroundColor: '#ea580c' }} />
-                <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                    Actividad reciente
-                  </Text>
-                  {d.streakDays > 0 && (
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>🔥 {d.streakDays} dias de racha</Text>
-                  )}
-                </View>
-                {(d.recentActivity ?? []).slice(0, 4).map((a, i) => (
-                  <View
-                    key={i}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#f3f4f6' }}
-                  >
-                    <Text style={{ fontSize: 22 }}>{SESSION_ICONS[a.type] ?? '🏅'}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-                        {SESSION_LABELS[a.type] ?? a.type.toLowerCase().replace(/_/g, ' ')}
-                      </Text>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 1 }}>
-                        {new Date(a.completedAt).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        {a.durationMin ? ` · ${a.durationMin} min` : ''}
-                      </Text>
-                    </View>
-                    {a.rpe != null && (
-                      <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>RPE {a.rpe}</Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </View>
+              <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
             )}
 
             {/* CTAs */}
@@ -888,133 +527,89 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             )}
 
-            {/* #14 — Plan Completion Card (RECOVERY mode) */}
-            {d.mode === 'RECOVERY' && d.completedPlanName && (
-              <View style={{ borderRadius: 16, overflow: 'hidden', ...SHADOW }}>
-                <View style={{ height: 3, backgroundColor: '#22c55e' }} />
-                <View style={{ backgroundColor: '#f0fdf4', padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                  <Text style={{ fontSize: 32 }}>{'🏆'}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#16a34a', letterSpacing: 1.5, textTransform: 'uppercase' }}>Plan completado</Text>
-                    <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#14532d', marginTop: 4 }}>{d.completedPlanName}</Text>
-                    <Text style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>
-                      {d.recoveryDaysLeft != null && d.recoveryDaysLeft > 0
-                        ? `Recuperación activa · ${d.recoveryDaysLeft} días restantes`
-                        : 'Listo para un nuevo plan'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Today session card */}
+            {/* Today session card — white card + accent bar (matches web/Figma) */}
             {d.todaySession ? (
-              <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
-                <LinearGradient
-                  colors={['#1e3a5f', '#2d5a8e']}
-                  style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 8 }}
-                >
+              <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
+                <View style={{ height: 3, backgroundColor: '#1e3a5f' }} />
+                <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.55)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                      HOY
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#ea580c', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                      ● HOY
                     </Text>
-                    {d.todaySession.zoneTarget ? (
-                      <View style={{ backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#86efac' }}>
-                          {'\u25CF'} Zona {d.todaySession.zoneTarget}
-                        </Text>
+                    {d.todaySession.completed ? (
+                      <View style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Completada</Text>
                       </View>
-                    ) : d.todaySession.id === 'gym-today' ? (
-                      <View style={{ backgroundColor: 'rgba(234,89,12,0.28)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#fdba74' }}>
-                          {'\u25CF'} Fuerza
+                    ) : d.todaySession.zoneTarget && d.todaySession.zoneTarget !== 'N/A' ? (
+                      <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#15803d' }}>
+                          Zona {d.todaySession.zoneTarget}
                         </Text>
                       </View>
                     ) : null}
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={{ fontSize: 28 }}>{SESSION_ICONS[d.todaySession.type] ?? '\uD83C\uDFC5'}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-                        {d.todaySession.id === 'gym-today' && d.workoutName
-                          ? d.workoutName
-                          : `${d.todaySession.durationMin} min`}
-                      </Text>
-                    </View>
-                    {d.todaySession.completed && (
-                      <View style={{ backgroundColor: '#22c55e', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                        <Text style={{ color: 'white', fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{'\u2713'} Hecha</Text>
-                      </View>
-                    )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontSize: 28 }}>{d.todaySession.completed ? '✓' : (SESSION_ICONS[d.todaySession.type] ?? '🏅')}</Text>
+                    <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
+                      {d.todaySession.id === 'gym-today' && d.workoutName
+                        ? d.workoutName
+                        : `${d.todaySession.durationMin} min`}
+                    </Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter_400Regular' }}>
-                    {d.todaySession.id === 'gym-today' ? 'Entreno de fuerza' : d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
+                    {SESSION_LABELS[d.todaySession.type] ?? d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
                   </Text>
-                </LinearGradient>
-                {d.todaySession.completed ? (
-                  d.todaySession.id === 'gym-today' && (
-                    <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
-                      <TouchableOpacity
-                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/gym') }}
-                        activeOpacity={0.85}
-                        style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
-                      >
-                        <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Ver resumen →</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )
-                ) : (
-                  <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                        if (d.todaySession!.id === 'gym-today') {
-                          router.push('/(app)/(tabs)/gym')
-                        } else {
-                          router.push({
-                            pathname: '/(app)/log',
-                            params: {
-                              sessionId: d.todaySession!.id,
-                              type: d.todaySession!.type,
-                              duration: String(d.todaySession!.durationMin),
-                              zone: d.todaySession!.zoneTarget,
-                            },
-                          })
-                        }
-                      }}
-                      activeOpacity={0.85}
-                      style={{ backgroundColor: '#f97316', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
-                    >
-                      <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>
-                        {d.todaySession!.id === 'gym-today' ? 'Ir al Entreno →' : 'Registrar sesión'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            ) : d.mode === 'RECOVERY' ? (
-              <View style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
-                <View style={{ height: 3, backgroundColor: '#22c55e' }} />
-                <View style={{ backgroundColor: '#f0fdf4', padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                  <Text style={{ fontSize: 32 }}>{'\uD83C\uDFC6'}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#16a34a', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
-                      Plan completado
+                  {d.todaySession.detailText ? (
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                      {d.todaySession.detailText}
                     </Text>
-                    <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#14532d' }}>
-                      {d.completedPlanName ?? 'Plan terminado'}
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                      if (d.todaySession!.completed) {
+                        router.push(d.todaySession!.id === 'gym-today' ? '/(app)/(tabs)/gym' : '/(app)/(tabs)/progress' as any)
+                      } else if (d.todaySession!.id === 'gym-today') {
+                        router.push('/(app)/(tabs)/gym')
+                      } else {
+                        router.push({
+                          pathname: '/(app)/log',
+                          params: {
+                            sessionId: d.todaySession!.id,
+                            type: d.todaySession!.type,
+                            duration: String(d.todaySession!.durationMin),
+                            zone: d.todaySession!.zoneTarget,
+                          },
+                        })
+                      }
+                    }}
+                    activeOpacity={0.85}
+                    style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4 }}
+                  >
+                    <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>
+                      {d.todaySession.completed ? 'Ver resumen →' : d.todaySession.id === 'gym-today' ? 'Ir al Entreno →' : 'Iniciar →'}
                     </Text>
-                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#4ade80', marginTop: 3 }}>
-                      {d.recoveryDaysLeft != null && d.recoveryDaysLeft > 0
-                        ? `Recuperación activa · ${d.recoveryDaysLeft} días restantes`
-                        : 'Listo para un nuevo plan'}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/progress' as any) }}
+                    activeOpacity={0.7}
+                    style={{ alignItems: 'center', marginTop: 2 }}
+                  >
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
+                      + Agregar otra actividad
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
               </View>
+            ) : d.mode === 'RECOVERY' ? (
+              <RecoveryCardMobile
+                planName={d.completedPlanName}
+                recoveryDaysLeft={d.recoveryDaysLeft}
+                router={router}
+              />
             ) : (
               <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}>
-                <Text style={{ fontSize: 28 }}>{'\uD83D\uDE34'}</Text>
+                <Text style={{ fontSize: 28 }}>😴</Text>
                 <View>
                   <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>Día de descanso</Text>
                   <Text style={{ fontSize: 13, color: '#6b7280', fontFamily: 'Inter_400Regular', marginTop: 2 }}>Recupera bien hoy</Text>
@@ -1022,22 +617,24 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            {/* #26 — Gym today card: when no running session but gym day is scheduled */}
+            {/* #26 — Gym today card (matches web GymTodayCard — white card + accent bar) */}
             {!d.todaySession && d.workoutName && d.weeklyRoutine?.days?.find(day => day.dow === todayDow && day.activity === 'GYM') && (
               <TouchableOpacity
                 onPress={() => router.push('/(app)/(tabs)/gym')}
-                style={{ borderRadius: 20, overflow: 'hidden', ...SHADOW }}
+                activeOpacity={0.85}
+                style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}
               >
-                <LinearGradient colors={['#1e3a5f', '#2d5a8e']} style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 8 }}>
-                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.55)', letterSpacing: 1.5, textTransform: 'uppercase' }}>Hoy</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={{ fontSize: 28 }}>{'💪'}</Text>
-                    <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>{d.workoutName}</Text>
+                <View style={{ height: 3, backgroundColor: '#22c55e' }} />
+                <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                    Hoy · Dia de Gym
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontSize: 28 }}>💪</Text>
+                    <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>{d.workoutName}</Text>
                   </View>
-                </LinearGradient>
-                <View style={{ backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12 }}>
-                  <View style={{ backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>Empezar</Text>
+                  <View style={{ backgroundColor: '#22c55e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>Iniciar sesion →</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1055,25 +652,11 @@ export default function DashboardScreen() {
 
             {/* SHARE-08: Sunday weekly share */}
             {isSunday && d.completedCount > 0 && (
-              <TouchableOpacity
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#1e3a5f', borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, overflow: 'hidden' }}
-              >
-                <View style={{ width: 3, position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#ea580c' }} />
-                <Text style={{ fontSize: 22 }}>{'\uD83D\uDCC5'}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                    {d.completedCount}/{d.totalTraining} sesiones esta semana
-                  </Text>
-                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-                    Comparte tu resumen semanal {'\u2197'}
-                  </Text>
-                </View>
-                <View style={{ backgroundColor: '#ea580c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
-                  <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: 'white' }}>Compartir</Text>
-                </View>
-              </TouchableOpacity>
+              <SundayShareBanner
+                completedCount={d.completedCount}
+                totalTraining={d.totalTraining}
+                onPress={() => { setSundayShareProps(buildWeekShareProps(d.weekSessions, d.completedCount, d.totalTraining)); setShowSundayShare(true) }}
+              />
             )}
 
             {/* Coach card (B2B) */}
@@ -1113,6 +696,7 @@ export default function DashboardScreen() {
                 carbsG={d.nutritionTarget.carbsG}
                 fatG={d.nutritionTarget.fatG}
                 label={d.nutritionTarget.label}
+                consumed={nutritionLogData?.totals ?? null}
                 onPress={() => router.push('/(app)/(tabs)/nutrition')}
               />
             )}
@@ -1121,7 +705,7 @@ export default function DashboardScreen() {
             <HydrationWidget />
 
             {/* Alimentacion */}
-            <MealSlotsWidget />
+            <MealSlotsWidget logs={nutritionLogData?.logs ?? null} />
 
             {/* Metricas consolidadas */}
             <ProMetricsCard
@@ -1143,40 +727,8 @@ export default function DashboardScreen() {
             <TodayLogCard initial={d.todayLog ?? null} />
 
             {/* Actividad reciente */}
-            {(d.recentActivity?.length ?? 0) > 0 && (
-              <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#f3f4f6', ...SHADOW }}>
-                <View style={{ height: 3, backgroundColor: '#ea580c' }} />
-                <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                    Actividad reciente
-                  </Text>
-                  {d.streakDays > 0 && (
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>🔥 {d.streakDays} dias de racha</Text>
-                  )}
-                </View>
-                {(d.recentActivity ?? []).slice(0, 4).map((a, i) => (
-                  <View
-                    key={i}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#f3f4f6' }}
-                  >
-                    <Text style={{ fontSize: 22 }}>{SESSION_ICONS[a.type] ?? '🏅'}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-                        {SESSION_LABELS[a.type] ?? a.type.toLowerCase().replace(/_/g, ' ')}
-                      </Text>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 1 }}>
-                        {new Date(a.completedAt).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        {a.durationMin ? ` · ${a.durationMin} min` : ''}
-                      </Text>
-                    </View>
-                    {a.rpe != null && (
-                      <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>RPE {a.rpe}</Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </View>
+            {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
+              <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
             )}
           </>
         )}
