@@ -115,7 +115,7 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
   const { mutate: submitLog, isPending } = useMutation({
     mutationFn: logFood,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
       handleClose()
     },
   })
@@ -157,7 +157,7 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
           logFood({ foodId: item.foodId, grams: item.grams, mealType, date })
         )
       )
-      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
       handleClose()
     } finally {
       setLoggingTemplateId(null)

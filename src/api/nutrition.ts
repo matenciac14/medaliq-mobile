@@ -70,6 +70,33 @@ export async function getNutrition(): Promise<NutritionData> {
   return apiFetch<NutritionData>('/api/mobile/nutrition')
 }
 
+// ── Unified nutrition page data (single fat endpoint) ─────────────────────────
+
+export type NutritionPageData = {
+  hasNutritionPlan: boolean
+  dayType: 'hard' | 'easy' | 'rest'
+  macros: NutritionData['macros']
+  targets: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null
+  intensity: string
+  plannedMeals: PlannedMealItem[]
+  templateMeals: any[] | null
+  foodLogs: FoodLogData
+  adherence: { kcalLogged: number; kcalTarget: number; pct: number }
+  waterMl: number
+  waterTarget: number
+  mealPlan: any | null
+  gymKcalBurned: number | null
+  planPhaseContext: string | null
+  pendingAdjustment: PendingNutritionAdjustment | null
+  proposals: FoodProposalSummary[]
+  weeklySummary: WeeklyNutritionSummary
+}
+
+export async function getNutritionPage(tz?: string): Promise<NutritionPageData> {
+  const params = tz ? `?tz=${encodeURIComponent(tz)}` : ''
+  return apiFetch<NutritionPageData>(`/api/mobile/nutrition/today${params}`)
+}
+
 export async function getFoodLogs(date?: string): Promise<FoodLogData> {
   const param = date ? `?date=${date}` : ''
   return apiFetch<FoodLogData>(`/api/mobile/nutrition/log${param}`)

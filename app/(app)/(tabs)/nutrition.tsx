@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useState, useMemo, useCallback } from 'react'
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput, RefreshControl } from 'react-native'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, getMyProposals, getWaterLog, logWater, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary } from '../../../src/api/nutrition'
+import { getNutritionPage, deleteFoodLog, acceptNutritionAdjustment, rejectNutritionAdjustment, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, logWater, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary, type NutritionPageData } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
 import NutritionProgressCard from '../../../src/components/dashboard/NutritionProgressCard'
@@ -122,25 +122,19 @@ function MealList({ mealPlan, dayType }: { mealPlan: any; dayType: string }) {
 
 const WATER_QUICK_ADD = [250, 500, 750]
 
-function HydrationSection({ waterMlTarget: targetFromNutrition }: { waterMlTarget?: number; fallbackL?: number }) {
+function HydrationSection({ mlLogged: mlLoggedProp, waterTarget: targetProp }: { mlLogged: number; waterTarget: number }) {
   const queryClient = useQueryClient()
-
-  const { data: waterData } = useQuery({
-    queryKey: ['water-log'],
-    queryFn: getWaterLog,
-    staleTime: 30_000,
-  })
 
   const { mutate: addWater, isPending } = useMutation({
     mutationFn: (delta: number) => logWater(delta),
     onSuccess: () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      queryClient.invalidateQueries({ queryKey: ['water-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
     },
   })
 
-  const mlLogged = waterData?.mlLogged ?? 0
-  const target = waterData?.waterMlTarget ?? targetFromNutrition ?? 2000
+  const mlLogged = mlLoggedProp
+  const target = targetProp
   const pct = Math.min(100, Math.round((mlLogged / target) * 100))
   const liters = (mlLogged / 1000).toFixed(1)
   const targetL = (target / 1000).toFixed(1)
@@ -537,27 +531,22 @@ function PlannedMealsSection({
 
 // ─── TrackingSection ─────────────────────────────────────────────────────────
 
-function TrackingSection({ onAdd }: { onAdd: () => void }) {
+function TrackingSection({ onAdd, foodLogData }: { onAdd: () => void; foodLogData: NutritionPageData['foodLogs'] | undefined }) {
   const [expanded, setExpanded] = useState(false)
   const queryClient = useQueryClient()
-  const { data, isLoading } = useQuery({
-    queryKey: ['nutrition-log'],
-    queryFn: () => getFoodLogs(getLocalDateString()),
-    staleTime: 30_000,
-  })
   const { mutate: doDelete } = useMutation({
     mutationFn: deleteFoodLog,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
-      queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     },
     onError: () => Alert.alert('Error', 'No se pudo eliminar el alimento.'),
   })
 
-  const totals = data?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
-  const target = data?.target
-  const logs   = data?.logs ?? []
+  const isLoading = !foodLogData
+  const totals = foodLogData?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
+  const target = foodLogData?.target
+  const logs   = foodLogData?.logs ?? []
 
   const kcalPct = target?.kcal ? Math.min(Math.round((totals.kcal / target.kcal) * 100), 100) : 0
   const kcalOver = target?.kcal ? totals.kcal > target.kcal : false
@@ -809,14 +798,8 @@ function MyProposalsSection({ proposals }: { proposals: FoodProposalSummary[] })
 
 // ─── WeeklySummarySection ─────────────────────────────────────────────────────
 
-function WeeklySummarySection() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['nutrition-summary'],
-    queryFn: getWeeklyNutritionSummary,
-    staleTime: 5 * 60_000,
-  })
-
-  if (isLoading || !data) return null
+function WeeklySummarySection({ data }: { data: NutritionPageData['weeklySummary'] | undefined }) {
+  if (!data) return null
 
   const adherence = data.adherencePct
   const adherenceColor = adherence == null ? '#9ca3af'
@@ -888,31 +871,24 @@ export default function NutritionScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
-  const { data, isLoading } = useQuery({ queryKey: ['nutrition'], queryFn: getNutrition })
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['nutrition-page'],
+    queryFn: () => getNutritionPage(),
+    staleTime: 30_000,
+  })
   const [showSetup, setShowSetup]       = useState(false)
   const [showLogFood, setShowLogFood]   = useState(false)
   const [showPropose, setShowPropose]   = useState(false)
-  const { data: proposalsData, refetch: refetchProposals } = useQuery({
-    queryKey: ['food-proposals'],
-    queryFn: getMyProposals,
-    staleTime: 5 * 60_000,
-  })
-  const { data: plannedMealsData, refetch: refetchPlannedMeals } = useQuery({
-    queryKey: ['planned-meals', getLocalDateString()],
-    queryFn: () => getPlannedMeals(getLocalDateString()),
-    staleTime: 2 * 60_000,
-  })
+
+  // Refetch on tab focus
+  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
+
+  // Lazy load foods for SwapPicker
   const { data: allFoodsData } = useQuery({
     queryKey: ['foods'],
     queryFn: getFoods,
     staleTime: 10 * 60_000,
-    enabled: (plannedMealsData?.meals?.length ?? 0) > 0,
-  })
-  // UX-DASH-05c: consumed totals for NutritionProgressCard — deduped with TrackingSection's query
-  const { data: nutritionLogData } = useQuery({
-    queryKey: ['nutrition-log'],
-    queryFn: () => getFoodLogs(getLocalDateString()),
-    staleTime: 30_000,
+    enabled: (data?.plannedMeals?.length ?? 0) > 0,
   })
 
   if (!user?.features?.nutrition) {
@@ -954,6 +930,7 @@ export default function NutritionScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
         >
           {/* Sin plan — empty state con CTA */}
           {!data?.hasNutritionPlan && (
@@ -977,7 +954,7 @@ export default function NutritionScreen() {
           {data?.pendingAdjustment && (
             <NutritionAdjustmentCard
               adj={data.pendingAdjustment}
-              onAction={() => queryClient.invalidateQueries({ queryKey: ['nutrition'] })}
+              onAction={() => queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })}
             />
           )}
 
@@ -1013,20 +990,16 @@ export default function NutritionScreen() {
           {data?.hasNutritionPlan && macros && (
             <>
               {/* ── 1. Hero: progreso del día (kcal consumidas vs target) ── */}
-              <TrackingSection onAdd={() => setShowLogFood(true)} />
+              <TrackingSection onAdd={() => setShowLogFood(true)} foodLogData={data.foodLogs} />
 
               {/* ── 1b. Plan de hoy — alimentos asignados por coach o planificados ── */}
-              {(plannedMealsData?.meals ?? []).length > 0 && (
+              {(data.plannedMeals ?? []).length > 0 && (
                 <>
                   <PlannedMealsSection
-                    meals={plannedMealsData!.meals}
+                    meals={data.plannedMeals}
                     allFoods={allFoodsData ?? []}
-                    onLogged={() => {
-                      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
-                      queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
-                      refetchPlannedMeals()
-                    }}
-                    onSwapped={() => refetchPlannedMeals()}
+                    onLogged={() => queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })}
+                    onSwapped={() => queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })}
                   />
                   {/* GROCERY-02: CTA lista del mercado */}
                   <TouchableOpacity
@@ -1059,17 +1032,17 @@ export default function NutritionScreen() {
               )}
 
               {/* ── 2. Resumen semanal de adherencia ── */}
-              <WeeklySummarySection />
+              <WeeklySummarySection data={data.weeklySummary} />
 
               {/* ── 2b. Mis propuestas de alimento ── */}
-              {(proposalsData?.proposals ?? []).length > 0 && (
-                <MyProposalsSection proposals={proposalsData!.proposals} />
+              {(data.proposals ?? []).length > 0 && (
+                <MyProposalsSection proposals={data.proposals} />
               )}
 
               {/* ── 3. Objetivo de macros del día ── */}
               <NutritionProgressCard
                 target={{ kcal: macros.kcal, proteinG: macros.proteinG, carbsG: macros.carbsG, fatG: macros.fatG }}
-                consumed={nutritionLogData?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
+                consumed={data.foodLogs?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
               />
               {data.gymKcalBurned != null && data.gymKcalBurned > 0 && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff7ed', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 }}>
@@ -1089,8 +1062,8 @@ export default function NutritionScreen() {
                   <MealList mealPlan={data.mealPlan} dayType={dayType} />
                   {/* ── 3. Hidratación ── */}
                   <HydrationSection
-                    waterMlTarget={data.waterMlTarget}
-                    fallbackL={data.mealPlan[dayType]?.hydrationL}
+                    mlLogged={data.waterMl}
+                    waterTarget={data.waterTarget}
                   />
                   {/* ── 4. Suplementación ── */}
                   {data.mealPlan[dayType]?.supplements?.length > 0 && (
@@ -1172,7 +1145,7 @@ export default function NutritionScreen() {
 
       <FoodSetupFlow visible={showSetup} onClose={() => setShowSetup(false)} />
       <LogFoodModal visible={showLogFood} onClose={() => setShowLogFood(false)} date={getLocalDateString()} />
-      <ProposeFoodModal visible={showPropose} onClose={() => setShowPropose(false)} onSuccess={refetchProposals} />
+      <ProposeFoodModal visible={showPropose} onClose={() => setShowPropose(false)} onSuccess={() => queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })} />
     </View>
   )
 }
