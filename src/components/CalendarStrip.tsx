@@ -9,14 +9,15 @@ export type DayCell = {
   done: boolean
   isToday: boolean
   canLog: boolean
+  gymLabel?: string | null
 }
 
 type Props = {
   days: DayCell[]
   selectedDow: number | null
   onSelect: (dow: number) => void
-  completedCount: number
-  totalTraining: number
+  completedCount?: number
+  totalTraining?: number
 }
 
 export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
@@ -26,13 +27,14 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
       <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 8, gap: 3 }}>
         {days.map(day => {
           const isRest = !day.type || day.type === 'DESCANSO'
-          const isDone = day.done && !isRest
+          const hasActivity = (!isRest) || !!day.gymLabel
+          const activityDone = (day.done && !isRest) || (!!day.gymLabel && day.done)
           return (
             <View
               key={`seg-${day.dow}`}
               style={{
-                flex: 1, height: 3, borderRadius: 1.5,
-                backgroundColor: isDone ? '#22c55e' : '#e5e7eb',
+                flex: 1, height: 3, borderRadius: 99,
+                backgroundColor: activityDone ? '#22c55e' : '#d1d5db',
               }}
             />
           )
@@ -46,27 +48,30 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
           const isRest = !day.type || day.type === 'DESCANSO'
           const isDone = day.done && !isRest
           const hasSession = !!day.type && day.type !== 'DESCANSO'
+          const hasGym = !!day.gymLabel && !hasSession
 
-          // Circle bg
+          // Circle bg — matches web MobileDayPills
+          const hasActivity = hasSession || hasGym
+          const activityDone = isDone || (hasGym && day.done)
           const circleColor = day.isToday
             ? '#ea580c'
-            : isDone
+            : activityDone
               ? '#22c55e'
               : isSelected
                 ? 'white'
-                : hasSession
+                : hasActivity
                   ? '#1e3a5f'
-                  : 'white'
+                  : '#f1f5f9'
 
-          // Circle border
-          const circleBorder = isSelected && !day.isToday && !isDone
+          // Circle border — matches web
+          const circleBorder = isSelected && !day.isToday && !activityDone
             ? { borderWidth: 2, borderColor: '#1e3a5f' }
-            : !hasSession && !day.isToday && !isDone
-              ? { borderWidth: 1, borderColor: '#e5e7eb' }
+            : !hasActivity && !day.isToday && !activityDone
+              ? { borderWidth: 1, borderColor: '#cbd5e1' }
               : {}
 
           // Number color
-          const numColor = day.isToday || isDone || hasSession
+          const numColor = day.isToday || activityDone || (hasActivity && !isSelected)
             ? 'white'
             : isSelected
               ? '#1e3a5f'
@@ -88,7 +93,7 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
             >
               <Text style={{
                 fontSize: 11,
-                fontFamily: day.isToday || isSelected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                fontFamily: 'Inter_600SemiBold',
                 color: letterColor,
               }}>
                 {day.letter}
@@ -99,17 +104,13 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
                 alignItems: 'center', justifyContent: 'center',
                 ...circleBorder,
               }}>
-                {isDone && !day.isToday ? (
-                  <Text style={{ fontSize: 15, color: 'white', fontFamily: 'Inter_700Bold' }}>✓</Text>
-                ) : (
-                  <Text style={{
+                <Text style={{
                     fontSize: 15,
-                    fontFamily: day.isToday || isSelected ? 'Inter_700Bold' : 'Inter_400Regular',
+                    fontFamily: day.isToday || isSelected || activityDone ? 'Inter_700Bold' : 'Inter_400Regular',
                     color: numColor,
                   }}>
-                    {day.dateNum}
+                    {activityDone && !day.isToday ? '✓' : day.dateNum}
                   </Text>
-                )}
               </View>
             </TouchableOpacity>
           )

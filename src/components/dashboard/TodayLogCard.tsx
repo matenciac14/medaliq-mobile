@@ -13,12 +13,14 @@ export default function TodayLogCard({ initial }: Props) {
   const [energy, setEnergy] = useState<number | null>(initial?.energyLevel ?? null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const [open, setOpen] = useState(!initial)
 
   async function save() {
     const weightKg = weightInput ? parseFloat(weightInput) : undefined
     if (!weightKg && !energy) return
     setSaving(true)
+    setSaveError(false)
     try {
       await apiFetch('/api/mobile/metrics/log', {
         method: 'POST',
@@ -26,6 +28,8 @@ export default function TodayLogCard({ initial }: Props) {
       })
       setSaved(true)
       setOpen(false)
+    } catch {
+      setSaveError(true)
     } finally {
       setSaving(false)
     }
@@ -78,6 +82,11 @@ export default function TodayLogCard({ initial }: Props) {
             </View>
             <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center' }}>1 = sin energía · 5 = excelente</Text>
           </View>
+          {saveError && (
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#ef4444', textAlign: 'center' }}>
+              Error al guardar. Intenta de nuevo.
+            </Text>
+          )}
           <TouchableOpacity
             onPress={save}
             disabled={saving}

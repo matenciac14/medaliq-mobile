@@ -37,7 +37,7 @@ export default function FreeTodayCard({ router }: Props) {
         <TouchableOpacity
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/(app)/log-run') }}
           activeOpacity={0.85}
-          style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 10, alignItems: 'center', width: '100%', marginTop: 2 }}
+          style={{ backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 10, alignItems: 'center', width: '100%', marginTop: 2 }}
         >
           <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: 'white' }}>
             Registrar actividad →

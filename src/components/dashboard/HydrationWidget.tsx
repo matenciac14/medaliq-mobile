@@ -1,24 +1,33 @@
 // NUT-WATER-01 — Widget de hidratacion diaria (compacto, 1 fila)
-// Emoji + valor/barra | 3 botones (+250/+500/+1L)
+// Emoji + valor/barra | 4 botones (-250/+250/+500/+1L)
 
 import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../api/client'
 
-const BUTTONS = [
+const REMOVE_BUTTON = { label: '-250', delta: -250 }
+
+const ADD_BUTTONS = [
   { label: '+250', delta: 250 },
   { label: '+500', delta: 500 },
   { label: '+1L',  delta: 1000 },
 ]
 
-export default function HydrationWidget() {
-  const [mlLogged, setMlLogged]    = useState(0)
-  const [waterMlTarget, setTarget] = useState(2000)
-  const [loading, setLoading]      = useState(true)
+type Props = {
+  initialMl?: number
+  initialTarget?: number
+}
+
+export default function HydrationWidget({ initialMl, initialTarget }: Props = {}) {
+  const hasInitial = initialMl !== undefined
+  const [mlLogged, setMlLogged]    = useState(initialMl ?? 0)
+  const [waterMlTarget, setTarget] = useState(initialTarget ?? 2000)
+  const [loading, setLoading]      = useState(!hasInitial)
   const [adding, setAdding]        = useState<number | null>(null)
 
   useEffect(() => {
+    if (hasInitial) return
     apiFetch<{ mlLogged: number; waterMlTarget: number }>('/api/mobile/nutrition/water')
       .then(d => {
         setMlLogged(d.mlLogged ?? 0)
@@ -26,7 +35,7 @@ export default function HydrationWidget() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [hasInitial])
 
   async function handleAdd(delta: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -86,16 +95,32 @@ export default function HydrationWidget() {
       {/* Spacer */}
       <View style={{ flex: 1 }} />
 
-      {/* Right: 3 buttons */}
+      {/* Right: 4 buttons (-250 red + 3 add blue) */}
       <View style={{ flexDirection: 'row', gap: 4 }}>
-        {BUTTONS.map(({ label, delta }) => (
+        <TouchableOpacity
+          onPress={() => handleAdd(REMOVE_BUTTON.delta)}
+          disabled={adding !== null || mlLogged === 0}
+          activeOpacity={0.7}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 8,
+            backgroundColor: '#fef2f2',
+            opacity: adding !== null || mlLogged === 0 ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#dc2626' }}>
+            {adding === REMOVE_BUTTON.delta ? '...' : REMOVE_BUTTON.label}
+          </Text>
+        </TouchableOpacity>
+        {ADD_BUTTONS.map(({ label, delta }) => (
           <TouchableOpacity
             key={delta}
             onPress={() => handleAdd(delta)}
             disabled={adding !== null}
             activeOpacity={0.7}
             style={{
-              paddingHorizontal: 12,
+              paddingHorizontal: 10,
               paddingVertical: 6,
               borderRadius: 8,
               backgroundColor: '#edf2ff',

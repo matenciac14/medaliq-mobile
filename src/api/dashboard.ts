@@ -4,7 +4,7 @@ export type TodaySession = {
   id: string
   logId: string | null
   type: string
-  durationMin: number
+  durationMin: number | null
   zoneTarget: string
   detailText: string
   completed: boolean
@@ -18,6 +18,7 @@ export type WeekSession = {
   id: string | null
   durationMin: number | null
   zoneTarget: string | null
+  gymLabel: string | null
 }
 
 export type DashboardData = {
@@ -99,6 +100,32 @@ export type DashboardData = {
     adherencePct: number | null
   } | null
   pendingSuggestionsCount: number
+  todayFoodTotals: {
+    kcal: number
+    proteinG: number
+    carbsG: number
+    fatG: number
+  }
+  // PERF-02: pre-hydrated data to avoid independent fetches
+  waterData: {
+    mlLogged: number
+    waterMlTarget: number
+  }
+  mealSlotLogs: { mealType: string; kcal: number }[]
+  checkInData: {
+    energyLevel: number | null
+    sleepHours: number | null
+    stressLevel: number | null
+    motivationLevel: number | null
+    recordedAt: string
+  } | null
+  hrZones: {
+    z1: { min: number; max: number }
+    z2: { min: number; max: number }
+    z3: { min: number; max: number }
+    z4: { min: number; max: number }
+    z5: { min: number; max: number }
+  } | null
 }
 
 export async function getDashboard(): Promise<DashboardData> {
@@ -115,5 +142,7 @@ export type WeekSessionsData = {
 }
 
 export async function getWeekSessions(weekOffset: number): Promise<WeekSessionsData> {
-  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}`)
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const tzParam = tz ? `&tz=${encodeURIComponent(tz)}` : ''
+  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}${tzParam}`)
 }

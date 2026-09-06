@@ -42,7 +42,7 @@ export default function RecentActivityCard({ activities, streakDays }: Props) {
       <ScrollView style={{ maxHeight: 205 }}>
         {activities.slice(0, 4).map((a, i) => (
           <View
-            key={i}
+            key={`${a.type}-${a.completedAt}`}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#f3f4f6' }}
           >
             <Text style={{ fontSize: 22 }}>{SESSION_ICONS[a.type] ?? '🏅'}</Text>
