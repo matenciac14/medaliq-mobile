@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics'
 import { getNutrition, getFoodLogs, deleteFoodLog, getWeeklyNutritionSummary, acceptNutritionAdjustment, rejectNutritionAdjustment, getPlannedMeals, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, getMyProposals, getWaterLog, logWater, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import NutritionProgressCard from '../../../src/components/dashboard/NutritionProgressCard'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
 import LogFoodModal from '../../../src/components/LogFoodModal'
 import ProposeFoodModal from '../../../src/components/ProposeFoodModal'
@@ -907,6 +908,12 @@ export default function NutritionScreen() {
     staleTime: 10 * 60_000,
     enabled: (plannedMealsData?.meals?.length ?? 0) > 0,
   })
+  // UX-DASH-05c: consumed totals for NutritionProgressCard — deduped with TrackingSection's query
+  const { data: nutritionLogData } = useQuery({
+    queryKey: ['nutrition-log'],
+    queryFn: () => getFoodLogs(getLocalDateString()),
+    staleTime: 30_000,
+  })
 
   if (!user?.features?.nutrition) {
     return <UpgradeWall icon="🥗" title="Plan nutricional" description="Accede a tu plan de nutrición periodizado por tipo de entrenamiento con el plan Pro." />
@@ -1010,16 +1017,45 @@ export default function NutritionScreen() {
 
               {/* ── 1b. Plan de hoy — alimentos asignados por coach o planificados ── */}
               {(plannedMealsData?.meals ?? []).length > 0 && (
-                <PlannedMealsSection
-                  meals={plannedMealsData!.meals}
-                  allFoods={allFoodsData ?? []}
-                  onLogged={() => {
-                    queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
-                    queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
-                    refetchPlannedMeals()
-                  }}
-                  onSwapped={() => refetchPlannedMeals()}
-                />
+                <>
+                  <PlannedMealsSection
+                    meals={plannedMealsData!.meals}
+                    allFoods={allFoodsData ?? []}
+                    onLogged={() => {
+                      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+                      queryClient.invalidateQueries({ queryKey: ['nutrition-summary'] })
+                      refetchPlannedMeals()
+                    }}
+                    onSwapped={() => refetchPlannedMeals()}
+                  />
+                  {/* GROCERY-02: CTA lista del mercado */}
+                  <TouchableOpacity
+                    onPress={() => router.push('/(app)/grocery-list')}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: 'white',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      paddingHorizontal: 18,
+                      paddingVertical: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>🛒</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+                        Lista del mercado
+                      </Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                        Todos los alimentos de tu plan esta semana
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 18, color: '#9ca3af' }}>›</Text>
+                  </TouchableOpacity>
+                </>
               )}
 
               {/* ── 2. Resumen semanal de adherencia ── */}
@@ -1031,46 +1067,21 @@ export default function NutritionScreen() {
               )}
 
               {/* ── 3. Objetivo de macros del día ── */}
-              <View style={{ backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', padding: 20 }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
-                  Tu objetivo de hoy
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 14 }}>
-                  <Text style={{ fontSize: 42, fontFamily: 'Inter_900Black', color: '#f97316', letterSpacing: -1.5 }}>
-                    {macros.kcal.toLocaleString()}
-                  </Text>
-                  <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: '#9ca3af', paddingBottom: 4 }}>
-                    kcal
+              <NutritionProgressCard
+                target={{ kcal: macros.kcal, proteinG: macros.proteinG, carbsG: macros.carbsG, fatG: macros.fatG }}
+                consumed={nutritionLogData?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
+              />
+              {data.gymKcalBurned != null && data.gymKcalBurned > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff7ed', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: 13 }}>🔥</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
+                    Quemaste {data.gymKcalBurned} kcal en entreno hoy
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {[
-                    { label: 'Proteína', value: macros.proteinG, unit: 'g', color: '#3b82f6', bg: '#dbeafe' },
-                    { label: 'Carbos',   value: macros.carbsG,   unit: 'g', color: '#b45309', bg: '#fef9c3' },
-                    { label: 'Grasas',   value: macros.fatG,     unit: 'g', color: '#166534', bg: '#dcfce7' },
-                  ].map(m => (
-                    <View key={m.label} style={{ flex: 1, backgroundColor: m.bg, borderRadius: 12, padding: 12, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: m.color, letterSpacing: -0.5 }}>
-                        {m.value}
-                      </Text>
-                      <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: m.color, opacity: 0.8, marginTop: 1 }}>
-                        {m.unit} {m.label}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-                {data.gymKcalBurned != null && data.gymKcalBurned > 0 && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#fff7ed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text style={{ fontSize: 13 }}>🔥</Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
-                      Quemaste {data.gymKcalBurned} kcal en entreno hoy
-                    </Text>
-                  </View>
-                )}
-                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 10 }}>
-                  TDEE base {macros.tdee} kcal · ajustado por {day.label.toLowerCase()}
-                </Text>
-              </View>
+              )}
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: -4, paddingHorizontal: 4 }}>
+                TDEE base {macros.tdee} kcal · ajustado por {day.label.toLowerCase()}
+              </Text>
 
               {/* ── 3. Mis comidas ── */}
               {data.mealPlan ? (

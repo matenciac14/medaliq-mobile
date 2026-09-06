@@ -239,6 +239,30 @@ export async function logAllPlannedMealsToday(): Promise<{ created: number; tota
   return apiFetch('/api/mobile/nutrition/planned-meals/log-today', { method: 'POST', body: {} })
 }
 
+// ── Grocery list ───────────────────────────────────────────────────────────────
+
+export type GroceryItem = {
+  name: string
+  totalG: number
+}
+
+export type GroceryCategory = {
+  category: string
+  label: string
+  items: GroceryItem[]
+}
+
+export type GroceryListData = {
+  weekStart: string
+  weekEnd: string
+  totalItems: number
+  categories: GroceryCategory[]
+}
+
+export async function getGroceryList(weekStart: string): Promise<GroceryListData> {
+  return apiFetch(`/api/mobile/nutrition/grocery-list?weekStart=${encodeURIComponent(weekStart)}`)
+}
+
 // ── NutritionTemplate (Constructor A) ─────────────────────────────────────────
 
 export type NutritionTemplateItem = {
