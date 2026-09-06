@@ -59,6 +59,15 @@ export async function setMobileRole(role: 'ATHLETE' | 'COACH'): Promise<SessionU
   return res.user
 }
 
+export async function syncTimezone(): Promise<void> {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (!tz) return
+  await apiFetch('/api/mobile/auth/me', {
+    method: 'PATCH',
+    body: { timezone: tz },
+  }).catch(() => {})
+}
+
 export async function refreshToken(): Promise<SessionUser['features']> {
   const res = await apiFetch<{ token: string; features: SessionUser['features'] }>(
     '/api/mobile/auth/refresh',

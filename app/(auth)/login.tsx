@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as WebBrowser from 'expo-web-browser'
 import * as Google from 'expo-auth-session/providers/google'
-import { login, googleLogin } from '../../src/api/auth'
+import { login, googleLogin, syncTimezone } from '../../src/api/auth'
 import { useAuthStore } from '../../src/store/auth'
 
 WebBrowser.maybeCompleteAuthSession()
@@ -53,6 +53,7 @@ export default function LoginScreen() {
     try {
       const { user, needsRoleSelection } = await googleLogin(idToken)
       setUser(user)
+      syncTimezone()
       if (needsRoleSelection) {
         router.replace('/(auth)/select-role' as any)
       } else if (!user.onboardingCompleted) {
@@ -85,6 +86,7 @@ export default function LoginScreen() {
     try {
       const user = await login({ email: email.trim().toLowerCase(), password })
       setUser(user)
+      syncTimezone()
       if (!user.onboardingCompleted) {
         router.replace('/(auth)/onboarding')
       } else if (user.userPlan === 'INACTIVE') {
