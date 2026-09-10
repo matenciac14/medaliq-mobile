@@ -16,7 +16,7 @@ export async function getPublicTemplates(): Promise<PublicTemplate[]> {
 }
 
 export async function assignTemplate(templateId: string) {
-  return apiFetch('/api/gym/assign', { method: 'POST', body: { templateId } })
+  return apiFetch('/api/mobile/gym/assign', { method: 'POST', body: { templateId } })
 }
 
 export type RunningSession = {
@@ -87,6 +87,7 @@ export type GymSessionData = {
     notes: string | null
     setType: string
     supersetWith: string | null
+    suggestedNextWeightKg: number | null
     exercise: {
       id: string
       name: string
@@ -101,6 +102,7 @@ export type GymSessionData = {
       setNumber: number
       weightKg: number | null
       repsCompleted: number | null
+      completed: boolean
     }[]
   }[]
 }
@@ -130,6 +132,8 @@ export type CompleteSessionPayload = {
   sets: SetLog[]
   rpe?: number
   durationMin?: number
+  energyState?: 'EXHAUSTED' | 'NORMAL' | 'ENERGIZED'
+  discomfort?: 'NONE' | 'MILD' | 'MODERATE'
   notes?: string
   exerciseOverrides?: ExerciseOverride[]
 }
@@ -159,8 +163,26 @@ export async function searchExercises(params: {
   return res.exercises
 }
 
+export async function getExerciseAlternatives(exerciseId: string): Promise<ExerciseSearchResult[]> {
+  return apiFetch<ExerciseSearchResult[]>(
+    `/api/mobile/exercises/${exerciseId}/alternatives`
+  )
+}
+
 export async function getTodayGymSession(): Promise<GymSessionData | null> {
-  return apiFetch<GymSessionData | null>('/api/gym/session/today')
+  // TODO: estos endpoints usan Auth.js (session web), no JWT mobile — siempre 401 en prod.
+  // Crear /api/mobile/gym/today y /api/mobile/gym/complete con getMobileUser() cuando se priorice.
+  return apiFetch<GymSessionData | null>('/api/athlete/gym/session/today')
+}
+
+export type GymPR = {
+  exerciseName: string
+  estimatedOneRM: number
+}
+
+export async function getGymPRs(): Promise<GymPR[]> {
+  const res = await apiFetch<{ prs: GymPR[] }>('/api/mobile/gym/prs')
+  return res.prs
 }
 
 export type PRResult = {
@@ -169,5 +191,6 @@ export type PRResult = {
 }
 
 export async function completeGymSession(payload: CompleteSessionPayload): Promise<{ sessionId: string; newPRs: PRResult[] }> {
-  return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/gym/session/complete', { method: 'POST', body: payload })
+  // TODO: misma limitación — ruta web. Ver TODO en getTodayGymSession().
+  return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/athlete/gym/session/complete', { method: 'POST', body: payload })
 }

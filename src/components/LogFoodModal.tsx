@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import BarcodeScannerModal from './BarcodeScannerModal'
 import {
   Modal,
   View,
@@ -15,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getFoods, logFood, FoodItem,
   getMealTemplates, createMealTemplate, deleteMealTemplate, MealTemplate,
+  proposeFood, type ProposeInput,
 } from '../api/nutrition'
 
 const MEAL_TYPES = [
@@ -36,7 +38,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   LEGUME: '🫘 Legumbres',
 }
 
-type Step = 'search' | 'detail' | 'save-template'
+type Step = 'search' | 'detail' | 'save-template' | 'propose' | 'recipe-builder'
+
+const DEFAULT_PROPOSE = { name: '', category: 'CARB', kcalPer100g: '', proteinPer100g: '', carbsPer100g: '', fatPer100g: '', country: '', notes: '' }
 
 function calcTemplateKcal(t: MealTemplate) {
   return t.items.reduce((sum, i) => sum + Math.round(i.food.kcalPer100g * i.grams / 100), 0)
@@ -59,6 +63,13 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
   const [mealType, setMealType] = useState('BREAKFAST')
   const [templateName, setTemplateName] = useState('')
   const [loggingTemplateId, setLoggingTemplateId] = useState<string | null>(null)
+  const [proposeForm, setProposeForm] = useState<typeof DEFAULT_PROPOSE>(DEFAULT_PROPOSE)
+  const [proposeSuccess, setProposeSuccess] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const [recipeItems, setRecipeItems] = useState<{ food: FoodItem; grams: string }[]>([])
+  const [recipeQuery, setRecipeQuery] = useState('')
+  const [recipeName, setRecipeName] = useState('')
 
   const { data: foods = [], isLoading: loadingFoods } = useQuery({
     queryKey: ['foods'],
@@ -82,19 +93,48 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     },
   })
 
+  const { mutate: saveRecipeMut, isPending: savingRecipe } = useMutation({
+    mutationFn: createMealTemplate,
+    onSuccess: () => {
+      refetchTemplates()
+      setStep('search')
+      setRecipeItems([])
+      setRecipeName('')
+      setRecipeQuery('')
+    },
+  })
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return foods.slice(0, 30) // mostrar primeros 30 si no hay búsqueda
+    let result = foods
+    if (filterCategory) result = result.filter(f => f.category === filterCategory)
+    if (!query.trim()) return result.slice(0, 30)
     const q = query.toLowerCase()
-    return foods.filter(f => f.name.toLowerCase().includes(q)).slice(0, 40)
-  }, [foods, query])
+    return result.filter(f => f.name.toLowerCase().includes(q)).slice(0, 40)
+  }, [foods, query, filterCategory])
 
   const { mutate: submitLog, isPending } = useMutation({
     mutationFn: logFood,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
       handleClose()
     },
   })
+
+  const { mutate: submitPropose, isPending: proposing } = useMutation({
+    mutationFn: proposeFood,
+    onSuccess: () => { setProposeSuccess(true) },
+  })
+
+  function handleSubmitPropose() {
+    const { name, category, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, country, notes } = proposeForm
+    if (!name.trim() || !kcalPer100g || !proteinPer100g || !carbsPer100g || !fatPer100g) return
+    submitPropose({
+      name: name.trim(), category,
+      kcalPer100g: Number(kcalPer100g), proteinPer100g: Number(proteinPer100g),
+      carbsPer100g: Number(carbsPer100g), fatPer100g: Number(fatPer100g),
+      country: country || undefined, notes: notes.trim() || undefined,
+    } as ProposeInput)
+  }
 
   function handleSelectFood(food: FoodItem) {
     setSelectedFood(food)
@@ -117,7 +157,7 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
           logFood({ foodId: item.foodId, grams: item.grams, mealType, date })
         )
       )
-      queryClient.invalidateQueries({ queryKey: ['nutrition-log'] })
+      queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })
       handleClose()
     } finally {
       setLoggingTemplateId(null)
@@ -138,6 +178,20 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     refetchTemplates()
   }
 
+  function handleAddToRecipe(food: FoodItem) {
+    setRecipeItems(prev => [...prev, { food, grams: String(Math.round(food.servingG)) }])
+    setRecipeQuery('')
+  }
+
+  function handleSaveRecipe() {
+    const validItems = recipeItems.filter(i => Number(i.grams) > 0)
+    if (!recipeName.trim() || validItems.length === 0) return
+    saveRecipeMut({
+      name: recipeName.trim(),
+      items: validItems.map(i => ({ foodId: i.food.id, grams: Number(i.grams) })),
+    })
+  }
+
   function handleClose() {
     setStep('search')
     setQuery('')
@@ -145,8 +199,36 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
     setGrams('')
     setMealType('BREAKFAST')
     setTemplateName('')
+    setProposeForm(DEFAULT_PROPOSE)
+    setProposeSuccess(false)
+    setShowScanner(false)
+    setFilterCategory(null)
+    setRecipeItems([])
+    setRecipeQuery('')
+    setRecipeName('')
     onClose()
   }
+
+  // Recipe builder — filtered foods + running totals
+  const recipeFiltered = useMemo(() => {
+    if (!recipeQuery.trim()) return foods.slice(0, 20)
+    const q = recipeQuery.toLowerCase()
+    return foods.filter(f => f.name.toLowerCase().includes(q)).slice(0, 30)
+  }, [foods, recipeQuery])
+
+  const recipeTotals = recipeItems.reduce(
+    (acc, item) => {
+      const r = Number(item.grams) / 100
+      if (!isNaN(r) && r > 0) {
+        acc.kcal     += Math.round(item.food.kcalPer100g     * r)
+        acc.proteinG += Math.round(item.food.proteinPer100g  * r * 10) / 10
+        acc.carbsG   += Math.round(item.food.carbsPer100g    * r * 10) / 10
+        acc.fatG     += Math.round(item.food.fatPer100g      * r * 10) / 10
+      }
+      return acc
+    },
+    { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+  )
 
   // Macros calculados para la cantidad ingresada
   const preview = selectedFood && grams
@@ -173,7 +255,7 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
             borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {(step === 'detail' || step === 'save-template') && (
+              {(step === 'detail' || step === 'save-template' || step === 'propose' || step === 'recipe-builder') && (
                 <TouchableOpacity
                   onPress={() => step === 'save-template' ? setStep('detail') : setStep('search')}
                   style={{ padding: 4 }}
@@ -182,7 +264,11 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                 </TouchableOpacity>
               )}
               <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#111827' }}>
-                {step === 'search' ? 'Registrar comida' : step === 'save-template' ? 'Guardar plantilla' : selectedFood?.name ?? ''}
+                {step === 'search' ? 'Registrar comida'
+                  : step === 'save-template' ? 'Guardar plantilla'
+                  : step === 'propose' ? 'Proponer alimento'
+                  : step === 'recipe-builder' ? 'Nueva receta'
+                  : selectedFood?.name ?? ''}
               </Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={{ padding: 4 }}>
@@ -194,8 +280,9 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
           {step === 'search' && (
             <>
               <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
                   backgroundColor: '#f3f4f6', borderRadius: 12,
                   paddingHorizontal: 14, paddingVertical: 10,
                 }}>
@@ -214,7 +301,41 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                     </TouchableOpacity>
                   )}
                 </View>
+                <TouchableOpacity
+                  onPress={() => setShowScanner(true)}
+                  style={{
+                    backgroundColor: '#f3f4f6', borderRadius: 12,
+                    paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 20 }}>📷</Text>
+                </TouchableOpacity>
               </View>
+              </View>
+
+              {/* Filtros de categoría */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ maxHeight: 44 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8, gap: 8 }}
+              >
+                {[{ key: null, label: 'Todos' }, ...Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ key: k, label: v }))].map(c => (
+                  <TouchableOpacity
+                    key={c.key ?? 'all'}
+                    onPress={() => setFilterCategory(c.key)}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+                      backgroundColor: filterCategory === c.key ? '#1e3a5f' : 'white',
+                      borderColor: filterCategory === c.key ? '#1e3a5f' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: filterCategory === c.key ? 'white' : '#374151' }}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
               {loadingFoods ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -227,11 +348,21 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                   keyboardShouldPersistTaps="handled"
                 >
                   {/* Mis comidas (plantillas) — solo cuando no hay búsqueda */}
-                  {!query.trim() && templates.length > 0 && (
+                  {!query.trim() && (
                     <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-                        Mis comidas
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Mis comidas
+                        </Text>
+                        <TouchableOpacity onPress={() => { setRecipeItems([]); setRecipeName(''); setRecipeQuery(''); setStep('recipe-builder') }}>
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>+ Nueva receta</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {templates.length === 0 && (
+                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginBottom: 8 }}>
+                          Aún no tienes recetas guardadas.
+                        </Text>
+                      )}
                       {templates.map(t => {
                         const kcal = calcTemplateKcal(t)
                         return (
@@ -275,7 +406,9 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                           </View>
                         )
                       })}
-                      <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4, marginBottom: 12 }} />
+                      {templates.length > 0 && (
+                        <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', marginTop: 4, marginBottom: 12 }} />
+                      )}
                     </View>
                   )}
 
@@ -317,6 +450,17 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
                         </TouchableOpacity>
                       )
                     })
+                  )}
+                  {query.trim().length >= 2 && (
+                    <TouchableOpacity
+                      onPress={() => { setProposeForm(p => ({ ...p, name: query.trim() })); setStep('propose') }}
+                      style={{ marginTop: 20, paddingVertical: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f3f4f6' }}
+                    >
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
+                        {'¿No lo encontraste?  '}
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>Proponer alimento →</Text>
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </ScrollView>
               )}
@@ -560,8 +704,319 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
               </View>
             </>
           )}
+          {/* STEP: recipe-builder */}
+          {step === 'recipe-builder' && (
+            <>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Nombre de la receta */}
+                <TextInput
+                  value={recipeName}
+                  onChangeText={setRecipeName}
+                  placeholder="Nombre de la receta..."
+                  placeholderTextColor="#9ca3af"
+                  maxLength={100}
+                  autoFocus
+                  style={{
+                    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
+                    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16,
+                    fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827',
+                  }}
+                />
+
+                {/* Ingredientes actuales */}
+                {recipeItems.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                      Ingredientes
+                    </Text>
+                    {recipeItems.map((item, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }} numberOfLines={1}>
+                            {item.food.name}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                            {Math.round(item.food.kcalPer100g * Number(item.grams) / 100)} kcal
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <TextInput
+                            value={item.grams}
+                            onChangeText={v => setRecipeItems(prev => prev.map((it, i) => i === idx ? { ...it, grams: v } : it))}
+                            keyboardType="numeric"
+                            style={{
+                              width: 64, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8,
+                              paddingHorizontal: 8, paddingVertical: 6,
+                              fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827', textAlign: 'center',
+                            }}
+                          />
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>g</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => setRecipeItems(prev => prev.filter((_, i) => i !== idx))}
+                          style={{ width: 28, alignItems: 'center' }}
+                        >
+                          <Text style={{ fontSize: 16, color: '#d1d5db' }}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Totales */}
+                {recipeItems.length > 0 && (
+                  <View style={{ backgroundColor: '#1e3a5f', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                      Total receta
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[
+                        { label: 'kcal',    value: recipeTotals.kcal,     color: '#f97316' },
+                        { label: 'Prot.',   value: recipeTotals.proteinG,  color: '#93c5fd' },
+                        { label: 'Carbs',   value: recipeTotals.carbsG,    color: '#fde047' },
+                        { label: 'Grasa',   value: recipeTotals.fatG,      color: '#86efac' },
+                      ].map(m => (
+                        <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: m.color }}>{m.value}</Text>
+                          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{m.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Buscar y agregar ingrediente */}
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Agregar ingrediente
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  backgroundColor: '#f3f4f6', borderRadius: 12,
+                  paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+                }}>
+                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>🔍</Text>
+                  <TextInput
+                    value={recipeQuery}
+                    onChangeText={setRecipeQuery}
+                    placeholder="Buscar alimento..."
+                    placeholderTextColor="#9ca3af"
+                    style={{ flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827' }}
+                  />
+                  {recipeQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setRecipeQuery('')}>
+                      <Text style={{ fontSize: 16, color: '#9ca3af' }}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {recipeFiltered.map(food => (
+                  <TouchableOpacity
+                    key={food.id}
+                    onPress={() => handleAddToRecipe(food)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                        {Math.round(food.kcalPer100g * food.servingG / 100)} kcal · porción {Math.round(food.servingG)}g
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 20, color: '#d1d5db' }}>+</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Footer recipe-builder */}
+              <View style={{
+                paddingHorizontal: 20, paddingTop: 12,
+                paddingBottom: insets.bottom + 12,
+                borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                backgroundColor: 'white',
+              }}>
+                <TouchableOpacity
+                  onPress={handleSaveRecipe}
+                  disabled={savingRecipe || !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0}
+                  style={{
+                    backgroundColor: savingRecipe || !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0 ? '#e5e7eb' : '#1e3a5f',
+                    borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+                  }}
+                >
+                  {savingRecipe ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{
+                      color: !recipeName.trim() || recipeItems.filter(i => Number(i.grams) > 0).length === 0 ? '#9ca3af' : 'white',
+                      fontSize: 15, fontFamily: 'Inter_700Bold',
+                    }}>
+                      Guardar receta ({recipeItems.length} ingredientes)
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {/* STEP: propose */}
+          {step === 'propose' && (
+            proposeSuccess ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+                <Text style={{ fontSize: 40 }}>✓</Text>
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827', textAlign: 'center' }}>
+                  ¡Propuesta enviada!
+                </Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', lineHeight: 22 }}>
+                  El alimento está disponible en la librería mientras el equipo lo revisa.
+                </Text>
+                <TouchableOpacity
+                  onPress={handleClose}
+                  style={{ marginTop: 8, backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40 }}
+                >
+                  <Text style={{ color: 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32, gap: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Nombre */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Nombre *</Text>
+                    <TextInput
+                      value={proposeForm.name}
+                      onChangeText={v => setProposeForm(p => ({ ...p, name: v }))}
+                      placeholder="Ej: Pandebono, Taco de bistec..."
+                      placeholderTextColor="#9ca3af"
+                      autoFocus
+                      style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#111827' }}
+                    />
+                  </View>
+
+                  {/* Categoría */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Categoría *</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {[
+                        { key: 'PROTEIN', label: 'Proteína' }, { key: 'CARB', label: 'Carbs' },
+                        { key: 'FAT', label: 'Grasa' }, { key: 'VEGETABLE', label: 'Verdura' },
+                        { key: 'FRUIT', label: 'Fruta' }, { key: 'DAIRY', label: 'Lácteo' },
+                        { key: 'LEGUME', label: 'Legumbre' }, { key: 'PREPARED', label: 'Plato' },
+                        { key: 'OTHER', label: 'Otro' },
+                      ].map(c => (
+                        <TouchableOpacity
+                          key={c.key}
+                          onPress={() => setProposeForm(p => ({ ...p, category: c.key }))}
+                          style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, backgroundColor: proposeForm.category === c.key ? '#1e3a5f' : 'white', borderColor: proposeForm.category === c.key ? '#1e3a5f' : '#e5e7eb' }}
+                        >
+                          <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: proposeForm.category === c.key ? 'white' : '#374151' }}>{c.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Macros */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Macros por 100g *</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {([
+                        { key: 'kcalPer100g', label: 'kcal' },
+                        { key: 'proteinPer100g', label: 'Prot.' },
+                        { key: 'carbsPer100g', label: 'Carbs' },
+                        { key: 'fatPer100g', label: 'Grasa' },
+                      ] as const).map(field => (
+                        <View key={field.key} style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginBottom: 4, textAlign: 'center' }}>{field.label}</Text>
+                          <TextInput
+                            value={proposeForm[field.key]}
+                            onChangeText={v => setProposeForm(p => ({ ...p, [field.key]: v }))}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            placeholderTextColor="#9ca3af"
+                            style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827', textAlign: 'center' }}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* País */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>País de origen</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {[
+                        { key: '', label: 'Universal' }, { key: 'CO', label: 'Colombia' },
+                        { key: 'MX', label: 'México' }, { key: 'AR', label: 'Argentina' },
+                        { key: 'PE', label: 'Perú' }, { key: 'VE', label: 'Venezuela' },
+                        { key: 'CL', label: 'Chile' },
+                      ].map(c => (
+                        <TouchableOpacity
+                          key={c.key || 'universal'}
+                          onPress={() => setProposeForm(p => ({ ...p, country: c.key }))}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, backgroundColor: proposeForm.country === c.key ? '#f97316' : 'white', borderColor: proposeForm.country === c.key ? '#f97316' : '#e5e7eb' }}
+                        >
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: proposeForm.country === c.key ? 'white' : '#374151' }}>{c.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Notas */}
+                  <View>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Notas para el equipo (opcional)</Text>
+                    <TextInput
+                      value={proposeForm.notes}
+                      onChangeText={v => setProposeForm(p => ({ ...p, notes: v }))}
+                      placeholder="Ej: pandebono de panadería, aprox 60g c/u..."
+                      placeholderTextColor="#9ca3af"
+                      multiline
+                      numberOfLines={3}
+                      style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: 'Inter_400Regular', color: '#111827', textAlignVertical: 'top', minHeight: 80 }}
+                    />
+                  </View>
+                </ScrollView>
+
+                <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', backgroundColor: 'white' }}>
+                  <TouchableOpacity
+                    onPress={handleSubmitPropose}
+                    disabled={proposing || !proposeForm.name.trim() || !proposeForm.kcalPer100g}
+                    style={{ backgroundColor: proposing || !proposeForm.name.trim() || !proposeForm.kcalPer100g ? '#e5e7eb' : '#1e3a5f', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}
+                  >
+                    {proposing ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text style={{ color: !proposeForm.name.trim() || !proposeForm.kcalPer100g ? '#9ca3af' : 'white', fontSize: 15, fontFamily: 'Inter_700Bold' }}>
+                        Enviar propuesta
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )
+          )}
         </View>
       </KeyboardAvoidingView>
+
+      <BarcodeScannerModal
+        visible={showScanner}
+        onClose={() => setShowScanner(false)}
+        onFoodFound={food => {
+          setShowScanner(false)
+          handleSelectFood(food)
+        }}
+        onNotFound={barcode => {
+          setShowScanner(false)
+          setProposeForm(p => ({ ...p, notes: `Código de barras: ${barcode}` }))
+          setStep('propose')
+        }}
+      />
     </Modal>
   )
 }

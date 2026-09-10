@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
+import { DAY_FULL as DAY_LABELS_FULL, DAY_LETTERS as DAY_LABELS_SHORT } from '../../src/constants/calendar'
 
 type DayActivity = 'REST' | 'GYM' | 'RUN'
 
@@ -27,9 +28,6 @@ const RUN_TYPES = [
   { value: 'TIRADA_LARGA', icon: '🔵', label: 'Tirada larga' },
   { value: 'OTRO',         icon: '⚪', label: 'Sesion libre' },
 ]
-
-const DAY_LABELS_FULL = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
-const DAY_LABELS_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 type RoutineDay = {
   dow: number          // 1=Lun ... 7=Dom
@@ -220,7 +218,7 @@ export default function RoutineEditScreen() {
             borderWidth: 1, borderColor: '#e5e7eb', gap: 12,
           }}>
             <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-              {DAY_LABELS_FULL[selectedDay.dow - 1]} — {selectedDay.activity === 'GYM' ? 'Gym' : 'Running'}
+              {DAY_LABELS_FULL[selectedDay.dow - 1]} — {selectedDay.activity === 'GYM' ? 'Fuerza' : 'Running'}
             </Text>
 
             {selectedDay.activity === 'GYM' && (

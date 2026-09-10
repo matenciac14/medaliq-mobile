@@ -21,7 +21,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#f97316',
+        tabBarActiveTintColor: '#1e3a5f',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: {
           backgroundColor: 'white',
@@ -66,7 +66,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="gym"
         options={{
-          title: 'Gym',
+          title: 'Entreno',
           tabBarIcon: ({ color }) => (
             <Ionicons name="barbell-outline" size={22} color={color} />
           ),
@@ -81,15 +81,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progreso',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="trending-up-outline" size={22} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="progress" options={{ href: null }} />
       <Tabs.Screen
         name="profile"
         options={{

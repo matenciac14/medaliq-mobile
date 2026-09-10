@@ -6,6 +6,18 @@ import { useAuthStore } from '../../src/store/auth'
 import { getMe } from '../../src/api/auth'
 import { registerForPushNotificationsAsync } from '../../src/lib/notifications'
 import { registerPushToken } from '../../src/api/notifications'
+import { syncRecent } from '../../src/services/healthkit.service'
+
+// Mapa de screen → ruta Expo Router
+const SCREEN_ROUTES: Record<string, string> = {
+  notifications:  '/(app)/notifications',
+  checkin:        '/(app)/(tabs)/checkin',
+  plan:           '/(app)/(tabs)/plan',
+  gym:            '/(app)/(tabs)/gym',
+  progress:       '/(app)/(tabs)/progress',
+  nutrition:      '/(app)/(tabs)/nutrition',
+  messages:       '/(app)/messages',
+}
 
 export default function AppLayout() {
   const { user, isLoading, setUser } = useAuthStore()
@@ -26,8 +38,14 @@ export default function AppLayout() {
       .then(token => {
         if (token) return registerPushToken(token)
       })
-      .catch(() => {})
+      .catch(err => console.error('[push] Token registration failed:', err))
   }, [user])
+
+  // Sync HealthKit workouts al autenticar — fire-and-forget, no bloquea UI
+  useEffect(() => {
+    if (!user) return
+    syncRecent().catch(err => console.error('[healthkit] syncRecent failed:', err))
+  }, [user?.id])
 
   // Refresh features cuando la app vuelve al primer plano.
   // Garantiza que trial expirado, B2B activado u otros cambios de features
@@ -48,7 +66,7 @@ export default function AppLayout() {
     return () => sub.remove()
   }, [refreshUser])
 
-  // Escuchar notificaciones en foreground — si el coach activó features, refrescar JWT
+  // Foreground: recibir notificación — refrescar si es features_updated
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data as Record<string, unknown> | undefined
@@ -58,6 +76,21 @@ export default function AppLayout() {
     })
     return () => sub.remove()
   }, [refreshUser])
+
+  // Tap en notificación (foreground, background o killed) → navegar a la pantalla correcta
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined
+      const screen = data?.screen as string | undefined
+      if (screen && SCREEN_ROUTES[screen]) {
+        router.push(SCREEN_ROUTES[screen] as any)
+      } else {
+        // Fallback: abrir lista de notificaciones
+        router.push('/(app)/notifications')
+      }
+    })
+    return () => sub.remove()
+  }, [router])
 
   return <Stack screenOptions={{ headerShown: false }} />
 }

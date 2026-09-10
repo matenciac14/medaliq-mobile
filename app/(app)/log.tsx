@@ -10,17 +10,13 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
-
-const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
-}
+import { SESSION_ICONS } from '../../src/constants/sessions'
 
 const DISTANCE_TYPES = new Set(['RODAJE_Z2', 'FARTLEK', 'TIRADA_LARGA', 'CICLA', 'NATACION'])
 
 const FREE_ACTIVITY_TYPES = [
   { type: 'RODAJE_Z2', label: 'Correr',      icon: '🏃' },
-  { type: 'FUERZA',    label: 'Gym',          icon: '💪' },
+  { type: 'FUERZA',    label: 'Fuerza',       icon: '💪' },
   { type: 'OTRO',      label: 'Funcional',   icon: '🤸' },
   { type: 'DESCANSO',  label: 'Descanso',    icon: '😴' },
 ]
@@ -408,6 +404,17 @@ export default function LogScreen() {
                 {isDescanso ? 'Registrar descanso' : 'Guardar sesión'}
               </Text>
           }
+        </TouchableOpacity>
+
+        {/* Ver historial */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/log-history' as any)}
+          activeOpacity={0.7}
+          style={{ alignItems: 'center', paddingVertical: 8 }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>
+            Ver historial de sesiones →
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

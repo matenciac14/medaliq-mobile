@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, Linking } from 'react-native'
+import { View, Text, TouchableOpacity } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 
 export default function UpgradeWall({ icon, title, description }: Props) {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
 
   return (
     <View style={{
@@ -41,7 +43,7 @@ export default function UpgradeWall({ icon, title, description }: Props) {
         {description}
       </Text>
       <TouchableOpacity
-        onPress={() => Linking.openURL('https://medaliq.com/upgrade')}
+        onPress={() => router.push('/(app)/pricing' as any)}
         activeOpacity={0.85}
         style={{
           backgroundColor: '#f97316',
@@ -55,7 +57,7 @@ export default function UpgradeWall({ icon, title, description }: Props) {
           fontSize: 15,
           fontFamily: 'Inter_700Bold',
         }}>
-          Ver planes → Pro $15/mes
+          Ver planes → Pro $9.99/mes
         </Text>
       </TouchableOpacity>
     </View>

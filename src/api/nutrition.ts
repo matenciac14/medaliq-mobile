@@ -25,6 +25,7 @@ export type NutritionData = {
   pendingAdjustment: PendingNutritionAdjustment | null
   gymKcalBurned: number | null
   waterMlTarget?: number
+  planPhaseContext?: string | null
 }
 
 export type FoodLogEntry = {
@@ -69,6 +70,57 @@ export async function getNutrition(): Promise<NutritionData> {
   return apiFetch<NutritionData>('/api/mobile/nutrition')
 }
 
+// ── Unified nutrition page data (single fat endpoint) ─────────────────────────
+
+export type MealCheckItem = {
+  mealType: string
+  label: string
+  foods: string
+  kcal: number
+  proteinG: number
+  isLogged: boolean
+}
+
+export type NextMealData = {
+  label: string
+  time: string
+  foods: string
+  kcal: number
+  proteinG: number
+} | null
+
+export type NutritionPageData = {
+  hasNutritionPlan: boolean
+  dayType: 'hard' | 'easy' | 'rest'
+  macros: NutritionData['macros']
+  targets: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null
+  intensity: string
+  plannedMeals: PlannedMealItem[]
+  templateMeals: any[] | null
+  foodLogs: FoodLogData
+  adherence: { kcalLogged: number; kcalTarget: number; pct: number }
+  waterMl: number
+  waterTarget: number
+  mealPlan: any | null
+  gymKcalBurned: number | null
+  planPhaseContext: string | null
+  pendingAdjustment: PendingNutritionAdjustment | null
+  proposals: FoodProposalSummary[]
+  weeklySummary: WeeklyNutritionSummary
+  // B2B
+  isB2B: boolean
+  coachName: string | null
+  planName: string | null
+  // Meal checklist + next meal + tip
+  mealChecklist: MealCheckItem[]
+  nextMeal: NextMealData
+  tip: { title: string; body: string } | null
+}
+
+export async function getNutritionPage(): Promise<NutritionPageData> {
+  return apiFetch<NutritionPageData>('/api/mobile/nutrition/today')
+}
+
 export async function getFoodLogs(date?: string): Promise<FoodLogData> {
   const param = date ? `?date=${date}` : ''
   return apiFetch<FoodLogData>(`/api/mobile/nutrition/log${param}`)
@@ -109,22 +161,13 @@ export type FoodItem = {
   proteinPer100g: number
   carbsPer100g: number
   fatPer100g: number
+  fiberPer100g?: number | null
   servingG: number
   servingLabel: string | null
 }
 
 export async function getFoods(): Promise<FoodItem[]> {
   return apiFetch<FoodItem[]>('/api/mobile/nutrition/foods')
-}
-
-export async function generateMeals(payload: {
-  availableFoods: string[]
-  restrictions: string[]
-  mealsPerDay: number
-  weighsFood: boolean
-  notes?: string
-}): Promise<{ ok: boolean; mealPlanId: string }> {
-  return apiFetch('/api/mobile/nutrition/generate-meals', { method: 'POST', body: payload })
 }
 
 export type MealTemplateItem = {
@@ -205,4 +248,147 @@ export async function proposeFood(payload: ProposeInput): Promise<{ proposalId: 
 
 export async function getMyProposals(): Promise<{ proposals: FoodProposalSummary[] }> {
   return apiFetch('/api/mobile/nutrition/foods/my-proposals')
+}
+
+// ── PlannedMeals ──────────────────────────────────────────────────────────────
+
+export type PlannedMealFood = {
+  id: string; name: string; category: string
+  kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number
+  servingG: number; servingLabel: string | null
+}
+
+export type PlannedMealItem = {
+  id: string
+  mealType: string
+  grams: number
+  food: PlannedMealFood
+  override: {
+    overrideFoodId: string
+    overrideGrams: number
+    overrideFood: PlannedMealFood
+  } | null
+}
+
+export async function getPlannedMeals(date: string): Promise<{ date: string; meals: PlannedMealItem[] }> {
+  return apiFetch(`/api/mobile/nutrition/plan?date=${encodeURIComponent(date)}`)
+}
+
+export async function logPlannedMeal(plannedMealId: string): Promise<{ ok: boolean; action: 'created' | 'updated' }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/log`, { method: 'POST', body: {} })
+}
+
+export async function swapPlannedMeal(plannedMealId: string, foodId: string, grams: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/swap`, { method: 'POST', body: { foodId, grams } })
+}
+
+export async function removeSwap(plannedMealId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/plan/${plannedMealId}/swap`, { method: 'DELETE', body: {} })
+}
+
+export async function logAllPlannedMealsToday(): Promise<{ created: number; total: number }> {
+  return apiFetch('/api/mobile/nutrition/planned-meals/log-today', { method: 'POST', body: {} })
+}
+
+// ── PlannedMeals CRUD (constructor mobile) ──────────────────────────────────
+
+export type PlannedMealsByDate = Record<string, PlannedMealItem[]>
+
+export async function getPlannedMealsWeek(weekStart: string): Promise<{ weekStart: string; meals: PlannedMealsByDate }> {
+  return apiFetch(`/api/mobile/nutrition/planned-meals?weekStart=${encodeURIComponent(weekStart)}`)
+}
+
+export async function createPlannedMeal(payload: {
+  date: string; mealType: string; foodId: string; grams: number
+}): Promise<{ meal: PlannedMealItem }> {
+  return apiFetch('/api/mobile/nutrition/planned-meals', { method: 'POST', body: payload })
+}
+
+export async function deletePlannedMeal(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/planned-meals/${id}`, { method: 'DELETE', body: {} })
+}
+
+// ── Grocery list ───────────────────────────────────────────────────────────────
+
+export type GroceryItem = {
+  name: string
+  totalG: number
+}
+
+export type GroceryCategory = {
+  category: string
+  label: string
+  items: GroceryItem[]
+}
+
+export type GroceryListData = {
+  weekStart: string
+  weekEnd: string
+  totalItems: number
+  categories: GroceryCategory[]
+}
+
+export async function getGroceryList(weekStart: string): Promise<GroceryListData> {
+  return apiFetch(`/api/mobile/nutrition/grocery-list?weekStart=${encodeURIComponent(weekStart)}`)
+}
+
+// ── NutritionTemplate (Constructor A) ─────────────────────────────────────────
+
+export type NutritionTemplateItem = {
+  id: string; grams: number
+  food: { name: string; kcalPer100g: number }
+}
+
+export type NutritionTemplateMeal = {
+  id: string; mealType: string
+  items: NutritionTemplateItem[]
+}
+
+export type NutritionTemplateDay = {
+  id: string; dayType: 'HARD' | 'EASY' | 'REST'
+  meals: NutritionTemplateMeal[]
+}
+
+export type NutritionTemplate = {
+  id: string; name: string; goal: string | null
+  days: NutritionTemplateDay[]
+}
+
+export async function getNutritionTemplates(): Promise<{ templates: NutritionTemplate[] }> {
+  return apiFetch('/api/mobile/nutrition/templates')
+}
+
+export async function createNutritionTemplate(payload: {
+  name: string; goal?: string
+}): Promise<{ template: NutritionTemplate }> {
+  return apiFetch('/api/mobile/nutrition/templates', { method: 'POST', body: payload })
+}
+
+export async function addTemplateMealItem(
+  templateId: string,
+  payload: { dayType: string; mealType: string; foodId: string; grams: number }
+): Promise<{ item: any }> {
+  return apiFetch(`/api/mobile/nutrition/templates/${templateId}/meals`, { method: 'POST', body: payload })
+}
+
+export async function applyNutritionTemplate(
+  templateId: string,
+  payload: { weekStart: string; intensityMap: Record<string, 'HARD' | 'EASY' | 'REST'> }
+): Promise<{ ok: boolean; created: number }> {
+  return apiFetch(`/api/mobile/nutrition/templates/${templateId}/apply`, { method: 'POST', body: payload })
+}
+
+// ── Water tracking ─────────────────────────────────────────────────────────────
+
+export type WaterLogData = {
+  mlLogged: number
+  waterMlTarget: number
+}
+
+export async function getWaterLog(): Promise<WaterLogData> {
+  return apiFetch<WaterLogData>('/api/mobile/nutrition/water')
+}
+
+export async function logWater(delta: number): Promise<{ mlLogged: number }> {
+  return apiFetch<{ mlLogged: number }>('/api/mobile/nutrition/water', { method: 'POST', body: { delta } })
 }

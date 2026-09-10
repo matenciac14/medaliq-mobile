@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Linking } from 'react-native'
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -49,10 +49,10 @@ export default function UpgradeScreen() {
           <Text style={{ color: 'white', fontSize: 36, fontFamily: 'Inter_900Black', lineHeight: 40 }}>M</Text>
         </View>
         <Text style={{ color: 'white', fontSize: 24, fontFamily: 'Inter_900Black', textAlign: 'center' }}>
-          Tu trial ha finalizado
+          Elige tu plan
         </Text>
         <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
-          Para seguir entrenando con tu plan personalizado,{'\n'}activa tu suscripción Pro.
+          Activa Pro para entrenar con plan adaptativo,{'\n'}check-in semanal y métricas de progreso.
         </Text>
       </LinearGradient>
 
@@ -94,8 +94,8 @@ export default function UpgradeScreen() {
             Plan Pro
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 8, gap: 4 }}>
-            <Text style={{ fontSize: 40, fontFamily: 'Inter_900Black', color: '#1e3a5f', lineHeight: 48 }}>$15</Text>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#94a3b8', paddingBottom: 8 }}>/mes</Text>
+            <Text style={{ fontSize: 40, fontFamily: 'Inter_900Black', color: '#1e3a5f', lineHeight: 48 }}>$9.99</Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#94a3b8', paddingBottom: 8 }}>/mes USD</Text>
           </View>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#94a3b8', marginTop: 4 }}>
             Cancela cuando quieras
@@ -106,7 +106,7 @@ export default function UpgradeScreen() {
       {/* CTA */}
       <View style={{ marginHorizontal: 16, marginTop: 16, gap: 10 }}>
         <TouchableOpacity
-          onPress={() => Linking.openURL('https://medaliq.com/upgrade')}
+          onPress={() => router.push('/(app)/pricing' as any)}
           activeOpacity={0.85}
           style={{
             backgroundColor: '#f97316',
@@ -116,7 +116,7 @@ export default function UpgradeScreen() {
           }}
         >
           <Text style={{ color: 'white', fontSize: 16, fontFamily: 'Inter_700Bold' }}>
-            Activar Pro — $15/mes
+            Ver planes
           </Text>
         </TouchableOpacity>
 

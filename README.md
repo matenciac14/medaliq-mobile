@@ -1,6 +1,6 @@
 # Medaliq Mobile
 
-App nativa iOS + Android para [Medaliq](https://medaliq.com) — coaching deportivo con AI para LatAm.
+App nativa iOS + Android para [Medaliq](https://medaliq.com) — plataforma de tracking y coaching deportivo para LatAm.
 
 ## Stack
 
