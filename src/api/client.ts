@@ -52,7 +52,17 @@ export async function apiFetch<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  // Auto-inject timezone into GET requests so backend resolves dates correctly
+  let url = `${BASE_URL}${path}`
+  if (method === 'GET') {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (tz) {
+      const sep = url.includes('?') ? '&' : '?'
+      url += `${sep}tz=${encodeURIComponent(tz)}`
+    }
+  }
+
+  const res = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

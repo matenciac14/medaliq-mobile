@@ -12,6 +12,7 @@ type Props = {
   carbsG: number
   fatG: number
   label: string
+  headerLabel?: string
   consumed?: Consumed | null
   onPress: () => void
 }
@@ -48,17 +49,17 @@ function MacroRing({ label, current, target, color, bgColor }: {
   return (
     <View style={{ alignItems: 'center', gap: 4, flex: 1 }}>
       <RingProgress size={40} stroke={4} pct={pct} color={color} bgColor={bgColor} />
-      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
-        {current}g
+      <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#1f3b5e' }}>
+        {Math.round(current)}g
       </Text>
-      <Text style={{ fontSize: 9, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
+      <Text style={{ fontSize: 9, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>
         {label}
       </Text>
     </View>
   )
 }
 
-export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, consumed: consumedProp, onPress }: Props) {
+export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, headerLabel, consumed: consumedProp, onPress }: Props) {
   const consumed = consumedProp ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   const loading = !consumedProp
 
@@ -71,12 +72,12 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, consumed
       activeOpacity={0.85}
       style={{
         backgroundColor: 'white', borderRadius: 20, overflow: 'hidden',
-        borderWidth: 1, borderColor: '#f3f4f6',
+        borderWidth: 1, borderColor: '#f0f2f5',
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
       }}
     >
-      <View style={{ flexDirection: 'row', padding: 20, gap: 20 }}>
+      <View style={{ flexDirection: 'row', padding: 16, gap: 20 }}>
         {/* Left — big calorie ring */}
         <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
           <RingProgress size={120} stroke={10} pct={kcalPct} color="#f97316" bgColor="#fef3e2" />
@@ -85,10 +86,10 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, consumed
               <Text style={{ fontSize: 12, color: '#9ca3af' }}>...</Text>
             ) : (
               <>
-                <Text style={{ fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1e3a5f', lineHeight: 24 }}>
+                <Text style={{ fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1f3b5e', lineHeight: 24 }}>
                   {remaining.toLocaleString()}
                 </Text>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>
                   restantes
                 </Text>
               </>
@@ -97,29 +98,26 @@ export default function NutritionBanner({ kcal, proteinG, carbsG, fatG, consumed
         </View>
 
         {/* Right — info column */}
-        <View style={{ flex: 1, justifyContent: 'center', gap: 10 }}>
-          {/* Title block */}
-          <View style={{ gap: 2 }}>
-            <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#9ca3af', letterSpacing: 0.72 }}>
-              CALORIAS DE HOY
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase' }}>
+            {headerLabel ?? 'CALORIAS DE HOY'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
+            <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1f3b5e' }}>
+              {kcal.toLocaleString()}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
-                {kcal.toLocaleString()}
-              </Text>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                kcal objetivo
-              </Text>
-            </View>
-            {!loading && (
-              <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>
-                {consumed.kcal.toLocaleString()} kcal consumidas
-              </Text>
-            )}
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8c99a6' }}>
+              kcal objetivo
+            </Text>
           </View>
+          {!loading && (
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#8c99a6', marginTop: 2 }}>
+              {consumed.kcal.toLocaleString()} kcal consumidas
+            </Text>
+          )}
 
           {/* Macro rings row */}
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
             <MacroRing label="Prot" current={consumed.proteinG} target={proteinG} color="#3b82f6" bgColor="#edf2ff" />
             <MacroRing label="Carbs" current={consumed.carbsG} target={carbsG} color="#eab308" bgColor="#fef9c3" />
             <MacroRing label="Grasas" current={consumed.fatG} target={fatG} color="#22c55e" bgColor="#dcfce7" />

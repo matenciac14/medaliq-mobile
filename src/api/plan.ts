@@ -85,7 +85,5 @@ export type CalendarWeek = {
 }
 
 export async function getCalendarWeek(weekOffset: number): Promise<CalendarWeek> {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const tzParam = tz ? `&tz=${encodeURIComponent(tz)}` : ''
-  return apiFetch<CalendarWeek>(`/api/mobile/calendar?weekOffset=${weekOffset}${tzParam}`)
+  return apiFetch<CalendarWeek>(`/api/mobile/calendar?weekOffset=${weekOffset}`)
 }

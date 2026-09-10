@@ -142,7 +142,5 @@ export type WeekSessionsData = {
 }
 
 export async function getWeekSessions(weekOffset: number): Promise<WeekSessionsData> {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const tzParam = tz ? `&tz=${encodeURIComponent(tz)}` : ''
-  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}${tzParam}`)
+  return apiFetch<WeekSessionsData>(`/api/mobile/dashboard/week-sessions?weekOffset=${weekOffset}`)
 }
