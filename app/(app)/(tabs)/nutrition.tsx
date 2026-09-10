@@ -1213,20 +1213,21 @@ export default function NutritionScreen() {
             </View>
           )}
 
-          {/* sin-plan: EmptyState */}
-          {!data?.hasNutritionPlan && (
-            <View style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#f0f2f5', borderRadius: 20, padding: 28, alignItems: 'center', gap: 10 }}>
-              <Text style={{ fontSize: 36 }}>🥗</Text>
+          {/* sin-plan: CTA al constructor de nutricion */}
+          {!data?.hasNutritionPlan && !data?.isB2B && (
+            <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 20, padding: 28, alignItems: 'center', gap: 10 }}>
+              <Text style={{ fontSize: 36 }}>📋</Text>
               <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1f3b5e', textAlign: 'center' }}>
-                Sin plan nutricional
+                Crea tu menu nutricional
               </Text>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#8c99a6', textAlign: 'center', lineHeight: 18 }}>
-                Completa el onboarding para activar tu plan nutricional personalizado.
+                Define que comes en cada tipo de dia y el sistema lo aplica a tu semana automaticamente.
               </Text>
               <TouchableOpacity
-                style={{ backgroundColor: '#1e3a5f', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 4 }}
+                onPress={() => router.push('/(app)/nutrition-constructor' as any)}
+                style={{ backgroundColor: '#ea580c', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 4 }}
               >
-                <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Completar onboarding</Text>
+                <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Crear menu nutricional</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1374,6 +1375,29 @@ export default function NutritionScreen() {
                 </View>
                 <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>
               </TouchableOpacity>
+
+              {!data?.isB2B && (
+                <TouchableOpacity
+                  onPress={() => router.push('/(app)/nutrition-constructor' as any)}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: '#fff7ed', borderRadius: 20, borderWidth: 1,
+                    borderColor: '#fed7aa', padding: 16,
+                    flexDirection: 'row', alignItems: 'center', gap: 14,
+                  }}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#ffedd5', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>🍽️</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>Crear menu nutricional</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                      Define comidas por tipo de dia y planifica tu semana.
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>›</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </ScrollView>
