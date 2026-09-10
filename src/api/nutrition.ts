@@ -290,6 +290,24 @@ export async function logAllPlannedMealsToday(): Promise<{ created: number; tota
   return apiFetch('/api/mobile/nutrition/planned-meals/log-today', { method: 'POST', body: {} })
 }
 
+// ── PlannedMeals CRUD (constructor mobile) ──────────────────────────────────
+
+export type PlannedMealsByDate = Record<string, PlannedMealItem[]>
+
+export async function getPlannedMealsWeek(weekStart: string): Promise<{ weekStart: string; meals: PlannedMealsByDate }> {
+  return apiFetch(`/api/mobile/nutrition/planned-meals?weekStart=${encodeURIComponent(weekStart)}`)
+}
+
+export async function createPlannedMeal(payload: {
+  date: string; mealType: string; foodId: string; grams: number
+}): Promise<{ meal: PlannedMealItem }> {
+  return apiFetch('/api/mobile/nutrition/planned-meals', { method: 'POST', body: payload })
+}
+
+export async function deletePlannedMeal(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/mobile/nutrition/planned-meals/${id}`, { method: 'DELETE', body: {} })
+}
+
 // ── Grocery list ───────────────────────────────────────────────────────────────
 
 export type GroceryItem = {
@@ -338,6 +356,19 @@ export type NutritionTemplate = {
 
 export async function getNutritionTemplates(): Promise<{ templates: NutritionTemplate[] }> {
   return apiFetch('/api/mobile/nutrition/templates')
+}
+
+export async function createNutritionTemplate(payload: {
+  name: string; goal?: string
+}): Promise<{ template: NutritionTemplate }> {
+  return apiFetch('/api/mobile/nutrition/templates', { method: 'POST', body: payload })
+}
+
+export async function addTemplateMealItem(
+  templateId: string,
+  payload: { dayType: string; mealType: string; foodId: string; grams: number }
+): Promise<{ item: any }> {
+  return apiFetch(`/api/mobile/nutrition/templates/${templateId}/meals`, { method: 'POST', body: payload })
 }
 
 export async function applyNutritionTemplate(
