@@ -13,8 +13,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import { getNutritionTemplates, getFoods, getNutritionPage, createNutritionTemplate, addTemplateMealItem } from '../../src/api/nutrition'
-import type { NutritionTemplate, FoodItem } from '../../src/api/nutrition'
+import { getNutritionTemplates, getFoods, getNutritionPage, createNutritionTemplate, addTemplateMealItem, getMealTemplates } from '../../src/api/nutrition'
+import type { NutritionTemplate, FoodItem, MealTemplate } from '../../src/api/nutrition'
 
 // ── Types & Constants ────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ type MealType = 'BREAKFAST' | 'PRE_WORKOUT' | 'LUNCH' | 'SNACK' | 'DINNER' | 'PO
 
 const DAY_TABS: { value: DayType; label: string; icon: string; bg: string; border: string; text: string }[] = [
   { value: 'HARD', label: 'Duro', icon: '🔥', bg: '#1e3a5f', border: '#1e3a5f', text: 'white' },
-  { value: 'EASY', label: 'Facil', icon: '✅', bg: '#f0fdf4', border: '#86efac', text: '#16a34a' },
+  { value: 'EASY', label: 'Fácil', icon: '✅', bg: '#f0fdf4', border: '#86efac', text: '#16a34a' },
   { value: 'REST', label: 'Descanso', icon: '😴', bg: '#f9fafb', border: '#d1d5db', text: '#6b7280' },
 ]
 
@@ -67,6 +67,14 @@ function AddFoodModal({
     staleTime: 5 * 60_000,
   })
 
+  const { data: templatesData } = useQuery({
+    queryKey: ['meal-templates'],
+    queryFn: getMealTemplates,
+    staleTime: 5 * 60_000,
+  })
+
+  const savedCombos = templatesData?.templates ?? []
+
   const filtered = query.length >= 2
     ? (allFoods ?? []).filter(f => f.name.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
     : (allFoods ?? []).slice(0, 8)
@@ -88,7 +96,7 @@ function AddFoodModal({
     onClose()
   }
 
-  const dayLabel = dayType === 'HARD' ? 'Dia Duro 🔥' : dayType === 'EASY' ? 'Dia Facil ✅' : 'Descanso 😴'
+  const dayLabel = dayType === 'HARD' ? 'Día Duro 🔥' : dayType === 'EASY' ? 'Día Fácil ✅' : 'Descanso 😴'
   const mealLabel = MEAL_LABELS[mealType]?.label ?? mealType
 
   if (selected) {
@@ -117,8 +125,10 @@ function AddFoodModal({
               <View style={{ paddingHorizontal: 16, gap: 16 }}>
                 {/* Food info */}
                 <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text style={{ fontSize: 28 }}>🥄</Text>
-                  <View>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>🥄</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{selected.name}</Text>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
                       {selected.kcalPer100g} kcal · {selected.proteinPer100g}g prot · {selected.carbsPer100g}g carb · {selected.fatPer100g}g grasa por 100g
@@ -129,7 +139,7 @@ function AddFoodModal({
                 {/* Grams input */}
                 <View>
                   <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280', marginBottom: 8 }}>Cantidad (gramos)</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderColor: '#1f3b5e', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 }}>
                     <TextInput
                       value={String(grams)}
                       onChangeText={t => setGrams(Math.max(1, Number(t) || 0))}
@@ -147,7 +157,7 @@ function AddFoodModal({
                       key={g}
                       onPress={() => setGrams(g)}
                       style={{
-                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                        flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
                         borderWidth: 1.5,
                         borderColor: grams === g ? '#1e3a5f' : '#e2e8f0',
                         backgroundColor: grams === g ? '#eff6ff' : 'white',
@@ -164,17 +174,18 @@ function AddFoodModal({
                     <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
                       Aporte nutricional · {grams}g
                     </Text>
-                    <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                      <View>
+                    <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ marginRight: 14 }}>
                         <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827' }}>{macros.kcal}</Text>
                         <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kcal</Text>
                       </View>
+                      <View style={{ width: 1, height: 32, backgroundColor: '#e5e7eb', marginRight: 14 }} />
                       {[
-                        { label: 'Proteina', value: `${macros.proteinG}g`, color: '#ef4444' },
-                        { label: 'Carbos', value: `${macros.carbsG}g`, color: '#3b82f6' },
-                        { label: 'Grasas', value: `${macros.fatG}g`, color: '#eab308' },
+                        { label: 'Proteína', value: `${macros.proteinG}g`, color: '#3b82f6' },
+                        { label: 'Carbos', value: `${macros.carbsG}g`, color: '#eab308' },
+                        { label: 'Grasas', value: `${macros.fatG}g`, color: '#22c55e' },
                       ].map(m => (
-                        <View key={m.label} style={{ alignItems: 'center' }}>
+                        <View key={m.label} style={{ alignItems: 'center', flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: m.color }} />
                             <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>{m.value}</Text>
@@ -222,8 +233,8 @@ function AddFoodModal({
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 }}>
             <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827' }}>Agregar alimento</Text>
-            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={22} color="#9ca3af" />
+            <TouchableOpacity onPress={handleClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f2f5f7', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={18} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
@@ -244,6 +255,7 @@ function AddFoodModal({
                 autoFocus
                 style={{ flex: 1, paddingVertical: 12, paddingLeft: 8, fontSize: 15, fontFamily: 'Inter_400Regular', color: '#0f172a' }}
               />
+              <Ionicons name="camera-outline" size={20} color="#9ca3af" />
             </View>
           </View>
 
@@ -252,7 +264,7 @@ function AddFoodModal({
 
             {!isLoading && filtered.length > 0 && (
               <View style={{ paddingHorizontal: 16 }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.65, marginBottom: 8 }}>
                   {query.length >= 2 ? 'Resultados' : 'Tus alimentos'}
                 </Text>
                 {filtered.map(food => (
@@ -260,10 +272,13 @@ function AddFoodModal({
                     key={food.id}
                     onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
                     style={{
-                      flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
-                      borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                      flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12,
+                      borderBottomWidth: 1, borderBottomColor: '#f3f4f6', marginLeft: 4,
                     }}
                   >
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 16 }}>🥄</Text>
+                    </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
                       <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
@@ -275,6 +290,53 @@ function AddFoodModal({
                     </View>
                   </TouchableOpacity>
                 ))}
+              </View>
+            )}
+            {/* Combinaciones guardadas */}
+            {savedCombos.length > 0 && !query && (
+              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.65, marginBottom: 8 }}>
+                  Combinaciones guardadas
+                </Text>
+                {savedCombos.map(t => {
+                  const comboKcal = t.items.reduce((s, i) => s + Math.round(i.food.kcalPer100g * i.grams / 100), 0)
+                  const comboProt = t.items.reduce((s, i) => s + Math.round(i.food.proteinPer100g * i.grams / 100), 0)
+                  const comboCarbs = t.items.reduce((s, i) => s + Math.round(i.food.carbsPer100g * i.grams / 100), 0)
+                  const comboFat = t.items.reduce((s, i) => s + Math.round(i.food.fatPer100g * i.grams / 100), 0)
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => {/* TODO: apply combo */}}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+                        borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                      }}
+                    >
+                      <View style={{ width: 3, height: 36, borderRadius: 2, backgroundColor: '#eb590d', marginRight: 12 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{t.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{comboKcal} kcal</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3b82f6' }} />
+                            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{comboProt}P</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#eab308' }} />
+                            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{comboCarbs}C</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22c55e' }} />
+                            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{comboFat}G</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="add" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
             )}
           </ScrollView>
@@ -338,13 +400,12 @@ export default function NutritionDayBuilderScreen() {
     { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   )
 
-  const targetKcal = activeDayType === 'HARD' ? (pageData?.macros?.kcal ?? 2850)
-    : activeDayType === 'EASY' ? Math.round((pageData?.macros?.kcal ?? 2850) * 0.77)
-    : Math.round((pageData?.macros?.kcal ?? 2850) * 0.63)
-
-  const targetProtein = pageData?.macros?.proteinG ?? 165
-  const targetCarbs = activeDayType === 'HARD' ? (pageData?.macros?.carbsG ?? 340) : Math.round((pageData?.macros?.carbsG ?? 340) * 0.7)
-  const targetFat = pageData?.macros?.fatG ?? 75
+  const dayKey = activeDayType === 'HARD' ? 'hard' : activeDayType === 'EASY' ? 'easy' : 'rest'
+  const dayTarget = pageData?.dayTargets?.[dayKey as keyof NonNullable<typeof pageData.dayTargets>]
+  const targetKcal = dayTarget?.kcal ?? 0
+  const targetProtein = dayTarget?.proteinG ?? 0
+  const targetCarbs = dayTarget?.carbsG ?? 0
+  const targetFat = dayTarget?.fatG ?? 0
 
   function handleAddFood(food: FoodItem, grams: number) {
     if (!addingTo) return
@@ -405,7 +466,7 @@ export default function NutritionDayBuilderScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutricion</Text>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutrición</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 6, alignItems: 'center' }}>
@@ -415,7 +476,7 @@ export default function NutritionDayBuilderScreen() {
           </View>
           <View style={{ flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 6, alignItems: 'center' }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-              {activeDayType === 'HARD' ? '🔥 Dia Duro' : activeDayType === 'EASY' ? '✅ Dia Facil' : '😴 Descanso'}
+              {activeDayType === 'HARD' ? '🔥 Día Duro' : activeDayType === 'EASY' ? '✅ Día Fácil' : '😴 Descanso'}
             </Text>
           </View>
         </View>
@@ -427,14 +488,14 @@ export default function NutritionDayBuilderScreen() {
       >
         {/* Title */}
         <View>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827' }}>Menu nutricional</Text>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827' }}>Menú nutricional</Text>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
-            Define las comidas para cada tipo de dia
+            Define las comidas para cada tipo de día
           </Text>
         </View>
 
         {/* Day type tabs */}
-        <View style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 22, padding: 3 }}>
           {DAY_TABS.map(tab => {
             const isActive = activeDayType === tab.value
             return (
@@ -442,9 +503,8 @@ export default function NutritionDayBuilderScreen() {
                 key={tab.value}
                 onPress={() => { setActiveDayType(tab.value); Haptics.selectionAsync() }}
                 style={{
-                  flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
-                  backgroundColor: isActive ? tab.bg : 'white',
-                  borderWidth: 1.5, borderColor: isActive ? tab.border : '#e2e8f0',
+                  flex: 1, paddingVertical: 10, borderRadius: 20, alignItems: 'center',
+                  backgroundColor: isActive ? tab.bg : 'transparent',
                 }}
               >
                 <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: isActive ? tab.text : '#9ca3af' }}>
@@ -456,26 +516,26 @@ export default function NutritionDayBuilderScreen() {
         </View>
 
         {/* Configuring banner */}
-        <View style={{ backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fed7aa' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#92400e' }}>
-            {activeDayType === 'HARD' ? '🔥' : activeDayType === 'EASY' ? '✅' : '😴'} Configurando: {activeDayType === 'HARD' ? 'Dia Duro' : activeDayType === 'EASY' ? 'Dia Facil' : 'Descanso'}
+        <View style={{ backgroundColor: '#f5f7fc', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#d9e0ed' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>
+            {activeDayType === 'HARD' ? '🔥' : activeDayType === 'EASY' ? '✅' : '😴'} Configurando: {activeDayType === 'HARD' ? 'Día Duro' : activeDayType === 'EASY' ? 'Día Fácil' : 'Descanso'}
           </Text>
-          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#b45309', marginTop: 2 }}>
-            {activeDayType === 'HARD' ? 'Sesiones de alta intensidad' : activeDayType === 'EASY' ? 'Sesiones de baja intensidad' : 'Dias sin entrenamiento'}
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6a7788', marginTop: 2 }}>
+            {activeDayType === 'HARD' ? 'Sesiones de alta intensidad' : activeDayType === 'EASY' ? 'Sesiones de baja intensidad' : 'Días sin entrenamiento'}
           </Text>
         </View>
 
         {/* Macros summary */}
-        <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+        <View style={{ backgroundColor: '#fff7ed', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#fed7aa' }}>
           <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
-            Macros · {activeDayType === 'HARD' ? 'Dia Duro' : activeDayType === 'EASY' ? 'Dia Facil' : 'Descanso'}
+            Macros · {activeDayType === 'HARD' ? 'Día Duro' : activeDayType === 'EASY' ? 'Día Fácil' : 'Descanso'}
           </Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {[
-              { label: 'Kcal', value: dayTotals.kcal, target: targetKcal, color: '#ea580c' },
-              { label: 'P', value: dayTotals.proteinG, target: targetProtein, color: '#ef4444', suffix: 'g' },
-              { label: 'C', value: dayTotals.carbsG, target: targetCarbs, color: '#3b82f6', suffix: 'g' },
-              { label: 'G', value: dayTotals.fatG, target: targetFat, color: '#eab308', suffix: 'g' },
+              { label: 'Kcal', value: dayTotals.kcal, target: targetKcal, color: '#ea580c', subLabel: 'objetivo' },
+              { label: 'P', value: dayTotals.proteinG, target: targetProtein, color: '#3b82f6', suffix: 'g', subLabel: 'proteína' },
+              { label: 'C', value: dayTotals.carbsG, target: targetCarbs, color: '#eab308', suffix: 'g', subLabel: 'carbos' },
+              { label: 'G', value: dayTotals.fatG, target: targetFat, color: '#22c55e', suffix: 'g', subLabel: 'grasas' },
             ].map(m => {
               const pct = m.target > 0 ? Math.min((m.value / m.target) * 100, 100) : 0
               return (
@@ -485,7 +545,7 @@ export default function NutritionDayBuilderScreen() {
                     {m.suffix ? `${Math.round(m.value * 10) / 10}${m.suffix}` : m.value.toLocaleString()}
                   </Text>
                   <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#d1d5db' }}>
-                    {m.label === 'Kcal' ? 'objetivo' : `${m.target}${m.suffix}`}
+                    {m.subLabel}
                   </Text>
                   <View style={{ width: '100%', height: 3, backgroundColor: '#f3f4f6', borderRadius: 2, marginTop: 4 }}>
                     <View style={{ width: `${pct}%`, height: 3, backgroundColor: m.color, borderRadius: 2 }} />
@@ -589,7 +649,7 @@ export default function NutritionDayBuilderScreen() {
           {saving
             ? <ActivityIndicator color="white" />
             : <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                Aplicar a esta semana →
+                Guardar menú →
               </Text>
           }
         </TouchableOpacity>

@@ -121,14 +121,21 @@ function AddFoodSheet({
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', justifyContent: 'space-around' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{macros.kcal}</Text>
-                    <Text style={{ fontSize: 9, color: '#9ca3af' }}>kcal</Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{macros.prot}g</Text>
-                    <Text style={{ fontSize: 9, color: '#9ca3af' }}>proteina</Text>
+                <View style={{ backgroundColor: '#1e3a5f', borderRadius: 14, padding: 14 }}>
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                    Aporte de {grams}g
+                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                    {[
+                      { label: 'Calorías', value: macros.kcal, unit: 'kcal', color: '#fb923c' },
+                      { label: 'Proteína', value: `${macros.prot}g`, unit: '', color: '#93c5fd' },
+                    ].map(m => (
+                      <View key={m.label} style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20, fontFamily: 'Inter_900Black', color: m.color }}>{m.value}{m.unit ? '' : ''}</Text>
+                        <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>{m.unit || ''}</Text>
+                        <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>{m.label}</Text>
+                      </View>
+                    ))}
                   </View>
                 </View>
                 <TouchableOpacity onPress={handleAdd} style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
@@ -153,7 +160,14 @@ function AddFoodSheet({
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 }}>
             <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827' }}>Agregar alimento</Text>
-            <TouchableOpacity onPress={handleClose}><Ionicons name="close" size={22} color="#9ca3af" /></TouchableOpacity>
+            <TouchableOpacity onPress={handleClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f2f5f7', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={18} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>
+              {MEAL_LABELS[mealType] ?? mealType}
+            </Text>
           </View>
           <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0', paddingHorizontal: 14 }}>
@@ -164,20 +178,28 @@ function AddFoodSheet({
           </View>
           <ScrollView style={{ maxHeight: 350 }} keyboardShouldPersistTaps="handled">
             {isLoading && <ActivityIndicator color="#f97316" style={{ marginTop: 20 }} />}
-            <View style={{ paddingHorizontal: 16 }}>
-              {filtered.map(food => (
-                <TouchableOpacity key={food.id} onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{food.kcalPer100g} kcal / 100g</Text>
-                  </View>
-                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="add" size={16} color="white" />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!isLoading && filtered.length > 0 && (
+              <View style={{ paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.65, marginBottom: 8 }}>
+                  {query.length >= 2 ? 'Resultados' : 'Tus alimentos'}
+                </Text>
+                {filtered.map(food => (
+                  <TouchableOpacity key={food.id} onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', marginLeft: 4 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 16 }}>🥄</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{food.kcalPer100g} kcal / 100g</Text>
+                    </View>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="add" size={16} color="white" />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -221,7 +243,7 @@ export default function NutritionWeekPlannerScreen() {
 
   // Totals for day
   const dayTotal = dayMeals.reduce((sum, m) => sum + calcKcal(m.food, m.grams), 0)
-  const targetKcal = pageData?.macros?.kcal ?? 2850
+  const targetKcal = pageData?.targets?.kcal ?? 0
 
   // Apply template if coming from day builder
   const { mutate: applyTemplate, isPending: applying } = useMutation({
@@ -272,7 +294,7 @@ export default function NutritionWeekPlannerScreen() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutricion</Text>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutrición</Text>
         </View>
         {/* Date + Day type badges */}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
@@ -282,7 +304,7 @@ export default function NutritionWeekPlannerScreen() {
             </Text>
           </View>
           <View style={{ flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 6, alignItems: 'center' }}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>🔥 Dia Duro</Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>🔥 Día Duro</Text>
           </View>
         </View>
 
@@ -292,7 +314,7 @@ export default function NutritionWeekPlannerScreen() {
             <Ionicons name="chevron-back" size={18} color="white" />
           </TouchableOpacity>
           <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-            Semana · {formatWeekRange(mondayStr)}
+            Semana {weekOffset + 1} · {formatWeekRange(mondayStr)}
           </Text>
           <TouchableOpacity onPress={() => handleWeekChange(1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chevron-forward" size={18} color="white" />
@@ -326,7 +348,7 @@ export default function NutritionWeekPlannerScreen() {
                   </Text>
                   <View style={{
                     width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isSelected ? '#1e3a5f' : hasMeals ? '#22c55e' : '#f3f4f6',
+                    backgroundColor: isSelected ? '#1e3a5f' : hasMeals ? '#1e3a5f' : '#f3f4f6',
                   }}>
                     <Text style={{
                       fontSize: 14, fontFamily: 'Inter_700Bold',
@@ -335,7 +357,7 @@ export default function NutritionWeekPlannerScreen() {
                       {dayNum}
                     </Text>
                   </View>
-                  {hasMeals && !isSelected && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#22c55e' }} />}
+                  {hasMeals && !isSelected && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#1e3a5f' }} />}
                 </TouchableOpacity>
               )
             })}
@@ -343,37 +365,39 @@ export default function NutritionWeekPlannerScreen() {
 
           {/* Days planned progress */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Dias planificados</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Días planificados</Text>
             <Text style={{ fontSize: 15, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>{daysPlanned} / 7</Text>
           </View>
           <View style={{ height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, overflow: 'hidden' }}>
-            <View style={{ height: 4, backgroundColor: '#22c55e', borderRadius: 2, width: `${(daysPlanned / 7) * 100}%` }} />
+            <View style={{ height: 4, backgroundColor: '#eb590d', borderRadius: 2, width: `${(daysPlanned / 7) * 100}%` }} />
           </View>
 
           {/* Day content */}
           {dayMeals.length === 0 ? (
             // Empty day state (Figma 4944:89)
-            <View style={{ backgroundColor: '#fff7ed', borderRadius: 20, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#fed7aa' }}>
-              <Text style={{ fontSize: 40 }}>📭</Text>
-              <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827', textAlign: 'center', marginTop: 12 }}>
+            <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#ebedf2' }}>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f0f5ff', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                <Text style={{ fontSize: 40 }}>📭</Text>
+              </View>
+              <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', textAlign: 'center', marginTop: 12 }}>
                 Sin comidas planificadas
               </Text>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center', marginTop: 8 }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6a7788', textAlign: 'center', marginTop: 8 }}>
                 {new Date(selectedDay + 'T12:00:00Z').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
               </Text>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center', marginTop: 4 }}>
-                Agrega comidas desde tu plantilla o personaliza este dia.
+                Agrega comidas desde tu plantilla o personaliza este día.
               </Text>
 
               {params.templateId && (
                 <TouchableOpacity
                   onPress={() => applyTemplate()}
                   disabled={applying}
-                  style={{ backgroundColor: '#ea580c', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14, marginTop: 16, opacity: applying ? 0.7 : 1 }}
+                  style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14, marginTop: 16, opacity: applying ? 0.7 : 1 }}
                 >
                   {applying
                     ? <ActivityIndicator color="white" />
-                    : <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>Aplicar plantilla</Text>
+                    : <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>Aplicar plantilla Descanso</Text>
                   }
                 </TouchableOpacity>
               )}
@@ -388,36 +412,23 @@ export default function NutritionWeekPlannerScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            // Meals list
-            <View style={{ gap: 8 }}>
-              {MEAL_ORDER.map(mealType => {
+            // Meals list — flat inside one container (Figma 4523:3332)
+            <View style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+              {MEAL_ORDER.map((mealType, idx) => {
                 const items = grouped[mealType] ?? []
                 if (items.length === 0) return null
                 const mealKcal = items.reduce((s, m) => s + calcKcal(m.food, m.grams), 0)
+                const foodSummary = items.map(i => i.food.name).join(', ')
                 return (
-                  <View key={mealType} style={{ backgroundColor: 'white', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View key={mealType} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                    <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
                         {MEAL_LABELS[mealType] ?? mealType}
                       </Text>
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#ea580c' }}>{mealKcal} kcal</Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>{foodSummary}</Text>
                     </View>
-                    {items.map(item => (
-                      <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151' }}>{item.food.name}</Text>
-                          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                            {item.food.servingLabel ? `${item.food.servingLabel} (${item.grams}g)` : `${item.grams}g`}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>
-                          {calcKcal(item.food, item.grams)} kcal
-                        </Text>
-                        <TouchableOpacity onPress={() => removeMeal(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="close-circle" size={16} color="#d1d5db" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#ea580c', marginRight: 8 }}>{mealKcal} kcal</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
                   </View>
                 )
               })}
@@ -427,22 +438,24 @@ export default function NutritionWeekPlannerScreen() {
                 onPress={() => setAddingMealType('BREAKFAST')}
                 style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  backgroundColor: 'white', borderRadius: 14, paddingVertical: 14,
-                  borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#d1d5db',
+                  paddingVertical: 14,
+                  borderStyle: 'dashed', borderTopWidth: 1, borderTopColor: '#e5e7eb',
                 }}
               >
                 <Ionicons name="add" size={16} color="#6b7280" />
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar comida al dia</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar comida al día</Text>
               </TouchableOpacity>
 
-              {/* Day total */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginTop: 4 }}>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>Total</Text>
-                <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{dayTotal.toLocaleString()} kcal</Text>
+              {/* Day total — inside card */}
+              <View style={{ padding: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>Total</Text>
+                  <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{dayTotal.toLocaleString()} kcal</Text>
+                </View>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#eb590d', textAlign: 'right', marginTop: 2 }}>
+                  Objetivo: {targetKcal.toLocaleString()} kcal · Faltan {Math.max(0, targetKcal - dayTotal).toLocaleString()} kcal
+                </Text>
               </View>
-              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'right', marginTop: -4 }}>
-                Objetivo: {targetKcal.toLocaleString()} kcal · Faltan {Math.max(0, targetKcal - dayTotal).toLocaleString()} kcal
-              </Text>
             </View>
           )}
         </ScrollView>

@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '../../src/api/client'
-import { assignTemplate } from '../../src/api/gym'
+import { assignTemplate, searchExercises } from '../../src/api/gym'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,8 +31,8 @@ function ExercisePicker({ onSelect }: { onSelect: (ex: PickerExercise) => void }
     timeout.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const res = await apiFetch<{ exercises: PickerExercise[] }>(`/api/gym/exercises/search?q=${encodeURIComponent(q)}`)
-        setResults(res.exercises ?? [])
+        const exercises = await searchExercises({ q })
+        setResults(exercises.map(e => ({ id: e.id, name: e.name, bodyPart: e.bodyPart })))
       } catch { setResults([]) } finally { setLoading(false) }
     }, 300)
   }, [q])
@@ -103,7 +103,7 @@ export default function GymBuilderScreen() {
 
     setSaving(true)
     try {
-      const template = await apiFetch<{ id: string }>('/api/athlete/gym/routines', {
+      const template = await apiFetch<{ id: string }>('/api/mobile/gym/routines', {
         method: 'POST',
         body: {
           name: name.trim(),

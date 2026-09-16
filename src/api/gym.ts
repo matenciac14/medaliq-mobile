@@ -170,9 +170,7 @@ export async function getExerciseAlternatives(exerciseId: string): Promise<Exerc
 }
 
 export async function getTodayGymSession(): Promise<GymSessionData | null> {
-  // TODO: estos endpoints usan Auth.js (session web), no JWT mobile — siempre 401 en prod.
-  // Crear /api/mobile/gym/today y /api/mobile/gym/complete con getMobileUser() cuando se priorice.
-  return apiFetch<GymSessionData | null>('/api/athlete/gym/session/today')
+  return apiFetch<GymSessionData | null>('/api/mobile/gym/today')
 }
 
 export type GymPR = {
@@ -191,6 +189,5 @@ export type PRResult = {
 }
 
 export async function completeGymSession(payload: CompleteSessionPayload): Promise<{ sessionId: string; newPRs: PRResult[] }> {
-  // TODO: misma limitación — ruta web. Ver TODO en getTodayGymSession().
-  return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/athlete/gym/session/complete', { method: 'POST', body: payload })
+  return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/mobile/gym/complete', { method: 'POST', body: payload })
 }
