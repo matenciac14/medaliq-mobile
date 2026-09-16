@@ -279,7 +279,49 @@ export default function LogFoodModal({ visible, onClose, date }: Props) {
           {/* STEP: search */}
           {step === 'search' && (
             <>
-              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              {/* Meal type tabs — Figma 4523:1858 */}
+              <View style={{ paddingTop: 12, paddingBottom: 4 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}
+                >
+                  {MEAL_TYPES.map(mt => (
+                    <TouchableOpacity
+                      key={mt.key}
+                      onPress={() => setMealType(mt.key)}
+                      style={{
+                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                        backgroundColor: mealType === mt.key ? '#1e3a5f' : 'white',
+                        borderWidth: 1, borderColor: mealType === mt.key ? '#1e3a5f' : '#e5e7eb',
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 12, fontFamily: 'Inter_500Medium',
+                        color: mealType === mt.key ? 'white' : '#374151',
+                      }}>
+                        {mt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {/* Dots pagination indicator */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 4, marginTop: 8 }}>
+                  {MEAL_TYPES.map(mt => (
+                    <View
+                      key={mt.key}
+                      style={{
+                        width: mealType === mt.key ? 8 : 5,
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: mealType === mt.key ? '#ea580c' : '#d1d5db',
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{
                   flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,

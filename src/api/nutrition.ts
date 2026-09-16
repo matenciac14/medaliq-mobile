@@ -94,6 +94,11 @@ export type NutritionPageData = {
   dayType: 'hard' | 'easy' | 'rest'
   macros: NutritionData['macros']
   targets: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null
+  dayTargets: {
+    hard: { kcal: number; proteinG: number; carbsG: number; fatG: number }
+    easy: { kcal: number; proteinG: number; carbsG: number; fatG: number }
+    rest: { kcal: number; proteinG: number; carbsG: number; fatG: number }
+  } | null
   intensity: string
   plannedMeals: PlannedMealItem[]
   templateMeals: any[] | null

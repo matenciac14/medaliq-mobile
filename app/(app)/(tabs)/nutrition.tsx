@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput, RefreshControl, Modal, Platform, KeyboardAvoidingView } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -121,7 +121,7 @@ function MealList({ mealPlan, dayType }: { mealPlan: any; dayType: string }) {
 
 // ─── HydrationSection ────────────────────────────────────────────────────────
 
-const WATER_QUICK_ADD = [250, 500, 750]
+const WATER_QUICK_ADD = [250, 500, 1000]
 
 function HydrationSection({ mlLogged: mlLoggedProp, waterTarget: targetProp }: { mlLogged: number; waterTarget: number }) {
   const queryClient = useQueryClient()
@@ -184,7 +184,7 @@ function HydrationSection({ mlLogged: mlLoggedProp, waterTarget: targetProp }: {
             disabled={isPending}
             style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#ebf2ff' }}
           >
-            <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#2e61c2' }}>+{ml === 1000 ? '1L' : ml}</Text>
+            <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#2e61c2' }}>+{ml >= 1000 ? `${ml / 1000}L` : ml}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -517,10 +517,19 @@ function PlannedMealsSection({
   )
 }
 
-// ─── TrackingSection ─────────────────────────────────────────────────────────
+// ─── ConsumedSheet — bottom sheet modal (Figma 4523:1764) ────────────────────
 
-function TrackingSection({ onAdd, foodLogData }: { onAdd: () => void; foodLogData: NutritionPageData['foodLogs'] | undefined }) {
-  const [expanded, setExpanded] = useState(false)
+const MEAL_TYPE_ORDER = ['BREAKFAST', 'PRE_WORKOUT', 'LUNCH', 'SNACK', 'DINNER', 'POST_WORKOUT']
+const CONSUMED_MEAL_LABELS: Record<string, string> = {
+  BREAKFAST: 'Desayuno', PRE_WORKOUT: 'Pre-entreno', LUNCH: 'Almuerzo',
+  SNACK: 'Merienda', DINNER: 'Cena', POST_WORKOUT: 'Post-entreno',
+}
+
+function ConsumedSheet({ visible, onClose, foodLogData, onAdd }: {
+  visible: boolean; onClose: () => void
+  foodLogData: NutritionPageData['foodLogs'] | undefined
+  onAdd: () => void
+}) {
   const queryClient = useQueryClient()
   const { mutate: doDelete } = useMutation({
     mutationFn: deleteFoodLog,
@@ -531,108 +540,87 @@ function TrackingSection({ onAdd, foodLogData }: { onAdd: () => void; foodLogDat
     onError: () => Alert.alert('Error', 'No se pudo eliminar el alimento.'),
   })
 
-  const isLoading = !foodLogData
   const totals = foodLogData?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
-  const target = foodLogData?.target
-  const logs   = foodLogData?.logs ?? []
+  const logs = foodLogData?.logs ?? []
 
-  const kcalPct = target?.kcal ? Math.min(Math.round((totals.kcal / target.kcal) * 100), 100) : 0
-  const kcalOver = target?.kcal ? totals.kcal > target.kcal : false
+  const grouped = useMemo(() => {
+    const map: Record<string, typeof logs> = {}
+    for (const log of logs) {
+      const key = log.mealType || 'OTHER'
+      if (!map[key]) map[key] = []
+      map[key].push(log)
+    }
+    return MEAL_TYPE_ORDER
+      .filter(mt => map[mt]?.length)
+      .map(mt => ({ mealType: mt, label: CONSUMED_MEAL_LABELS[mt] ?? mt, items: map[mt] }))
+  }, [logs])
 
   return (
-    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#f0f2f5', overflow: 'hidden' }}>
-      {/* Header row */}
-      <TouchableOpacity
-        onPress={() => setExpanded(e => !e)}
-        activeOpacity={0.7}
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase', marginBottom: 4 }}>
-            Lo que comi hoy
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'white' }}>
+        {/* Handle bar */}
+        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+        </View>
+
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 }}>
+          <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+            Lo que consumi hoy
           </Text>
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#9ca3af" />
-          ) : (
-            <View style={{ gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: kcalOver ? '#ef4444' : '#111827', letterSpacing: -0.5 }}>
-                  {totals.kcal}
-                </Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                  {target ? `/ ${target.kcal} kcal` : 'kcal registradas'}
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>✕</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Totals */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text style={{ fontSize: 32, fontFamily: 'Inter_900Black', color: '#111827', letterSpacing: -1 }}>
+              {totals.kcal.toLocaleString()}
+            </Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kcal consumidas</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ef4444' }} />
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>P {totals.proteinG}g</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3b82f6' }} />
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>C {totals.carbsG}g</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#eab308' }} />
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>G {totals.fatG}g</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+
+        {/* Grouped logs */}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {grouped.length > 0 ? grouped.map(group => (
+            <View key={group.mealType}>
+              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                  {group.label}
                 </Text>
               </View>
-              {/* Barra kcal */}
-              {target && (
-                <View style={{ height: 5, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                  <View style={{
-                    height: '100%', width: `${kcalPct}%`,
-                    backgroundColor: kcalOver ? '#ef4444' : '#f97316',
-                    borderRadius: 4,
-                  }} />
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 12 }}>
-          <TouchableOpacity
-            onPress={onAdd}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ backgroundColor: '#eb590d', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
-          >
-            <Text style={{ color: 'white', fontSize: 11, fontFamily: 'Inter_700Bold' }}>+ Registrar</Text>
-          </TouchableOpacity>
-          <Text style={{ fontSize: 12, color: '#9ca3af' }}>{expanded ? '▲' : '▼'}</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Expanded: macros + logs */}
-      {expanded && !isLoading && (
-        <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 20, paddingBottom: 16, gap: 12 }}>
-          {/* 4 macro bars */}
-          {target && (
-            <View style={{ gap: 8, paddingTop: 14 }}>
-              {([
-                { key: 'proteinG', label: 'Proteína', color: '#3b82f6', unit: 'g' },
-                { key: 'carbsG',   label: 'Carbos',   color: '#eab308', unit: 'g' },
-                { key: 'fatG',     label: 'Grasas',   color: '#22c55e', unit: 'g' },
-              ] as const).map(m => {
-                const val = totals[m.key] ?? 0
-                const tgt = target[m.key] ?? 0
-                const pct = tgt > 0 ? Math.min((val / tgt) * 100, 100) : 0
-                return (
-                  <View key={m.key} style={{ gap: 4 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{m.label}</Text>
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
-                        {val}{m.unit} <Text style={{ color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>/ {tgt}{m.unit}</Text>
-                      </Text>
-                    </View>
-                    <View style={{ height: 5, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                      <View style={{ height: '100%', width: `${pct}%`, backgroundColor: m.color, borderRadius: 4 }} />
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
-          )}
-
-          {/* Logs list */}
-          {logs.length > 0 ? (
-            <View style={{ gap: 2, paddingTop: 4 }}>
-              <View style={{ height: 1, backgroundColor: '#f3f4f6', marginBottom: 8 }} />
-              {logs.map(log => (
-                <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 }}>
+              {group.items.map(log => (
+                <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#374151' }} numberOfLines={1}>
-                      {log.food.name}
-                    </Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
-                      {log.grams}g · {log.kcal} kcal · {log.mealType}
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_500Medium', color: '#111827' }}>{log.food.name}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+                      {log.grams}g
                     </Text>
                   </View>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: '#6b7280', marginRight: 12 }}>
+                    {log.kcal} kcal
+                  </Text>
                   <TouchableOpacity
                     onPress={() =>
                       Alert.alert('Eliminar', `¿Quitar "${log.food.name}"?`, [
@@ -641,20 +629,120 @@ function TrackingSection({ onAdd, foodLogData }: { onAdd: () => void; foodLogDat
                       ])
                     }
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ padding: 4 }}
                   >
-                    <Text style={{ fontSize: 16, color: '#ef4444' }}>×</Text>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 12, color: '#ef4444' }}>✕</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
-          ) : (
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center', paddingVertical: 8 }}>
-              Aún no registras comidas hoy
-            </Text>
+          )) : (
+            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                Aun no registras comidas hoy
+              </Text>
+            </View>
           )}
+        </ScrollView>
+
+        {/* Footer CTA */}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+          <TouchableOpacity
+            onPress={() => { onClose(); setTimeout(onAdd, 300) }}
+            activeOpacity={0.85}
+            style={{ backgroundColor: '#1e3a5f', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: 'white' }}>+ Agregar comida</Text>
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
+    </Modal>
+  )
+}
+
+// ─── TrackingSection (card that opens ConsumedSheet) ─────────────────────────
+
+function TrackingSection({ onAdd, onViewConsumed, foodLogData }: {
+  onAdd: () => void; onViewConsumed: () => void
+  foodLogData: NutritionPageData['foodLogs'] | undefined
+}) {
+  const isLoading = !foodLogData
+  const totals = foodLogData?.totals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }
+  const target = foodLogData?.target
+  const logs = foodLogData?.logs ?? []
+
+  const kcalPct = target?.kcal ? Math.min(Math.round((totals.kcal / target.kcal) * 100), 100) : 0
+  const kcalOver = target?.kcal ? totals.kcal > target.kcal : false
+
+  return (
+    <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#f0f2f5', overflow: 'hidden' }}>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase', marginBottom: 4 }}>
+          Lo que comi hoy
+        </Text>
+        {isLoading ? (
+          <ActivityIndicator size="small" color="#9ca3af" />
+        ) : (
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black', color: kcalOver ? '#ef4444' : '#111827', letterSpacing: -0.5 }}>
+                {totals.kcal}
+              </Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                {target ? `/ ${target.kcal} kcal` : 'kcal registradas'}
+              </Text>
+            </View>
+            {target && (
+              <View style={{ height: 5, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                <View style={{
+                  height: '100%', width: `${kcalPct}%`,
+                  backgroundColor: kcalOver ? '#ef4444' : '#f97316', borderRadius: 4,
+                }} />
+              </View>
+            )}
+            {/* Macro pills */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+              {([
+                { label: 'P', val: totals.proteinG, color: '#3b82f6' },
+                { label: 'C', val: totals.carbsG, color: '#eab308' },
+                { label: 'G', val: totals.fatG, color: '#22c55e' },
+              ]).map(m => (
+                <View key={m.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: m.color }} />
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#8c99a6' }}>{m.label} {m.val}g</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Action buttons */}
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 }}>
+        <TouchableOpacity
+          onPress={onViewConsumed}
+          activeOpacity={0.7}
+          style={{
+            flex: 1, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb',
+            paddingVertical: 10, alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
+            Ver lo que consumi
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onAdd}
+          activeOpacity={0.85}
+          style={{
+            flex: 1, borderRadius: 10, backgroundColor: '#eb590d',
+            paddingVertical: 10, alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: 'white' }}>+ Registrar comida</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -795,47 +883,67 @@ function WeeklySummarySection({ data }: { data: NutritionPageData['weeklySummary
     : adherence >= 60 ? '#eb590d'
     : '#ef4444'
 
+  const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+  const today = new Date().getDay()
+  const todayIdx = today === 0 ? 6 : today - 1
+
   return (
     <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#f0f2f5', padding: 14, gap: 10 }}>
-      <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase' }}>
-        Resumen de la semana
-      </Text>
-
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
-          <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1e3a5f', letterSpacing: -0.5 }}>
-            {data.daysWithLog}
-            <Text style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>/7</Text>
-          </Text>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>días registrados</Text>
-        </View>
-
-        <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
-          <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#f97316', letterSpacing: -0.5 }}>
-            {data.avgKcal > 0 ? data.avgKcal.toLocaleString() : '—'}
-          </Text>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280', textAlign: 'center' }}>
-            kcal promedio{data.targetKcal > 0 ? ` / ${data.targetKcal.toLocaleString()}` : ''}
-          </Text>
-        </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase' }}>
+          Resumen de la semana
+        </Text>
+        <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#eb590d' }}>
+          {data.daysWithLog}/7 días
+        </Text>
       </View>
 
-      {adherence != null && (
-        <View style={{ gap: 4 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>Adherencia calórica</Text>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: adherenceColor }}>{adherence}%</Text>
+      {/* Daily bars */}
+      <View style={{ flexDirection: 'row', gap: 4, height: 48, alignItems: 'flex-end' }}>
+        {DAY_LABELS.map((label, i) => {
+          const hasLog = i < data.daysWithLog
+          const isFuture = i > todayIdx
+          const barH = hasLog ? 36 + Math.random() * 12 : 12
+          const barColor = isFuture ? '#e5e7eb' : hasLog ? (adherence != null && adherence >= 85 ? '#22c55e' : '#f97316') : '#fee2e2'
+          return (
+            <View key={label} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+              <View style={{
+                width: '100%', height: barH, borderRadius: 4,
+                backgroundColor: barColor, opacity: isFuture ? 0.4 : 1,
+              }} />
+            </View>
+          )
+        })}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        {DAY_LABELS.map((label, i) => (
+          <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 9, fontFamily: i === todayIdx ? 'Inter_700Bold' : 'Inter_400Regular', color: i === todayIdx ? '#1e3a5f' : '#9ca3af' }}>
+              {label}
+            </Text>
           </View>
-          <View style={{ height: 4, backgroundColor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-            <View style={{ height: '100%' as any, width: `${Math.min(adherence, 100)}%` as any, backgroundColor: adherenceColor, borderRadius: 2 }} />
-          </View>
-          <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-            {adherence >= 85 ? 'Excelente consistencia esta semana'
-              : adherence >= 60 ? 'Buena semana — sigue sumando días'
-              : 'Registra más días para mejorar tu adherencia'}
+        ))}
+      </View>
+
+      {/* Stats row */}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#f97316' }}>
+            {data.avgKcal > 0 ? data.avgKcal.toLocaleString() : '—'}
+          </Text>
+          <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
+            kcal prom{data.targetKcal > 0 ? ` / ${data.targetKcal.toLocaleString()}` : ''}
           </Text>
         </View>
-      )}
+        {adherence != null && (
+          <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: adherenceColor }}>
+              {adherence}%
+            </Text>
+            <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>adherencia</Text>
+          </View>
+        )}
+      </View>
 
       {data.daysWithoutLog > 0 && data.daysWithLog > 0 && (
         <View style={{ backgroundColor: '#fffaf0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -977,7 +1085,7 @@ function CoachCTA() {
 
 // ─── MealChecklistInline ────────────────────────────────────────────────────
 
-function MealChecklistInline({ meals }: { meals: { label: string; foods: string; kcal: number; isLogged: boolean }[] }) {
+function MealChecklistInline({ meals, isB2B }: { meals: { label: string; foods: string; kcal: number; isLogged: boolean }[]; isB2B?: boolean }) {
   const logged = meals.filter(m => m.isLogged).length
   return (
     <View style={{
@@ -986,7 +1094,7 @@ function MealChecklistInline({ meals }: { meals: { label: string; foods: string;
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6 }}>
         <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8c99a6', letterSpacing: 0.72, textTransform: 'uppercase' }}>
-          Comidas del plan
+          {isB2B ? 'Plan de comidas · Coach' : 'Comidas del plan'}
         </Text>
         <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#eb590d' }}>
           {logged}/{meals.length} registradas
@@ -1040,6 +1148,7 @@ export default function NutritionScreen() {
   const [showSetup, setShowSetup]       = useState(false)
   const [showLogFood, setShowLogFood]   = useState(false)
   const [showPropose, setShowPropose]   = useState(false)
+  const [showConsumed, setShowConsumed] = useState(false)
 
   // Refetch on tab focus
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
@@ -1078,9 +1187,9 @@ export default function NutritionScreen() {
                 {new Date().toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
             </View>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <View style={{ backgroundColor: data?.isB2B ? '#1e3a5f' : 'rgba(255,255,255,0.15)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
-                {day.emoji} {day.label}
+                {data?.isB2B ? '🏋️ Coach asigna' : `${day.emoji} ${day.label}`}
               </Text>
             </View>
           </View>
@@ -1094,7 +1203,7 @@ export default function NutritionScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: data?.hasNutritionPlan && macros && !data?.isB2B ? 100 : 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
         >
@@ -1179,7 +1288,7 @@ export default function NutritionScreen() {
             <NutritionProgressCard
               target={{ kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
               consumed={{ kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
-              label="CALORIAS DE HOY"
+              label="OBJETIVO DIARIO"
             />
           )}
 
@@ -1213,28 +1322,41 @@ export default function NutritionScreen() {
             </View>
           )}
 
-          {/* sin-plan: CTA al constructor de nutricion */}
+          {/* sin-plan: CTA al constructor de nutricion + pedir a coach */}
           {!data?.hasNutritionPlan && !data?.isB2B && (
-            <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 20, padding: 28, alignItems: 'center', gap: 10 }}>
-              <Text style={{ fontSize: 36 }}>📋</Text>
-              <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1f3b5e', textAlign: 'center' }}>
-                Crea tu menu nutricional
-              </Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#8c99a6', textAlign: 'center', lineHeight: 18 }}>
-                Define que comes en cada tipo de dia y el sistema lo aplica a tu semana automaticamente.
-              </Text>
+            <>
+              <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 20, padding: 28, alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 36 }}>📋</Text>
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1f3b5e', textAlign: 'center' }}>
+                  Crea tu menu nutricional
+                </Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#8c99a6', textAlign: 'center', lineHeight: 18 }}>
+                  Define que comes en cada tipo de dia y el sistema lo aplica a tu semana automaticamente.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(app)/nutrition-constructor' as any)}
+                  style={{ backgroundColor: '#ea580c', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 4 }}
+                >
+                  <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Crear menu nutricional</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
-                onPress={() => router.push('/(app)/nutrition-constructor' as any)}
-                style={{ backgroundColor: '#ea580c', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginTop: 4 }}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: 'white', borderRadius: 16, borderWidth: 1.5,
+                  borderColor: '#e2e8f0', paddingVertical: 14, alignItems: 'center',
+                }}
               >
-                <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>Crear menu nutricional</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>
+                  Pedir a mi coach que lo configure
+                </Text>
               </TouchableOpacity>
-            </View>
+            </>
           )}
 
           {/* Meal checklist (con-plan & b2b) */}
           {(data?.mealChecklist ?? []).length > 0 && (
-            <MealChecklistInline meals={data!.mealChecklist} />
+            <MealChecklistInline meals={data!.mealChecklist} isB2B={data?.isB2B} />
           )}
 
           {/* Next meal highlight (con-plan & b2b) */}
@@ -1262,7 +1384,7 @@ export default function NutritionScreen() {
           {data?.hasNutritionPlan && macros && (
             <>
               {/* Registro de comidas */}
-              <TrackingSection onAdd={() => setShowLogFood(true)} foodLogData={data.foodLogs} />
+              <TrackingSection onAdd={() => setShowLogFood(true)} onViewConsumed={() => setShowConsumed(true)} foodLogData={data.foodLogs} />
 
               {/* Plan de hoy — alimentos asignados */}
               {(data.plannedMeals ?? []).length > 0 && (
@@ -1403,6 +1525,50 @@ export default function NutritionScreen() {
         </ScrollView>
       )}
 
+      {/* Floating CTA bar — con-plan only (matches Figma 4523:633 footer) */}
+      {!isLoading && data?.hasNutritionPlan && macros && !data?.isB2B && (
+        <View style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          paddingHorizontal: 16, paddingTop: 10, paddingBottom: insets.bottom + 8,
+          backgroundColor: 'rgba(241,245,249,0.95)',
+          borderTopWidth: 1, borderTopColor: '#e5e7eb',
+          flexDirection: 'row', gap: 8,
+        }}>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/nutrition-constructor' as any)}
+            activeOpacity={0.85}
+            style={{
+              flex: 1, backgroundColor: 'white', borderRadius: 14,
+              borderWidth: 1.5, borderColor: '#e2e8f0',
+              paddingVertical: 14, alignItems: 'center',
+              flexDirection: 'row', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <Text style={{ fontSize: 14 }}>✏️</Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>Editar menu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/nutrition-week-planner' as any)}
+            activeOpacity={0.85}
+            style={{
+              flex: 1, backgroundColor: 'white', borderRadius: 14,
+              borderWidth: 1.5, borderColor: '#e2e8f0',
+              paddingVertical: 14, alignItems: 'center',
+              flexDirection: 'row', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <Text style={{ fontSize: 14 }}>📅</Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f' }}>Aplicar semana</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ConsumedSheet
+        visible={showConsumed}
+        onClose={() => setShowConsumed(false)}
+        foodLogData={data?.foodLogs}
+        onAdd={() => setShowLogFood(true)}
+      />
       <FoodSetupFlow visible={showSetup} onClose={() => setShowSetup(false)} />
       <LogFoodModal visible={showLogFood} onClose={() => setShowLogFood(false)} date={getLocalDateString()} />
       <ProposeFoodModal visible={showPropose} onClose={() => setShowPropose(false)} onSuccess={() => queryClient.invalidateQueries({ queryKey: ['nutrition-page'] })} />
