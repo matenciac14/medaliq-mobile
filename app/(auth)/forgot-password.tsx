@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MedaliqLogo } from '../../src/components/MedaliqLogo'
 import {
   View, Text, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -49,11 +50,8 @@ export default function ForgotPasswordScreen() {
       <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 24 }}>
 
         {/* Logo */}
-        <View style={{ alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 72, height: 72, borderRadius: 18, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: 'white', fontSize: 36, fontFamily: 'Inter_900Black', lineHeight: 40 }}>M</Text>
-          </View>
-          <Text style={{ color: 'white', fontSize: 28, fontFamily: 'Inter_900Black', letterSpacing: -0.5 }}>Medaliq</Text>
+        <View style={{ alignItems: 'center' }}>
+          <MedaliqLogo variant="dark" size="md" />
         </View>
 
         {sent ? (

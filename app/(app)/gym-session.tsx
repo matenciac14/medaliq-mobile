@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Alert, Modal, Vibration, ActivityIndicator, Image, Animated, Share,
@@ -9,12 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
+import * as KeepAwake from 'expo-keep-awake'
 import {
-  getTodayGymSession, completeGymSession, searchExercises,
-  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult,
+  getTodayGymSession, completeGymSession, searchExercises, getExerciseAlternatives, getGymPRs,
+  SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult, GymPR,
 } from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
 import { useGymSessionStore } from '../../src/store/gymSession'
+import SharePreviewModal from '../../src/components/SharePreviewModal'
+import type { ShareCardProps } from '../../src/components/ShareCard'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   SUPERSET: { bg: '#ede9fe', text: '#7c3aed', label: 'Superset' },
@@ -37,13 +40,10 @@ type FreeExercise = {
   gif?: string | null
 }
 
-let _nextLocalId = 1
-function newLocalId() { return `free-${_nextLocalId++}` }
-
 const SET_TYPE_CONFIG = {
   WORK:    { bg: 'transparent', text: '#374151', badge: null },
-  WARMUP:  { bg: '#fff7ed',     text: '#f97316', badge: 'W' },
-  DROPSET: { bg: '#ffe4e6',     text: '#e11d48', badge: '↓' },
+  WARMUP:  { bg: '#eff6ff',     text: '#3b82f6', badge: 'W' },
+  DROPSET: { bg: '#f5f3ff',     text: '#7c3aed', badge: 'D' },
 } as const
 
 function buildInitialSets(data: GymSessionData): LocalSet[] {
@@ -95,8 +95,7 @@ function SwapModal({
   useEffect(() => {
     if (!visible || !exerciseId) return
     setLoadingAlt(true)
-    fetch(`/api/mobile/exercises/${exerciseId}/alternatives`)
-      .then(r => r.ok ? r.json() : [])
+    getExerciseAlternatives(exerciseId)
       .then(setAlternatives)
       .catch(() => setAlternatives([]))
       .finally(() => setLoadingAlt(false))
@@ -339,25 +338,42 @@ function AddExerciseModal({
 }
 
 // Finish Session Modal
+type EnergyStateOption = 'EXHAUSTED' | 'NORMAL' | 'ENERGIZED'
+type DiscomfortOption = 'NONE' | 'MILD' | 'MODERATE'
+
+const ENERGY_OPTS: { value: EnergyStateOption; emoji: string; label: string }[] = [
+  { value: 'EXHAUSTED', emoji: '😮‍💨', label: 'Agotado' },
+  { value: 'NORMAL', emoji: '😊', label: 'Normal' },
+  { value: 'ENERGIZED', emoji: '💪', label: 'Con energía' },
+]
+
+const DISCOMFORT_OPTS: { value: DiscomfortOption; emoji: string; label: string }[] = [
+  { value: 'NONE', emoji: '✅', label: 'Sin molestias' },
+  { value: 'MILD', emoji: '⚡', label: 'Leve' },
+  { value: 'MODERATE', emoji: '⚠️', label: 'Moderada' },
+]
+
 function FinishModal({
   visible,
   completedCount,
   defaultDuration,
   defaultRpe,
   onConfirm,
-  onClose,
+  onSkip,
   submitting,
 }: {
   visible: boolean
   completedCount: number
   defaultDuration: number
   defaultRpe?: number
-  onConfirm: (rpe: number, durationMin: number, notes: string) => void
-  onClose: () => void
+  onConfirm: (data: { rpe: number; durationMin: number; notes: string; energyState?: EnergyStateOption; discomfort?: DiscomfortOption }) => void
+  onSkip: () => void
   submitting: boolean
 }) {
   const [rpe, setRpe] = useState(defaultRpe ?? 7)
   const [durationMin, setDurationMin] = useState(String(defaultDuration || 60))
+  const [energyState, setEnergyState] = useState<EnergyStateOption | null>(null)
+  const [discomfort, setDiscomfort] = useState<DiscomfortOption | null>(null)
 
   // Sync defaultRpe when it arrives (exerciseRpeMap updates after first RPE is set)
   useEffect(() => { if (defaultRpe != null) setRpe(defaultRpe) }, [defaultRpe])
@@ -366,12 +382,37 @@ function FinishModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
-          <View>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Finalizar sesión</Text>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 2 }}>
+        <ScrollView style={{ maxHeight: '90%' }} contentContainerStyle={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 20 }}>
+          {/* Header */}
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="checkmark-circle" size={28} color="#16a34a" />
+            </View>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -0.3 }}>Sesión completada</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>
               {completedCount} series completadas
             </Text>
+          </View>
+
+          {/* Energy State */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>¿Cómo saliste?</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {ENERGY_OPTS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setEnergyState(opt.value)}
+                  style={{
+                    flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: 12,
+                    borderWidth: 2, borderColor: energyState === opt.value ? '#f97316' : '#e5e7eb',
+                    backgroundColor: energyState === opt.value ? '#fff7ed' : 'white',
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{opt.emoji}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: energyState === opt.value ? '#f97316' : '#6b7280' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* RPE */}
@@ -397,6 +438,27 @@ function FinishModal({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Muy fácil</Text>
               <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>Máximo esfuerzo</Text>
+            </View>
+          </View>
+
+          {/* Discomfort */}
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>¿Alguna molestia?</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {DISCOMFORT_OPTS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setDiscomfort(opt.value)}
+                  style={{
+                    flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: 12,
+                    borderWidth: 2, borderColor: discomfort === opt.value ? '#f97316' : '#e5e7eb',
+                    backgroundColor: discomfort === opt.value ? '#fff7ed' : 'white',
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{opt.emoji}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: discomfort === opt.value ? '#f97316' : '#6b7280' }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
@@ -435,25 +497,31 @@ function FinishModal({
           </View>
 
           {/* Buttons */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ gap: 10 }}>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={() => onConfirm({
+                rpe,
+                durationMin: parseInt(durationMin) || 60,
+                notes,
+                energyState: energyState ?? undefined,
+                discomfort: discomfort ?? undefined,
+              })}
               disabled={submitting}
-              style={{ flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onConfirm(rpe, parseInt(durationMin) || 60, notes)}
-              disabled={submitting}
-              style={{ flex: 2, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+              style={{ backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
             >
               <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: 'white' }}>
-                {submitting ? 'Guardando...' : 'Guardar sesión'}
+                {submitting ? 'Guardando...' : 'Guardar y continuar'}
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onSkip}
+              disabled={submitting}
+              style={{ paddingVertical: 10, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>Saltar por ahora</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   )
@@ -465,20 +533,24 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    let mounted = true
     intervalRef.current = setInterval(() => {
       setRemaining(prev => {
         if (prev <= 1) {
           clearInterval(intervalRef.current!)
           Vibration.vibrate([0, 300, 100, 300])
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          onDone()
+          if (mounted) onDone()
           return 0
         }
         return prev - 1
       })
     }, 1000)
-    return () => clearInterval(intervalRef.current!)
-  }, [])
+    return () => {
+      mounted = false
+      clearInterval(intervalRef.current!)
+    }
+  }, [onDone])
 
   function adjustTime(delta: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -530,7 +602,7 @@ function RestTimerModal({ seconds, onDone }: { seconds: number; onDone: () => vo
 // PR Celebration Modal — Recompensas Capa 3
 const CONFETTI = ['🎉', '🏆', '💪', '⭐', '🔥', '🎊']
 
-function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
+function PRModal({ prs, onClose, onShare }: { prs: PRResult[]; onClose: () => void; onShare: (pr: PRResult) => void }) {
   const scale = useRef(new Animated.Value(0.5)).current
   const opacity = useRef(new Animated.Value(0)).current
   const trophyBounce = useRef(new Animated.Value(0)).current
@@ -548,13 +620,9 @@ function PRModal({ prs, onClose }: { prs: PRResult[]; onClose: () => void }) {
     })
   }, [])
 
-  async function handleShare() {
-    const lines = prs.map(pr => `${pr.exerciseName ?? 'Ejercicio'}${pr.weightKg != null ? `: ${pr.weightKg} kg` : ''} 🏆`)
-    try {
-      await Share.share({
-        message: `¡Nuevos récords personales en MedalIQ! 💪\n${lines.join('\n')}`,
-      })
-    } catch { /* silently ignore */ }
+  function handleShare() {
+    // Compartir el PR más relevante (el primero de la lista)
+    onShare(prs[0])
   }
 
   return (
@@ -657,10 +725,29 @@ export default function GymSessionScreen() {
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
+  const [shareCardProps, setShareCardProps] = useState<ShareCardProps | null>(null)
   const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
   const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
   const [exerciseRpeMap, setExerciseRpeMap] = useState<Record<string, number>>({})
+  const [exerciseNotesMap, setExerciseNotesMap] = useState<Record<string, string>>({})
   const startTimeRef = useRef(Date.now())
+  const localIdRef = useRef(1)
+  const newLocalId = useCallback(() => `free-${localIdRef.current++}`, [])
+
+  function handleSharePR(pr: PRResult) {
+    const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+    const now = new Date()
+    const dateLabel = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
+    // Buscar estimatedOneRM en gymPRs para este ejercicio
+    const prData = gymPRs?.find(p => p.exerciseName === pr.exerciseName)
+    setShareCardProps({
+      variant: 'pr_gym',
+      exerciseName: pr.exerciseName ?? undefined,
+      weightKg: pr.weightKg ?? undefined,
+      estimatedOneRM: prData?.estimatedOneRM,
+      date: dateLabel,
+    })
+  }
 
   function isExerciseDone(exerciseId: string): boolean {
     const exSets = sets.filter(s => s.workoutExerciseId === exerciseId)
@@ -679,6 +766,18 @@ export default function GymSessionScreen() {
     queryKey: ['gym-today'],
     queryFn: getTodayGymSession,
   })
+
+  const { data: gymPRs } = useQuery<GymPR[]>({
+    queryKey: ['gym-prs'],
+    queryFn: getGymPRs,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Keep screen awake during gym session
+  useEffect(() => {
+    KeepAwake.activateKeepAwakeAsync()
+    return () => { KeepAwake.deactivateKeepAwake() }
+  }, [])
 
   // Restore draft or build fresh sets when session loads
   useEffect(() => {
@@ -745,7 +844,9 @@ export default function GymSessionScreen() {
       const isOffline = !('statusCode' in err)
       if (isOffline && session && lastPayloadRef.current) {
         const sessionKey = session.assignedWorkoutId ?? session.plannedSessionId ?? 'unknown'
-        savePendingSync(sessionKey, lastPayloadRef.current).catch(() => {})
+        savePendingSync(sessionKey, lastPayloadRef.current).catch(err =>
+          console.error('[gym-session] Failed to save offline sync — session data may be lost:', err)
+        )
         setShowFinishModal(false)
         Alert.alert(
           'Sin conexión',
@@ -857,7 +958,8 @@ export default function GymSessionScreen() {
     setShowFinishModal(true)
   }
 
-  function handleConfirmFinish(rpe: number, durationMin: number, notes: string) {
+  function handleConfirmFinish(data: { rpe: number; durationMin: number; notes: string; energyState?: EnergyStateOption; discomfort?: DiscomfortOption }) {
+    const { rpe, durationMin, notes, energyState, discomfort } = data
     const completedSets: SetLog[] = session!.freeSession
       ? sets.map(s => {
           const fe = freeExercises.find(f => f.localId === s.workoutExerciseId)
@@ -890,6 +992,15 @@ export default function GymSessionScreen() {
           replacedExerciseName: ov.name,
         }
       })
+    const exerciseNotesText = Object.entries(exerciseNotesMap)
+      .filter(([, note]) => note.trim())
+      .map(([id, note]) => {
+        const exName = session!.exercises.find(e => e.id === id)?.exercise.name ?? id
+        return `${exName}: ${note.trim()}`
+      })
+      .join('\n')
+    const combinedNotes = [notes.trim(), exerciseNotesText].filter(Boolean).join('\n\n')
+
     const payload = {
       ...(session!.plannedSessionId
         ? { plannedSessionId: session!.plannedSessionId }
@@ -898,7 +1009,9 @@ export default function GymSessionScreen() {
       sets: completedSets,
       durationMin,
       rpe,
-      notes: notes.trim() || undefined,
+      energyState,
+      discomfort,
+      notes: combinedNotes || undefined,
       exerciseOverrides: overridesArr.length > 0 ? overridesArr : undefined,
     }
     lastPayloadRef.current = payload
@@ -921,9 +1034,19 @@ export default function GymSessionScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
-      {prResults.length > 0 && (
-        <PRModal prs={prResults} onClose={() => { setPrResults([]); router.back() }} />
+      {prResults.length > 0 && !shareCardProps && (
+        <PRModal
+          prs={prResults}
+          onClose={() => { setPrResults([]); router.back() }}
+          onShare={handleSharePR}
+        />
       )}
+      <SharePreviewModal
+        visible={shareCardProps !== null}
+        card={shareCardProps ?? { variant: 'pr_gym' }}
+        title="Compartir récord"
+        onClose={() => { setShareCardProps(null); setPrResults([]); router.back() }}
+      />
       {restTimer.show && (
         <RestTimerModal
           seconds={restTimer.seconds}
@@ -936,7 +1059,7 @@ export default function GymSessionScreen() {
         defaultDuration={Math.max(1, Math.round(elapsedSecs / 60))}
         defaultRpe={avgExerciseRpe()}
         onConfirm={handleConfirmFinish}
-        onClose={() => setShowFinishModal(false)}
+        onSkip={() => setShowFinishModal(false)}
         submitting={finishing}
       />
       {swapTarget && (
@@ -1119,6 +1242,11 @@ export default function GymSessionScreen() {
 
           const swappedEx = exerciseOverrides.get(ex.id)
           const hasCompletedSets = sets.filter(s => s.workoutExerciseId === ex.id && s.completed).length > 0
+          const allPrevCompleted = ex.previousLogs.length > 0 && ex.previousLogs.every(l => l.completed)
+          const prevAvgWeight = allPrevCompleted && ex.previousLogs.some(l => l.weightKg != null)
+            ? ex.previousLogs.reduce((sum, l) => sum + (l.weightKg ?? 0), 0) / ex.previousLogs.filter(l => l.weightKg != null).length
+            : null
+          const suggestedWeight = ex.suggestedNextWeightKg ?? (prevAvgWeight != null ? Math.round((prevAvgWeight + 2.5) * 2) / 2 : null)
 
           return (
             <View style={{ gap: 12 }}>
@@ -1168,6 +1296,23 @@ export default function GymSessionScreen() {
                   {ex.restSeconds ? ` · ${ex.restSeconds}s descanso` : ''}
                 </Text>
 
+                {/* Sets progress bar */}
+                {(() => {
+                  const done = exSets.filter(s => s.completed).length
+                  const total = exSets.length
+                  if (total === 0) return null
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <View style={{ flex: 1, height: 4, backgroundColor: '#f3f4f6', borderRadius: 2, overflow: 'hidden' }}>
+                        <View style={{ width: `${(done / total) * 100}%`, height: 4, backgroundColor: done === total ? '#22c55e' : '#f97316', borderRadius: 2 }} />
+                      </View>
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: done === total ? '#22c55e' : '#f97316', minWidth: 28, textAlign: 'right' }}>
+                        {done}/{total}
+                      </Text>
+                    </View>
+                  )
+                })()}
+
                 {/* Muscle group badges */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                   <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
@@ -1182,6 +1327,21 @@ export default function GymSessionScreen() {
                     </View>
                   ) : null}
                 </View>
+
+                {/* 1RM estimado */}
+                {(() => {
+                  const exerciseName = swappedEx?.name ?? ex.exercise.name
+                  const pr = gymPRs?.find(p => p.exerciseName === exerciseName)
+                  if (!pr) return null
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <Text style={{ fontSize: 11 }}>🏆</Text>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#f97316' }}>
+                        1RM est.: {pr.estimatedOneRM} kg
+                      </Text>
+                    </View>
+                  )
+                })()}
 
                 {/* GIF demo — EX-11: guía visual del movimiento */}
                 {!swappedEx && ex.exercise.gif ? (
@@ -1277,6 +1437,14 @@ export default function GymSessionScreen() {
 
                     {/* Kg column */}
                     <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      {suggestedWeight != null && set.weightKg === '' && !set.completed && (
+                        <TouchableOpacity
+                          onPress={() => updateSet(globalIdx, 'weightKg', String(suggestedWeight))}
+                          style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#86efac' }}
+                        >
+                          <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#16a34a' }}>↑ {suggestedWeight}kg</Text>
+                        </TouchableOpacity>
+                      )}
                       <TextInput
                         value={set.weightKg}
                         onChangeText={v => updateSet(globalIdx, 'weightKg', v)}
@@ -1343,6 +1511,23 @@ export default function GymSessionScreen() {
                   value={exerciseRpeMap[ex.id]}
                   onChange={v => setExerciseRpeMap(prev => ({ ...prev, [ex.id]: v }))}
                 />
+              )}
+
+              {/* Nota por ejercicio */}
+              {isExerciseDone(ex.id) && (
+                <View style={{ backgroundColor: '#f9fafb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                    Nota del ejercicio
+                  </Text>
+                  <TextInput
+                    value={exerciseNotesMap[ex.id] ?? ''}
+                    onChangeText={v => setExerciseNotesMap(prev => ({ ...prev, [ex.id]: v }))}
+                    placeholder="Cómo fue este ejercicio..."
+                    placeholderTextColor="#d1d5db"
+                    multiline
+                    style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#374151', minHeight: 36 }}
+                  />
+                </View>
               )}
 
               {/* Navigate exercises */}

@@ -186,8 +186,19 @@ GET   /api/mobile/nutrition
 POST  /api/mobile/nutrition/log           (PRO gate)
 DELETE /api/mobile/nutrition/log/[id]
 GET   /api/mobile/nutrition/log/summary
-POST  /api/mobile/nutrition/generate-meals (PRO gate)
 GET   /api/mobile/nutrition/foods
+POST  /api/mobile/nutrition/foods/propose
+GET   /api/mobile/nutrition/foods/my-proposals
+GET   /api/mobile/nutrition/meal-templates
+POST  /api/mobile/nutrition/meal-templates
+DELETE /api/mobile/nutrition/meal-templates/[id]
+GET   /api/mobile/nutrition/plan?date=    ← PlannedMeals del día
+POST  /api/mobile/nutrition/plan/[id]/log ← PlannedMeal → FoodLog
+POST  /api/mobile/nutrition/planned-meals/log-today ← 1-tap log todos los de hoy
+GET   /api/mobile/nutrition/templates     ← NutritionTemplates propias
+POST  /api/mobile/nutrition/templates/[id]/apply ← aplicar template a semana
+GET   /api/mobile/nutrition/food-profile
+PUT   /api/mobile/nutrition/food-profile
 GET   /api/mobile/gym/week                (PRO gate)
 GET   /api/mobile/gym/history
 GET   /api/mobile/gym/templates
@@ -246,7 +257,7 @@ Si además toca la DB o API: cargar también `prisma-development`.
 
 ---
 
-## Estado (junio 2026)
+## Estado (agosto 2026)
 
 > Features completadas: ver `roadmap-data.ts` — no duplicar aquí.
 
@@ -254,13 +265,21 @@ Si además toca la DB o API: cargar también `prisma-development`.
 
 Ver `roadmap-data.ts` como fuente canónica. Esta tabla es referencia rápida.
 
-| Prioridad | Feature | Estado web | Notas |
-|-----------|---------|-----------|-------|
-| 🟠 P1 | Medidas corporales en check-in (cintura, brazos, caderas, muslos) | ✅ Sección colapsable | API acepta los campos — falta UI en formulario mobile |
-| 🟠 P1 | Ajuste nutricional pendiente (aceptar/rechazar) | ✅ NutritionAdjustmentCard | Pantalla nutrición mobile no muestra la card ni llama endpoints |
-| 🟠 P1 | Editar perfil de salud (peso, talla, FC reposo, lesiones) | ✅ /profile editable | Profile tab mobile es solo lectura |
-| 🟡 P2 | Gráficas de circunferencias en /progress | ✅ MeasurementsChart | API devuelve measurementPoints — UI mobile no los renderiza |
-| 🟡 P2 | Push notifications (frontend) | ✅ Backend listo | `/api/mobile/push-token` implementado — falta EAS + permisos en mobile |
-| 🟡 P2 | Offline-first gym tracker | ❌ | AsyncStorage backup sin red |
-| 🟢 P3 | Integraciones Strava / Garmin | ❌ | Requiere OAuth externo |
-| 🟢 P3 | Bluetooth HRM | ❌ | react-native-ble-plx |
+| Prioridad | Feature | Estado web | Estado mobile |
+|-----------|---------|-----------|---------------|
+| ✅ P1 | Medidas corporales en check-in | ✅ | ✅ Sección colapsable (2026-07-17) |
+| ✅ P1 | Ajuste nutricional (aceptar/rechazar) | ✅ | ✅ NutritionAdjustmentCard (2026-07-17) |
+| ✅ P1 | Editar perfil de salud | ✅ | ✅ edit-health-profile.tsx (2026-07-17) |
+| ✅ P2 | Gráficas circunferencias en /progress | ✅ | ✅ measurementPoints (2026-07-24) |
+| ✅ P2 | Adherencia nutricional en /progress | ✅ | ✅ nutritionAdherence[] (2026-07-30) |
+| ✅ P2 | Historial unificado running+gym | ✅ | ✅ log-history.tsx (2026-07-24) |
+| ✅ P2 | Apply NutritionTemplate a semana | ✅ | ✅ nutrition-apply-template.tsx (2026-07-29) |
+| ✅ P2 | 1-tap log comidas planeadas de hoy | ✅ | ✅ log-today endpoint mobile (2026-07-29) |
+| ✅ P2 | Water tracking | ✅ HydrationWidget web (2026-07-29) | ✅ GET/POST /api/mobile/nutrition/water + HydrationSection interactiva (2026-08-14) |
+| ✅ P2 | Sugerencia carga próxima sesión gym | ✅ | ✅ GYM-MOB-04: badge ↑Xkg en input (2026-08-14) |
+| 🟡 P2 | Push notifications en dispositivo real | ✅ Backend | Código listo — **requiere EAS rebuild** con projectId real |
+| 🟡 P2 | Strava en producción | ✅ Backend completo | ❌ pendiente env vars + webhook subscribe |
+| 🟡 P2 | Apple HealthKit / Google Health Connect | ❌ | ❌ pendiente librería + EAS bare workflow |
+| 🟢 P3 | Vista mensual del plan (PlanCalendarView) | ✅ | ❌ Solo strip semanal — backlog |
+| 🟢 P3 | Garmin Connect API | ❌ | ❌ Requiere partnership + aprobación |
+| 🟢 P3 | Bluetooth HRM | ❌ | ❌ react-native-ble-plx — requiere bare workflow |

@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
-import { getProgress } from '../../../src/api/progress'
+import { getProgress, getMuscleVolume } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
 import UpgradeWall from '../../../src/components/UpgradeWall'
+import MuscleMap from '../../../src/components/MuscleMap'
 
 const PHASE_COLORS: Record<string, string> = {
   BASE: '#3b82f6',
@@ -49,6 +50,13 @@ export default function ProgressScreen() {
     queryKey: ['progress'],
     queryFn: getProgress,
     enabled: !!(user?.features?.progress),
+  })
+
+  const { data: muscleData } = useQuery({
+    queryKey: ['progress-muscles'],
+    queryFn: () => getMuscleVolume(7),
+    enabled: !!(user?.features?.gym),
+    staleTime: 5 * 60_000,
   })
 
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
@@ -106,7 +114,7 @@ export default function ProgressScreen() {
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <StatCard label="Check-ins" value={String(data.totalCheckIns)} />
         <StatCard label="Adherencia" value={`${data.overallAdherencePct}%`} sub="promedio" />
-        <StatCard label="Gym" value={String(data.gymSessionsCompleted)} sub="sesiones" />
+        <StatCard label="Fuerza" value={String(data.gymSessionsCompleted)} sub="sesiones" />
       </View>
 
       {/* Peso */}
@@ -316,6 +324,56 @@ export default function ProgressScreen() {
         )
       })()}
 
+      {/* Adherencia nutricional — MOB-NUT-02 */}
+      {(data.nutritionAdherence ?? []).length > 0 && (() => {
+        const pts = data.nutritionAdherence.slice(-14)
+        const avg = Math.round(pts.reduce((a, p) => a + p.pct, 0) / pts.length)
+        const avgColor = avg >= 80 ? '#22c55e' : avg >= 60 ? '#f59e0b' : '#ef4444'
+        return (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionHeader title="Adherencia nutricional" />
+              <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: avgColor }}>{avg}%</Text>
+            </View>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: -8 }}>
+              Últimos 14 días · kcal registradas vs objetivo
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 52 }}>
+              {pts.map((p, i) => {
+                const barColor = p.pct >= 80 ? '#22c55e' : p.pct >= 60 ? '#f59e0b' : '#ef4444'
+                const barH = Math.max(4, Math.round((p.pct / 100) * 44))
+                const d = new Date(p.date)
+                const dayLabel = `${d.getUTCDate()}/${d.getUTCMonth() + 1}`
+                return (
+                  <View key={p.date} style={{ flex: 1, alignItems: 'center', gap: 3 }}>
+                    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                      <View style={{ width: '100%', height: barH, backgroundColor: barColor, borderRadius: 3, opacity: i === pts.length - 1 ? 1 : 0.75 }} />
+                    </View>
+                    {i % 3 === 0 && (
+                      <Text style={{ fontSize: 7, fontFamily: 'Inter_400Regular', color: '#d1d5db', textAlign: 'center' }}>
+                        {dayLabel}
+                      </Text>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {[
+                { color: '#22c55e', label: '≥80%' },
+                { color: '#f59e0b', label: '60–79%' },
+                { color: '#ef4444', label: '<60%' },
+              ].map(({ color, label }) => (
+                <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
+                  <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )
+      })()}
+
       {/* Circunferencias */}
       {data.measurementPoints.length > 0 && (() => {
         const MEASURES = [
@@ -368,6 +426,35 @@ export default function ProgressScreen() {
         )
       })()}
 
+      {/* Mapa muscular — GYM-S2-03 */}
+      {muscleData && Object.keys(muscleData).length > 0 && (() => {
+        // Top 3 músculos más trabajados esta semana
+        const sorted = Object.entries(muscleData)
+          .filter(([, v]) => v.fatigueLevel > 0)
+          .sort((a, b) => (b[1].volume ?? 0) - (a[1].volume ?? 0))
+          .slice(0, 4)
+
+        return (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 16, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SectionHeader title="Músculos · esta semana" />
+              {sorted.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {sorted.map(([key]) => (
+                    <View key={key} style={{ backgroundColor: '#fff7ed', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#ea580c', textTransform: 'capitalize' }}>
+                        {key}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <MuscleMap data={muscleData} />
+          </View>
+        )
+      })()}
+
       {/* PRs de gym */}
       {(data.gymPRs ?? []).length > 0 && (
         <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
@@ -397,6 +484,72 @@ export default function ProgressScreen() {
                         × {pr.repsCompleted} reps
                       </Text>
                     )}
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Histórico 1RM por ejercicio */}
+      {(data.gymPRHistory ?? []).length > 0 && (
+        <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <SectionHeader title="Progresión 1RM" />
+            <View style={{ backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#15803d' }}>📈 Epley</Text>
+            </View>
+          </View>
+          <View style={{ gap: 14 }}>
+            {data.gymPRHistory.slice(0, 5).map((series) => {
+              const pts = series.points.slice(-6)
+              const max = Math.max(...pts.map(p => p.oneRmKg))
+              const min = Math.min(...pts.map(p => p.oneRmKg))
+              const last = pts[pts.length - 1]
+              const first = pts[0]
+              const delta = pts.length > 1 ? Math.round((last.oneRmKg - first.oneRmKg) * 10) / 10 : null
+              return (
+                <View key={series.exerciseName} style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#111827', flex: 1 }} numberOfLines={1}>
+                      {series.exerciseName}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#1e3a5f' }}>
+                        {last.oneRmKg} <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kg 1RM</Text>
+                      </Text>
+                      {delta != null && (
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: delta > 0 ? '#22c55e' : delta < 0 ? '#ef4444' : '#9ca3af' }}>
+                          {delta > 0 ? '+' : ''}{delta}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {/* Sparkline bars */}
+                  <View style={{ flexDirection: 'row', gap: 4, alignItems: 'flex-end', height: 32 }}>
+                    {pts.map((p, i) => {
+                      const range = max - min
+                      const pct = range > 0 ? ((p.oneRmKg - min) / range) : 1
+                      const barH = Math.max(6, Math.round(pct * 28))
+                      const isLast = i === pts.length - 1
+                      return (
+                        <View key={p.date} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: 32 }}>
+                          <View style={{ width: '100%', height: barH, backgroundColor: isLast ? '#1e3a5f' : '#dbeafe', borderRadius: 3 }} />
+                        </View>
+                      )
+                    })}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {pts.map((p, i) => {
+                      const d = new Date(p.date)
+                      const label = `${d.getDate()}/${d.getMonth() + 1}`
+                      return (
+                        <Text key={p.date} style={{ flex: 1, fontSize: 8, fontFamily: 'Inter_400Regular', color: '#d1d5db', textAlign: 'center' }}>
+                          {label}
+                        </Text>
+                      )
+                    })}
                   </View>
                 </View>
               )

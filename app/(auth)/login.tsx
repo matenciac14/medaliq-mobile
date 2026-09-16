@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { MedaliqLogo } from '../../src/components/MedaliqLogo'
 import {
   View,
   Text,
@@ -16,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as WebBrowser from 'expo-web-browser'
 import * as Google from 'expo-auth-session/providers/google'
-import { login, googleLogin } from '../../src/api/auth'
+import { login, googleLogin, syncTimezone } from '../../src/api/auth'
 import { useAuthStore } from '../../src/store/auth'
 
 WebBrowser.maybeCompleteAuthSession()
@@ -52,6 +53,7 @@ export default function LoginScreen() {
     try {
       const { user, needsRoleSelection } = await googleLogin(idToken)
       setUser(user)
+      syncTimezone()
       if (needsRoleSelection) {
         router.replace('/(auth)/select-role' as any)
       } else if (!user.onboardingCompleted) {
@@ -84,6 +86,7 @@ export default function LoginScreen() {
     try {
       const user = await login({ email: email.trim().toLowerCase(), password })
       setUser(user)
+      syncTimezone()
       if (!user.onboardingCompleted) {
         router.replace('/(auth)/onboarding')
       } else if (user.userPlan === 'INACTIVE') {
@@ -123,9 +126,7 @@ export default function LoginScreen() {
           alignItems: 'center',
           paddingTop: insets.top,
         }}>
-          <Text style={{ fontSize: 32, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-            Medal<Text style={{ color: '#f97316' }}>iq</Text>
-          </Text>
+          <MedaliqLogo variant="dark" size="lg" />
           <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.55)', marginTop: 8 }}>
             Tu progreso continúa.
           </Text>

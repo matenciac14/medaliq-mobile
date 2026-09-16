@@ -10,12 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { apiFetch } from '../../src/api/client'
-
-const SESSION_ICONS: Record<string, string> = {
-  RODAJE_Z2: '🏃', FARTLEK: '🏃', TIRADA_LARGA: '🏃', TEMPO: '🏃',
-  INTERVALOS: '⚡', SIMULACRO: '🏁', TEST: '📊',
-  CICLA: '🚴', NATACION: '🏊', FUERZA: '💪', DESCANSO: '😴', OTRO: '🏅',
-}
+import { SESSION_ICONS } from '../../src/constants/sessions'
 
 const SESSION_TYPE_OPTIONS = [
   { value: 'RODAJE_Z2',    label: 'Rodaje Z2' },

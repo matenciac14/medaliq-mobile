@@ -1,11 +1,13 @@
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { getGymHistory, type GymSessionSummary } from '../../src/api/gym-history'
+
+type ExProgression = { date: string; maxWeight: number }[]
 
 function rpeStyle(rpe: number | null): { bg: string; text: string } {
   if (!rpe) return { bg: '#f3f4f6', text: '#6b7280' }
@@ -25,7 +27,36 @@ function formatVolume(kg: number): string {
   return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg}kg`
 }
 
-function SessionCard({ session }: { session: GymSessionSummary }) {
+function ExerciseProgressionChart({ points }: { points: ExProgression }) {
+  if (points.length < 2) return null
+  const last8 = points.slice(-8)
+  const min = Math.min(...last8.map(p => p.maxWeight))
+  const max = Math.max(...last8.map(p => p.maxWeight))
+  const range = max - min || 1
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+        Progresión de carga
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 40 }}>
+        {last8.map((p, i) => {
+          const h = Math.max(4, Math.round(((p.maxWeight - min) / range) * 32))
+          const isLast = i === last8.length - 1
+          return (
+            <View key={i} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+              {isLast && (
+                <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: '#f97316' }}>{p.maxWeight}kg</Text>
+              )}
+              <View style={{ height: h, width: '80%', borderRadius: 2, backgroundColor: isLast ? '#f97316' : '#e5e7eb' }} />
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function SessionCard({ session, progressionByExercise }: { session: GymSessionSummary; progressionByExercise: Map<string, ExProgression> }) {
   const [expanded, setExpanded] = useState(false)
   const rpe = rpeStyle(session.rpe)
   const canExpand = !session.isFree || !!session.notes
@@ -73,6 +104,9 @@ function SessionCard({ session }: { session: GymSessionSummary }) {
           {session.durationMin && (
             <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#374151' }}>{session.durationMin}min</Text>
           )}
+          {session.completedSets > 0 && (
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>{session.completedSets} series</Text>
+          )}
           {session.rpe && (
             <View style={{ backgroundColor: rpe.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: rpe.text }}>RPE {session.rpe}</Text>
@@ -99,7 +133,9 @@ function SessionCard({ session }: { session: GymSessionSummary }) {
               {session.notes}
             </Text>
           )}
-          {session.exercises.map(ex => (
+          {session.exercises.map(ex => {
+            const progression = progressionByExercise.get(ex.name)
+            return (
             <View key={ex.name}>
               <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1e3a5f', marginBottom: 6 }}>
                 🏋 {ex.name}
@@ -134,8 +170,10 @@ function SessionCard({ session }: { session: GymSessionSummary }) {
                   </View>
                 ))}
               </View>
+              {progression && <ExerciseProgressionChart points={progression} />}
             </View>
-          ))}
+          )})}
+
         </View>
       )}
     </View>
@@ -146,6 +184,23 @@ export default function GymHistoryScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { data, isLoading } = useQuery({ queryKey: ['gym-history'], queryFn: getGymHistory })
+
+  const progressionByExercise = useMemo(() => {
+    if (!data?.sessions) return new Map<string, ExProgression>()
+    const map = new Map<string, ExProgression>()
+    const sorted = [...data.sessions].sort((a, b) => a.date.localeCompare(b.date))
+    for (const session of sorted) {
+      for (const ex of session.exercises) {
+        const weights = ex.sets.filter(s => s.completed && s.weightKg != null).map(s => s.weightKg!)
+        if (weights.length === 0) continue
+        const maxWeight = Math.max(...weights)
+        const existing = map.get(ex.name) ?? []
+        existing.push({ date: session.date, maxWeight })
+        map.set(ex.name, existing)
+      }
+    }
+    return map
+  }, [data])
 
   const GradientHeader = () => (
     <LinearGradient
@@ -221,7 +276,7 @@ export default function GymHistoryScreen() {
         </View>
       ) : (
         <View>
-          {data.sessions.map(s => <SessionCard key={s.id} session={s} />)}
+          {data.sessions.map(s => <SessionCard key={s.id} session={s} progressionByExercise={progressionByExercise} />)}
         </View>
       )}
     </ScrollView>

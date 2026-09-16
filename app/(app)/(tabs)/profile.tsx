@@ -123,7 +123,12 @@ export default function ProfileScreen() {
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
           <MenuItem icon="mail-outline" label="Email" value={user?.email ?? ''} />
           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
-          <MenuItem icon="medal-outline" label="Plan" value={planLabel[plan] ?? plan} />
+          <MenuItem
+            icon="medal-outline"
+            label="Mi suscripción"
+            value={planLabel[plan] ?? plan}
+            onPress={() => router.push('/(app)/pricing')}
+          />
         </View>
       </View>
 
@@ -136,6 +141,12 @@ export default function ProfileScreen() {
               icon="body-outline"
               label="Perfil de salud"
               onPress={() => router.push('/(app)/edit-health-profile' as any)}
+            />
+            <View style={{ height: 1, backgroundColor: '#f1f5f9', marginLeft: 66 }} />
+            <MenuItem
+              icon="link-outline"
+              label="Integraciones"
+              onPress={() => router.push('/(app)/integrations' as any)}
             />
           </View>
         </View>
