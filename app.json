@@ -33,7 +33,9 @@
       },
       "package": "com.medaliq.app",
       "versionCode": 1,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -58,7 +60,8 @@
           "sounds": [],
           "enableBackgroundRemoteNotifications": false
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

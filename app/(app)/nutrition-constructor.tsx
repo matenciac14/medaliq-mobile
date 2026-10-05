@@ -27,20 +27,20 @@ export default function NutritionConstructorScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
       {/* Header */}
-      <View style={{ backgroundColor: '#1e3a5f', paddingTop: insets.top + 8, paddingBottom: 20, paddingHorizontal: 16 }}>
+      <View style={{ backgroundColor: '#1e3a5f', paddingTop: insets.top + 8, paddingBottom: 16, paddingHorizontal: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={22} color="white" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutrición</Text>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: 'white', flex: 1 }}>Nutrición</Text>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 6, alignItems: 'center' }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)' }}>
               {new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           </View>
-          <View style={{ flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 8, alignItems: 'center' }}>
+          <View style={{ flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 6, alignItems: 'center' }}>
             <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>🔥 Día Duro</Text>
           </View>
         </View>
@@ -52,14 +52,16 @@ export default function NutritionConstructorScreen() {
       >
         {/* Hero card */}
         <View style={{ backgroundColor: '#fff7ed', borderRadius: 20, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#fed7aa' }}>
-          <Text style={{ fontSize: 44 }}>📋</Text>
+          <Text style={{ fontSize: 48 }}>📋</Text>
           <Text style={{ fontSize: 20, fontFamily: 'Inter_800ExtraBold', color: '#1e3a5f', textAlign: 'center', marginTop: 12 }}>
             Tu primer plan de{'\n'}nutrición
           </Text>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6a7788', textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
-            Define qué comes en cada tipo de día — Duro, Fácil o Descanso — y el sistema lo aplica automáticamente a tu semana.
-          </Text>
         </View>
+
+        {/* Description — outside hero per Figma 4523:3163 */}
+        <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6a7788', textAlign: 'center', lineHeight: 20 }}>
+          Define qué comes en cada tipo de día — Duro, Fácil o Descanso — y el sistema lo aplica automáticamente a tu semana.
+        </Text>
 
         {/* Features list */}
         <View style={{ backgroundColor: 'white', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
@@ -71,7 +73,7 @@ export default function NutritionConstructorScreen() {
                 borderBottomWidth: i < FEATURES.length - 1 ? 1 : 0, borderBottomColor: '#f3f4f6',
               }}
             >
-              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 20 }}>{f.emoji}</Text>
               </View>
               <View style={{ flex: 1 }}>

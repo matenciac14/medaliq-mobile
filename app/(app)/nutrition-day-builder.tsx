@@ -29,12 +29,17 @@ const DAY_TABS: { value: DayType; label: string; icon: string; bg: string; borde
 
 const MEAL_ORDER: MealType[] = ['BREAKFAST', 'PRE_WORKOUT', 'LUNCH', 'SNACK', 'DINNER', 'POST_WORKOUT']
 const MEAL_LABELS: Record<MealType, { label: string; icon: string }> = {
-  BREAKFAST: { label: 'Desayuno', icon: '🍳' },
+  BREAKFAST: { label: 'Desayuno', icon: '🌅' },
   PRE_WORKOUT: { label: 'Pre-entreno', icon: '⚡' },
-  LUNCH: { label: 'Almuerzo', icon: '🥗' },
+  LUNCH: { label: 'Almuerzo', icon: '🍽️' },
   SNACK: { label: 'Snack', icon: '🍎' },
-  DINNER: { label: 'Cena', icon: '🍽️' },
+  DINNER: { label: 'Cena', icon: '🌙' },
   POST_WORKOUT: { label: 'Post-entreno', icon: '💪' },
+}
+
+const FOOD_CATEGORY_EMOJI: Record<string, string> = {
+  PROTEIN: '🍗', CARB: '🍚', FAT: '🫒', VEGETABLE: '🥦',
+  FRUIT: '🍌', DAIRY: '🥛', LEGUME: '🫘', NUT_SEED: '🥜', OTHER: '🥄',
 }
 
 const QUICK_GRAMS = [50, 80, 100, 150, 200]
@@ -107,26 +112,31 @@ function AddFoodModal({
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34 }}>
               <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-                <TouchableOpacity onPress={() => setSelected(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name="arrow-back" size={22} color="#374151" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+                <TouchableOpacity onPress={() => setSelected(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 18, fontFamily: 'Inter_400Regular', color: '#374151' }}>←</Text>
                 </TouchableOpacity>
                 <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontFamily: 'Inter_700Bold', color: '#111827' }}>
                   {selected.name}
                 </Text>
-                <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name="close" size={22} color="#9ca3af" />
+                <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>✕</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Divider (Figma y=72) */}
+              <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
 
               <View style={{ paddingHorizontal: 16, gap: 16 }}>
                 {/* Food info */}
                 <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 20 }}>🥄</Text>
+                    <Text style={{ fontSize: 20 }}>{FOOD_CATEGORY_EMOJI[selected.category] ?? '🥄'}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{selected.name}</Text>
@@ -175,9 +185,9 @@ function AddFoodModal({
                       Aporte nutricional · {grams}g
                     </Text>
                     <View style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={{ marginRight: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline', marginRight: 14 }}>
                         <Text style={{ fontSize: 26, fontFamily: 'Inter_900Black', color: '#111827' }}>{macros.kcal}</Text>
-                        <Text style={{ fontSize: 10, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>kcal</Text>
+                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginLeft: 3 }}>kcal</Text>
                       </View>
                       <View style={{ width: 1, height: 32, backgroundColor: '#e5e7eb', marginRight: 14 }} />
                       {[
@@ -196,6 +206,9 @@ function AddFoodModal({
                     </View>
                   </View>
                 )}
+
+                {/* Divider before footer */}
+                <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
 
                 {/* Agregar a... */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -228,19 +241,22 @@ function AddFoodModal({
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
         <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', paddingBottom: 34 }}>
           <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 }}>
             <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827' }}>Agregar alimento</Text>
             <TouchableOpacity onPress={handleClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f2f5f7', alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="close" size={18} color="#6b7280" />
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>✕</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Divider (Figma y=74) */}
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_500Medium', color: '#6b7280' }}>
-              🍳 {mealLabel} · {dayLabel}
+              {MEAL_LABELS[mealType]?.icon ?? '🍳'} {mealLabel} · {dayLabel}
             </Text>
           </View>
 
@@ -267,31 +283,34 @@ function AddFoodModal({
                 <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.65, marginBottom: 8 }}>
                   {query.length >= 2 ? 'Resultados' : 'Tus alimentos'}
                 </Text>
-                {filtered.map(food => (
-                  <TouchableOpacity
-                    key={food.id}
-                    onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12,
-                      borderBottomWidth: 1, borderBottomColor: '#f3f4f6', marginLeft: 4,
-                    }}
-                  >
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 16 }}>🥄</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                        {food.kcalPer100g} kcal / 100g
-                      </Text>
-                    </View>
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="add" size={16} color="white" />
-                    </View>
-                  </TouchableOpacity>
+                {filtered.map((food, idx) => (
+                  <View key={food.id}>
+                    <TouchableOpacity
+                      onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}
+                    >
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 16 }}>{FOOD_CATEGORY_EMOJI[food.category] ?? '🥄'}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
+                          {food.kcalPer100g} kcal / 100g
+                        </Text>
+                      </View>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: 'white' }}>+</Text>
+                      </View>
+                    </TouchableOpacity>
+                    {idx < filtered.length - 1 && (
+                      <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 48 }} />
+                    )}
+                  </View>
                 ))}
               </View>
             )}
+            {/* Section divider (Figma SectionDivider y=260) */}
+            {savedCombos.length > 0 && !query && <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />}
             {/* Combinaciones guardadas */}
             {savedCombos.length > 0 && !query && (
               <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
@@ -312,7 +331,7 @@ function AddFoodModal({
                         borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
                       }}
                     >
-                      <View style={{ width: 3, height: 36, borderRadius: 2, backgroundColor: '#eb590d', marginRight: 12 }} />
+                      <View style={{ width: 3, height: 44, borderRadius: 2, backgroundColor: '#eb590d', marginRight: 12 }} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{t.name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
@@ -332,7 +351,7 @@ function AddFoodModal({
                         </View>
                       </View>
                       <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="add" size={16} color="white" />
+                        <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: 'white' }}>+</Text>
                       </View>
                     </TouchableOpacity>
                   )
@@ -340,6 +359,9 @@ function AddFoodModal({
               </View>
             )}
           </ScrollView>
+
+          {/* Footer divider (Figma y=693) */}
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
 
           {/* Proponer nuevo */}
           <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
@@ -489,7 +511,7 @@ export default function NutritionDayBuilderScreen() {
         {/* Title */}
         <View>
           <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: '#111827' }}>Menú nutricional</Text>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 8 }}>
             Define las comidas para cada tipo de día
           </Text>
         </View>
@@ -539,7 +561,7 @@ export default function NutritionDayBuilderScreen() {
             ].map(m => {
               const pct = m.target > 0 ? Math.min((m.value / m.target) * 100, 100) : 0
               return (
-                <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                <View key={m.label} style={{ flex: 1, alignItems: 'flex-start' }}>
                   <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: '#9ca3af' }}>{m.label}</Text>
                   <Text style={{ fontSize: 18, fontFamily: 'Inter_900Black', color: m.color, marginTop: 2 }}>
                     {m.suffix ? `${Math.round(m.value * 10) / 10}${m.suffix}` : m.value.toLocaleString()}
@@ -547,8 +569,8 @@ export default function NutritionDayBuilderScreen() {
                   <Text style={{ fontSize: 9, fontFamily: 'Inter_400Regular', color: '#d1d5db' }}>
                     {m.subLabel}
                   </Text>
-                  <View style={{ width: '100%', height: 3, backgroundColor: '#f3f4f6', borderRadius: 2, marginTop: 4 }}>
-                    <View style={{ width: `${pct}%`, height: 3, backgroundColor: m.color, borderRadius: 2 }} />
+                  <View style={{ width: '100%', height: 4, backgroundColor: '#f3f4f6', borderRadius: 2, marginTop: 4 }}>
+                    <View style={{ width: `${pct}%`, height: 4, backgroundColor: m.color, borderRadius: 2 }} />
                   </View>
                 </View>
               )
@@ -561,74 +583,94 @@ export default function NutritionDayBuilderScreen() {
           Comidas configuradas
         </Text>
 
-        {MEAL_ORDER.map(mealType => {
-          const items = currentDayMeals[mealType]
-          const isExpanded = expandedMeal === mealType
-          const mealMacros = items.reduce((acc, i) => {
-            const m = calcMacros(i.food, i.grams)
-            return { kcal: acc.kcal + m.kcal, proteinG: acc.proteinG + m.proteinG }
-          }, { kcal: 0, proteinG: 0 })
+        {/* Unified MealList card (Figma MealList 358×474 — one card for all meals) */}
+        <View style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+          {MEAL_ORDER.map((mealType, idx) => {
+            const items = currentDayMeals[mealType]
+            const isExpanded = expandedMeal === mealType
+            const mealMacros = items.reduce((acc, i) => {
+              const m = calcMacros(i.food, i.grams)
+              return { kcal: acc.kcal + m.kcal, proteinG: acc.proteinG + m.proteinG }
+            }, { kcal: 0, proteinG: 0 })
 
-          return (
-            <View key={mealType} style={{ backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
-              <TouchableOpacity
-                onPress={() => setExpandedMeal(isExpanded ? null : mealType)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', padding: 14,
-                  borderBottomWidth: isExpanded && items.length > 0 ? 1 : 0, borderBottomColor: '#f3f4f6',
-                }}
-              >
-                <Text style={{ fontSize: 16 }}>{MEAL_LABELS[mealType].icon}</Text>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{MEAL_LABELS[mealType].label}</Text>
-                  {items.length > 0 && !isExpanded && (
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
-                      {items.map(i => i.food.name).join(' + ')}
-                    </Text>
-                  )}
-                </View>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: items.length > 0 ? '#ea580c' : '#d1d5db', marginRight: 8 }}>
-                  {items.length > 0 ? `${mealMacros.kcal} kcal` : '—'}
-                </Text>
-                <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#9ca3af" />
-              </TouchableOpacity>
+            return (
+              <View key={mealType}>
+                {idx > 0 && <View style={{ height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 16 }} />}
+                <TouchableOpacity
+                  onPress={() => setExpandedMeal(isExpanded ? null : mealType)}
+                  style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}
+                >
+                  <Text style={{ fontSize: 16 }}>{MEAL_LABELS[mealType].icon}</Text>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>{MEAL_LABELS[mealType].label}</Text>
+                    {items.length > 0 && !isExpanded && (
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                        {items.map(i => i.food.name).join(' + ')}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: items.length > 0 ? '#ea580c' : '#d1d5db', marginRight: 8 }}>
+                    {items.length > 0 ? `${mealMacros.kcal} kcal` : '—'}
+                  </Text>
+                  <Text style={{ fontSize: 16, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>
+                    {isExpanded ? '⌄' : '›'}
+                  </Text>
+                </TouchableOpacity>
 
-              {isExpanded && (
-                <View style={{ padding: 14, gap: 8 }}>
-                  {items.map(item => {
-                    const m = calcMacros(item.food, item.grams)
-                    return (
-                      <View key={item.tempId} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
-                            {item.food.name}
-                          </Text>
-                          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{item.grams}g</Text>
+                {isExpanded && (
+                  <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                    {items.map((item, foodIdx) => {
+                      const m = calcMacros(item.food, item.grams)
+                      return (
+                        <View key={item.tempId}>
+                          {foodIdx > 0 && <View style={{ height: 1, backgroundColor: '#f3f4f6', marginVertical: 6 }} />}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#374151' }}>
+                                {item.food.name}
+                              </Text>
+                              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{item.grams}g</Text>
+                            </View>
+                            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>{m.kcal} kcal</Text>
+                            <TouchableOpacity onPress={() => handleRemoveFood(mealType, item.tempId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#d1d5db' }}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>{m.kcal} kcal</Text>
-                        <TouchableOpacity onPress={() => handleRemoveFood(mealType, item.tempId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="close-circle" size={18} color="#d1d5db" />
-                        </TouchableOpacity>
-                      </View>
-                    )
-                  })}
+                      )
+                    })}
 
-                  <TouchableOpacity
-                    onPress={() => setAddingTo(mealType)}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      paddingVertical: 12, borderRadius: 10,
-                      borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#d1d5db',
-                    }}
-                  >
-                    <Ionicons name="add" size={16} color="#6b7280" />
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar alimento</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )
-        })}
+                    <TouchableOpacity
+                      onPress={() => setAddingTo(mealType)}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        paddingVertical: 10, borderRadius: 10, marginTop: 8,
+                        borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#d1d5db',
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>+ Agregar alimento</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )
+          })}
+
+          {/* Bottom add-meal shortcut (Figma 4523:3285 — inside MealList card) */}
+          <View style={{ height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 16 }} />
+          <TouchableOpacity
+            onPress={() => {
+              const firstEmpty = MEAL_ORDER.find(mt => currentDayMeals[mt].length === 0)
+              setExpandedMeal(firstEmpty ?? 'BREAKFAST')
+              setAddingTo(firstEmpty ?? 'BREAKFAST')
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}
+          >
+            <Text style={{ fontSize: 16, marginRight: 10 }}>➕</Text>
+            <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>Agregar comida</Text>
+            <Text style={{ fontSize: 16, color: '#9ca3af', fontFamily: 'Inter_400Regular' }}>›</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Bottom CTA */}

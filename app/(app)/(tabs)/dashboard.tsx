@@ -24,12 +24,12 @@ import SelectedDayCard from '../../../src/components/SelectedDayCard'
 import SundayShareBanner from '../../../src/components/dashboard/SundayShareBanner'
 import RecentActivityCard from '../../../src/components/dashboard/RecentActivityCard'
 import QuickSessionFeedback from '../../../src/components/dashboard/QuickSessionFeedback'
-import FreeTodayCard from '../../../src/components/dashboard/FreeTodayCard'
 import DesbloquearProCard from '../../../src/components/dashboard/DesbloquearProCard'
 import FindCoachCard from '../../../src/components/dashboard/FindCoachCard'
 import ProMetricsCard from '../../../src/components/dashboard/ProMetricsCard'
 import FreeMetricsCard from '../../../src/components/dashboard/FreeMetricsCard'
 import TodayLogCard from '../../../src/components/dashboard/TodayLogCard'
+import TodaySessionCard from '../../../src/components/dashboard/TodaySessionCard'
 
 const STREAK_MILESTONE_KEY = 'medaliq:streak_milestone_seen'
 const STREAK_MILESTONES = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52]
@@ -289,6 +289,14 @@ export default function DashboardScreen() {
     setShowSeasonModal(false)
   }
 
+  // Auto-select today in FREE mode so SelectedDayCard shows immediately
+  useEffect(() => {
+    if (!data || data.todaySession || data.mode !== 'FREE') return
+    if (calendarSelectedIdx != null) return
+    const todayIdx = data.weekSessions.findIndex(s => s.isToday)
+    if (todayIdx >= 0) setCalendarSelectedIdx(data.weekSessions[todayIdx].dayIndex)
+  }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useFocusEffect(
     useCallback(() => {
       refetch()
@@ -326,9 +334,6 @@ export default function DashboardScreen() {
   const d = data
   const firstName = d.firstName || (user?.name ?? 'Atleta').split(' ')[0]
   const isFree = d.mode === 'FREE'
-  const modeLabel = isFree ? 'FREE' : d.isB2B ? 'B2B' : 'PRO'
-  // dow: 1=Mon … 7=Sun (ISO)
-  const todayDow = (() => { const day = new Date().getDay(); return day === 0 ? 7 : day })()
 
   // Active week data: use navWeekSessions when navigating, fallback to dashboard data
   const activeWeekSessions = freeWeekOffset === 0 || !navWeekSessions ? d.weekSessions : navWeekSessions
@@ -447,11 +452,11 @@ export default function DashboardScreen() {
       <View style={{ paddingHorizontal: 16, gap: 12 }}>
 
         {/* ============================================================== */}
-        {/* FREE MODE — Figma-aligned layout                               */}
+        {/* MODE-SPECIFIC: Calendar + Session card                          */}
         {/* ============================================================== */}
-        {isFree && !d.todaySession && (
+        {isFree && !d.todaySession ? (
           <>
-            {/* CalendarStrip — before HOY card per Figma */}
+            {/* CalendarStrip — FREE: simple tap-to-select */}
             <CalendarStrip
               days={sessionsToCalendarDays(activeWeekSessions, freeWeekOffset)}
               selectedDow={calendarSelectedIdx}
@@ -460,7 +465,7 @@ export default function DashboardScreen() {
               totalTraining={activeTotalTraining}
             />
 
-            {/* Selected day detail card — matches web MobileSelectedDayCard */}
+            {/* Selected day detail card */}
             {calendarSelectedIdx != null && (() => {
               const ws = activeWeekSessions.find(s => s.dayIndex === calendarSelectedIdx)
               return ws ? (
@@ -481,62 +486,10 @@ export default function DashboardScreen() {
                 />
               ) : null
             })()}
-
-            {/* HOY card */}
-            <FreeTodayCard router={router} />
-
-            {/* SHARE-08: Sunday weekly share */}
-            {isSunday && d.completedCount > 0 && (
-              <SundayShareBanner
-                completedCount={d.completedCount}
-                totalTraining={d.totalTraining}
-                onPress={() => { setSundayShareProps(buildWeekShareProps(activeWeekSessions, activeCompletedCount, activeTotalTraining)); setShowSundayShare(true) }}
-              />
-            )}
-
-            {/* Nutricion */}
-            {d.nutritionTarget && (
-              <NutritionProgressCard
-                target={d.nutritionTarget}
-                consumed={d.todayFoodTotals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
-                onPress={() => router.push('/(app)/(tabs)/nutrition')}
-              />
-            )}
-
-            {/* Hidratacion */}
-            <HydrationWidget initialMl={d.waterData?.mlLogged} initialTarget={d.waterData?.waterMlTarget} />
-
-            {/* Alimentacion */}
-            <MealSlotsWidget logs={d.mealSlotLogs ?? null} />
-
-            {/* Metricas — peso */}
-            <FreeMetricsCard
-              currentWeight={d.metrics.weightKg}
-              targetWeight={d.metrics.weightGoalKg}
-              weeklyWeightChange={d.weeklyWeightChange}
-              weightProgressPct={d.weightProgressPct}
-            />
-
-            {/* Registro de hoy */}
-            <TodayLogCard initial={d.todayLog ?? null} />
-
-            {/* Actividad reciente */}
-            {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
-              <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
-            )}
-
-            {/* CTAs */}
-            <DesbloquearProCard router={router} />
-            <FindCoachCard router={router} />
           </>
-        )}
-
-        {/* ============================================================== */}
-        {/* NON-FREE or FREE with todaySession — original layout           */}
-        {/* ============================================================== */}
-        {(!isFree || d.todaySession) && (
+        ) : (
           <>
-            {/* Calendar Strip — before TodaySession per Figma */}
+            {/* CalendarStrip — NON-FREE: past-unlogged auto-navigate + today reset */}
             {activeWeekSessions.length > 0 && (
               <CalendarStrip
                 days={sessionsToCalendarDays(activeWeekSessions, freeWeekOffset)}
@@ -553,7 +506,6 @@ export default function DashboardScreen() {
                     })
                     return
                   }
-                  // Tap today → reset to today card; tap other day → show SelectedDayCard
                   setCalendarSelectedIdx(s?.isToday ? null : dow)
                 }}
                 completedCount={activeCompletedCount}
@@ -561,7 +513,7 @@ export default function DashboardScreen() {
               />
             )}
 
-            {/* #4 — Banner: sugerencias de ajuste del coach pendientes */}
+            {/* Banner: sugerencias de ajuste del coach pendientes */}
             {(d.pendingSuggestionsCount ?? 0) > 0 && (
               <TouchableOpacity
                 onPress={() => router.push('/(app)/(tabs)/checkin')}
@@ -584,13 +536,12 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Selected day detail card — replaces todaySession card when a day is tapped */}
+            {/* Session card — day selection or today */}
             {(() => {
               const ws = calendarSelectedIdx != null
                 ? activeWeekSessions.find(s => s.dayIndex === calendarSelectedIdx) ?? null
                 : null
 
-              // If a non-today day is selected, show SelectedDayCard for that day
               if (ws && !ws.isToday) {
                 return (
                   <SelectedDayCard
@@ -611,82 +562,8 @@ export default function DashboardScreen() {
                 )
               }
 
-              // Default: show today's session card (or rest/recovery fallback)
               if (d.todaySession) {
-                return (
-                  <View style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}>
-                    <View style={{ height: 3, backgroundColor: '#1e3a5f' }} />
-                    <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#ea580c', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                          ● HOY
-                        </Text>
-                        {d.todaySession.completed ? (
-                          <View style={{ backgroundColor: '#22c55e', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3 }}>
-                            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: 'white' }}>Completada</Text>
-                          </View>
-                        ) : d.todaySession.zoneTarget && d.todaySession.zoneTarget !== 'N/A' ? (
-                          <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                            <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#15803d' }}>
-                              Zona {d.todaySession.zoneTarget}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Text style={{ fontSize: 28 }}>{d.todaySession.completed ? '✓' : (SESSION_ICONS[d.todaySession.type] ?? '🏅')}</Text>
-                        <Text style={{ fontSize: 28, fontFamily: 'Inter_900Black', color: '#1e3a5f', letterSpacing: -1 }}>
-                          {d.todaySession.id === 'gym-today' && d.workoutName
-                            ? d.workoutName
-                            : `${d.todaySession.durationMin ?? '—'} min`}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>
-                        {SESSION_LABELS[d.todaySession.type] ?? d.todaySession.type.toLowerCase().replace(/_/g, ' ')}
-                      </Text>
-                      {d.todaySession.detailText ? (
-                        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>
-                          {d.todaySession.detailText}
-                        </Text>
-                      ) : null}
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                          if (d.todaySession!.completed) {
-                            router.push(d.todaySession!.id === 'gym-today' ? '/(app)/(tabs)/gym' : '/(app)/(tabs)/progress' as any)
-                          } else if (d.todaySession!.id === 'gym-today') {
-                            router.push('/(app)/(tabs)/gym')
-                          } else {
-                            router.push({
-                              pathname: '/(app)/log',
-                              params: {
-                                sessionId: d.todaySession!.id,
-                                type: d.todaySession!.type,
-                                duration: String(d.todaySession!.durationMin),
-                                zone: d.todaySession!.zoneTarget,
-                              },
-                            })
-                          }
-                        }}
-                        activeOpacity={0.85}
-                        style={{ backgroundColor: '#1e3a5f', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4 }}
-                      >
-                        <Text style={{ color: 'white', fontSize: 13, fontFamily: 'Inter_700Bold' }}>
-                          {d.todaySession.completed ? 'Ver resumen →' : d.todaySession.id === 'gym-today' ? 'Ir al Entreno →' : 'Iniciar →'}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(app)/(tabs)/progress' as any) }}
-                        activeOpacity={0.7}
-                        style={{ alignItems: 'center', marginTop: 2 }}
-                      >
-                        <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#ea580c' }}>
-                          + Agregar otra actividad
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )
+                return <TodaySessionCard todaySession={d.todaySession} workoutName={d.workoutName} router={router} />
               }
 
               if (d.mode === 'RECOVERY') {
@@ -699,7 +576,6 @@ export default function DashboardScreen() {
                 )
               }
 
-              // Rest day fallback
               return (
                 <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12, ...SHADOW }}>
                   <Text style={{ fontSize: 28 }}>😴</Text>
@@ -711,9 +587,7 @@ export default function DashboardScreen() {
               )
             })()}
 
-            {/* Gym today now handled via todaySession (id='gym-today') from API */}
-
-            {/* Quick feedback — ¿Cómo te sentiste? (Figma: sesión completada) */}
+            {/* Quick feedback after completed session */}
             {d.todaySession?.completed && (
               <QuickSessionFeedback
                 sessionType={d.todaySession.type}
@@ -722,56 +596,81 @@ export default function DashboardScreen() {
                 logId={d.todaySession.logId ?? null}
               />
             )}
+          </>
+        )}
 
-            {/* SHARE-08: Sunday weekly share */}
-            {isSunday && d.completedCount > 0 && (
-              <SundayShareBanner
-                completedCount={d.completedCount}
-                totalTraining={d.totalTraining}
-                onPress={() => { setSundayShareProps(buildWeekShareProps(activeWeekSessions, activeCompletedCount, activeTotalTraining)); setShowSundayShare(true) }}
-              />
-            )}
+        {/* ============================================================== */}
+        {/* SHARED WIDGETS — same for all modes                            */}
+        {/* ============================================================== */}
 
-            {/* Nutricion — first card after session (matches web order) */}
-            {d.nutritionTarget && (
-              <NutritionProgressCard
-                target={d.nutritionTarget}
-                consumed={d.todayFoodTotals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
-                onPress={() => router.push('/(app)/(tabs)/nutrition')}
-              />
-            )}
+        {/* Sunday weekly share */}
+        {isSunday && d.completedCount > 0 && (
+          <SundayShareBanner
+            completedCount={d.completedCount}
+            totalTraining={d.totalTraining}
+            onPress={() => { setSundayShareProps(buildWeekShareProps(activeWeekSessions, activeCompletedCount, activeTotalTraining)); setShowSundayShare(true) }}
+          />
+        )}
 
-            {/* Hidratacion */}
-            <HydrationWidget initialMl={d.waterData?.mlLogged} initialTarget={d.waterData?.waterMlTarget} />
+        {/* Nutricion */}
+        {d.nutritionTarget && (
+          <NutritionProgressCard
+            target={d.nutritionTarget}
+            consumed={d.todayFoodTotals ?? { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }}
+            onPress={() => router.push('/(app)/(tabs)/nutrition')}
+          />
+        )}
 
-            {/* Alimentacion */}
-            <MealSlotsWidget logs={d.mealSlotLogs ?? null} />
+        {/* Hidratacion */}
+        <HydrationWidget initialMl={d.waterData?.mlLogged} initialTarget={d.waterData?.waterMlTarget} />
 
-            {/* Metricas consolidadas */}
-            <ProMetricsCard
-              formStatus={d.formStatus}
-              formMessage={d.formMessage}
-              lastCheckIn={d.lastCheckIn}
-              formCheckInDaysAgo={d.lastCheckinDaysAgo ?? null}
-              currentWeight={d.metrics.weightKg}
-              targetWeight={d.metrics.weightGoalKg}
-              weeklyWeightChange={d.weeklyWeightChange}
-              weightProgressPct={d.weightProgressPct}
-              currentVolume={d.currentVolume}
-              volumeDeltaPct={d.volumeDeltaPct}
-              isRecomp={d.isRecomp}
-              raceDays={d.raceDays}
-            />
+        {/* Alimentacion */}
+        <MealSlotsWidget logs={d.mealSlotLogs ?? null} />
 
-            {/* Registro de hoy */}
-            <TodayLogCard initial={d.todayLog ?? null} />
+        {/* Metricas — mode-specific card */}
+        {isFree ? (
+          <FreeMetricsCard
+            currentWeight={d.metrics.weightKg}
+            targetWeight={d.metrics.weightGoalKg}
+            weeklyWeightChange={d.weeklyWeightChange}
+            weightProgressPct={d.weightProgressPct}
+          />
+        ) : (
+          <ProMetricsCard
+            formStatus={d.formStatus}
+            formMessage={d.formMessage}
+            lastCheckIn={d.lastCheckIn}
+            formCheckInDaysAgo={d.lastCheckinDaysAgo ?? null}
+            currentWeight={d.metrics.weightKg}
+            targetWeight={d.metrics.weightGoalKg}
+            weeklyWeightChange={d.weeklyWeightChange}
+            weightProgressPct={d.weightProgressPct}
+            currentVolume={d.currentVolume}
+            volumeDeltaPct={d.volumeDeltaPct}
+            isRecomp={d.isRecomp}
+            raceDays={d.raceDays}
+          />
+        )}
 
-            {/* Actividad reciente */}
-            {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
-              <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
-            )}
+        {/* Registro de hoy */}
+        <TodayLogCard initial={d.todayLog ?? null} />
 
-            {/* Coach card (B2B) — after content cards, matches web InfoBannerRow position */}
+        {/* Actividad reciente */}
+        {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
+          <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
+        )}
+
+        {/* ============================================================== */}
+        {/* MODE-SPECIFIC: Bottom CTAs / Info cards                        */}
+        {/* ============================================================== */}
+        {isFree ? (
+          <>
+            <DesbloquearProCard router={router} />
+            <FindCoachCard router={router} />
+          </>
+        ) : (
+          <>
+            {/* Coach card (B2B) */}
             {d.coach && (
               <CoachCard
                 name={d.coach.name}

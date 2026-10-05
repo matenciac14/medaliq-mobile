@@ -59,6 +59,11 @@ function calcKcal(food: { kcalPer100g: number }, grams: number) {
 
 // ── AddFoodSheet (simple version for planner) ────────────────────────────────
 
+const FOOD_CATEGORY_EMOJI: Record<string, string> = {
+  PROTEIN: '🍗', CARB: '🍚', FAT: '🫒', VEGETABLE: '🥦',
+  FRUIT: '🍌', DAIRY: '🥛', LEGUME: '🫘', NUT_SEED: '🥜', OTHER: '🥄',
+}
+
 const QUICK_GRAMS = [50, 100, 150, 200]
 
 function AddFoodSheet({
@@ -98,7 +103,7 @@ function AddFoodSheet({
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34 }}>
               <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
                 <TouchableOpacity onPress={() => setSelected(null)}>
@@ -156,7 +161,7 @@ function AddFoodSheet({
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
         <View style={{ backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', paddingBottom: 34 }}>
           <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' }} />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 }}>
             <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#111827' }}>Agregar alimento</Text>
@@ -183,20 +188,25 @@ function AddFoodSheet({
                 <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1.65, marginBottom: 8 }}>
                   {query.length >= 2 ? 'Resultados' : 'Tus alimentos'}
                 </Text>
-                {filtered.map(food => (
-                  <TouchableOpacity key={food.id} onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', marginLeft: 4 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 16 }}>🥄</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
-                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{food.kcalPer100g} kcal / 100g</Text>
-                    </View>
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="add" size={16} color="white" />
-                    </View>
-                  </TouchableOpacity>
+                {filtered.map((food, idx) => (
+                  <View key={food.id}>
+                    <TouchableOpacity onPress={() => { setSelected(food); setGrams(food.servingG || 100) }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f5fa', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 16 }}>{FOOD_CATEGORY_EMOJI[food.category] ?? '🥄'}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#111827' }}>{food.name}</Text>
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#9ca3af' }}>{food.kcalPer100g} kcal / 100g</Text>
+                      </View>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a5f', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="add" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
+                    {idx < filtered.length - 1 && (
+                      <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 48 }} />
+                    )}
+                  </View>
                 ))}
               </View>
             )}
@@ -310,14 +320,16 @@ export default function NutritionWeekPlannerScreen() {
 
         {/* Week navigation */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 }}>
-          <TouchableOpacity onPress={() => handleWeekChange(-1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="chevron-back" size={18} color="white" />
+          <TouchableOpacity onPress={() => handleWeekChange(-1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_400Regular', color: 'white' }}>‹</Text>
           </TouchableOpacity>
           <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'white' }}>
             Semana {weekOffset + 1} · {formatWeekRange(mondayStr)}
           </Text>
-          <TouchableOpacity onPress={() => handleWeekChange(1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="chevron-forward" size={18} color="white" />
+          <TouchableOpacity onPress={() => handleWeekChange(1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_400Regular', color: 'white' }}>›</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -331,6 +343,16 @@ export default function NutritionWeekPlannerScreen() {
           contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: insets.bottom + 100 }}
           showsVerticalScrollIndicator={false}
         >
+          {/* Per-day progress segments (Figma ProgressSeg) */}
+          <View style={{ flexDirection: 'row', gap: 3 }}>
+            {weekDays.map((d) => {
+              const hasMeals = (meals[d]?.length ?? 0) > 0
+              return (
+                <View key={`seg-${d}`} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: hasMeals ? '#22c55e' : '#e5e7eb' }} />
+              )
+            })}
+          </View>
+
           {/* Week strip */}
           <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'space-between' }}>
             {weekDays.map((d, i) => {
@@ -347,8 +369,8 @@ export default function NutritionWeekPlannerScreen() {
                     {DAY_SHORT[i]}
                   </Text>
                   <View style={{
-                    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isSelected ? '#1e3a5f' : hasMeals ? '#1e3a5f' : '#f3f4f6',
+                    width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: isSelected ? '#ea580c' : hasMeals ? '#22c55e' : '#f3f4f6',
                   }}>
                     <Text style={{
                       fontSize: 14, fontFamily: 'Inter_700Bold',
@@ -357,7 +379,6 @@ export default function NutritionWeekPlannerScreen() {
                       {dayNum}
                     </Text>
                   </View>
-                  {hasMeals && !isSelected && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#1e3a5f' }} />}
                 </TouchableOpacity>
               )
             })}
@@ -383,10 +404,10 @@ export default function NutritionWeekPlannerScreen() {
                 Sin comidas planificadas
               </Text>
               <Text style={{ fontSize: 13, fontFamily: 'Inter_400Regular', color: '#6a7788', textAlign: 'center', marginTop: 8 }}>
-                {new Date(selectedDay + 'T12:00:00Z').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {new Date(selectedDay + 'T12:00:00Z').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })} · 😴 Descanso
               </Text>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', textAlign: 'center', marginTop: 4 }}>
-                Agrega comidas desde tu plantilla o personaliza este día.
+                Agrega comidas desde tu plantilla de día Descanso o personaliza este día.
               </Text>
 
               {params.templateId && (
@@ -428,21 +449,21 @@ export default function NutritionWeekPlannerScreen() {
                       <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 2 }}>{foodSummary}</Text>
                     </View>
                     <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#ea580c', marginRight: 8 }}>{mealKcal} kcal</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
+                    <Text style={{ fontSize: 14, color: '#d1d5db', fontFamily: 'Inter_400Regular' }}>›</Text>
                   </View>
                 )
               })}
 
-              {/* Add to day */}
+              {/* Add to day (Figma AddMealDayBtnBg 326×40) */}
               <TouchableOpacity
                 onPress={() => setAddingMealType('BREAKFAST')}
                 style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  paddingVertical: 14,
-                  borderStyle: 'dashed', borderTopWidth: 1, borderTopColor: '#e5e7eb',
+                  marginHorizontal: 14, marginVertical: 10, height: 40, borderRadius: 10,
+                  borderWidth: 1, borderColor: '#e5e7eb',
                 }}
               >
-                <Ionicons name="add" size={16} color="#6b7280" />
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: '#6b7280' }}>+</Text>
                 <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#6b7280' }}>Agregar comida al día</Text>
               </TouchableOpacity>
 
@@ -452,7 +473,7 @@ export default function NutritionWeekPlannerScreen() {
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#374151' }}>Total</Text>
                   <Text style={{ fontSize: 16, fontFamily: 'Inter_900Black', color: '#ea580c' }}>{dayTotal.toLocaleString()} kcal</Text>
                 </View>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#eb590d', textAlign: 'right', marginTop: 2 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#eb590d', marginTop: 2 }}>
                   Objetivo: {targetKcal.toLocaleString()} kcal · Faltan {Math.max(0, targetKcal - dayTotal).toLocaleString()} kcal
                 </Text>
               </View>
