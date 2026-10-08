@@ -5,7 +5,6 @@ import { useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
 import { getProgress, getMuscleVolume } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
-import UpgradeWall from '../../../src/components/UpgradeWall'
 import MuscleMap from '../../../src/components/MuscleMap'
 
 const PHASE_COLORS: Record<string, string> = {
@@ -60,10 +59,6 @@ export default function ProgressScreen() {
   })
 
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
-
-  if (!user?.features?.progress) {
-    return <UpgradeWall icon="📈" title="Progreso" description="Visualiza tu evolución de peso, bienestar y adherencia al plan con el plan Pro." />
-  }
 
   if (isLoading || !data) {
     return (

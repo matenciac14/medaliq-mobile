@@ -6,7 +6,6 @@ import { useFocusEffect } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { getCheckinStatus, submitCheckin, acceptSuggestion, rejectSuggestion, type CheckinResult, type CheckinSuggestion } from '../../../src/api/checkin'
 import { useAuthStore } from '../../../src/store/auth'
-import UpgradeWall from '../../../src/components/UpgradeWall'
 import { isSyncEnabled, queryRestingHeartRate, querySleepHours } from '../../../src/services/healthkit.service'
 
 // ── Slider component (1–10) ────────────────────────────────────────────────
@@ -149,8 +148,8 @@ const TRIGGER_LABELS: Record<string, string> = {
 // ── Pain level options ──────────────────────────────────────────────────────
 
 const PAIN_OPTIONS = [
-  { label: 'Sin molestias', value: 0 },
-  { label: 'Leve', value: 3 },
+  { label: 'Sin molestias', value: 1 },
+  { label: 'Leve', value: 4 },
   { label: 'Moderada', value: 7 },
 ] as const
 
@@ -206,10 +205,6 @@ export default function CheckinScreen() {
     return Math.round((completed / weekSessions.length) * 100)
   }, [weekSessions])
 
-  if (!user?.features?.checkin) {
-    return <UpgradeWall icon="clipboard" title="Check-in semanal" description="Registra tu evolucion semanal y recibe ajustes automaticos en tu plan con el plan Pro." />
-  }
-
   async function handleSubmit() {
     if (energy === 0 || stress === 0) {
       Alert.alert('Faltan datos', 'Completa al menos energia y estres antes de enviar.')
@@ -223,7 +218,7 @@ export default function CheckinScreen() {
         muscleSoreness: energy, // RPE auto — use energy as proxy when no auto RPE available
         stressLevel: stress,
         motivationLevel: motivation > 0 ? motivation : undefined,
-        painLevel: painLevel ?? 0,
+        painLevel: painLevel ?? undefined,
         weightKg: weight ? parseFloat(weight) : undefined,
         hrResting: hrResting ? parseInt(hrResting) : undefined,
         sleepHours: sleepHours ? parseFloat(sleepHours) : undefined,

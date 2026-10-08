@@ -10,8 +10,11 @@ export type SessionUser = {
   name: string
   email: string
   role: 'ATHLETE' | 'COACH' | 'ADMIN'
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'DELETED'
   userPlan: 'FREE' | 'TRIAL' | 'PRO' | 'INACTIVE'
   onboardingCompleted: boolean
+  activated: boolean
+  isB2B: boolean
   features: {
     plan: boolean
     checkin: boolean

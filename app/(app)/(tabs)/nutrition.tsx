@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
 import { getNutritionPage, deleteFoodLog, acceptNutritionAdjustment, rejectNutritionAdjustment, logPlannedMeal, swapPlannedMeal, removeSwap, getFoods, logWater, type PendingNutritionAdjustment, type PlannedMealItem, type PlannedMealFood, type FoodProposalSummary, type NutritionPageData } from '../../../src/api/nutrition'
 import { useAuthStore } from '../../../src/store/auth'
-import UpgradeWall from '../../../src/components/UpgradeWall'
 import NutritionProgressCard from '../../../src/components/dashboard/NutritionProgressCard'
 import FoodSetupFlow from '../../../src/components/FoodSetupFlow'
 import LogFoodModal from '../../../src/components/LogFoodModal'
@@ -23,6 +22,7 @@ function getLocalDateString(): string {
 const DAY_TYPE = {
   hard: { label: 'Día duro', emoji: '🔥', color: '#ea580c' },
   easy: { label: 'Día fácil', emoji: '✅', color: '#16a34a' },
+  low:  { label: 'Día suave', emoji: '🟣', color: '#7c3aed' },
   rest: { label: 'Descanso', emoji: '😴', color: '#2563eb' },
 }
 
@@ -1160,10 +1160,6 @@ export default function NutritionScreen() {
     staleTime: 10 * 60_000,
     enabled: (data?.plannedMeals?.length ?? 0) > 0,
   })
-
-  if (!user?.features?.nutrition) {
-    return <UpgradeWall icon="🥗" title="Plan nutricional" description="Accede a tu plan de nutrición periodizado por tipo de entrenamiento con el plan Pro." />
-  }
 
   const dayType = data?.dayType ?? 'easy'
   const day     = DAY_TYPE[dayType]

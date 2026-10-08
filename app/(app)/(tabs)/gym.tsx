@@ -9,7 +9,6 @@ import { getTodayGymSession, getGymWeek, getPublicTemplates, assignTemplate, typ
 import { getMuscleVolume } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
 import { useGymSessionStore } from '../../../src/store/gymSession'
-import UpgradeWall from '../../../src/components/UpgradeWall'
 import MuscleMap, { MuscleData } from '../../../src/components/MuscleMap'
 
 const DOW_LABELS = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -515,10 +514,6 @@ export default function GymScreen() {
     enabled: !isError,
   })
 
-  if (!user?.features?.gym) {
-    return <UpgradeWall icon="🏋️" title="Entreno" description="Registra tus sesiones de entreno, sigue la progresión de cargas y accede a rutinas con el plan Pro." />
-  }
-
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
@@ -527,13 +522,13 @@ export default function GymScreen() {
     )
   }
 
-  // Sin rutina asignada (404) → mostrar selector de plantillas públicas
-  if (isError) {
+  // Sin rutina asignada → mostrar selector de plantillas públicas (paridad con web)
+  if (isError || !session || session.freeSession) {
     return <TemplatePickerScreen insets={insets} />
   }
 
-  // Rutina asignada pero hoy es descanso (isRestDay o sin workoutDay)
-  if (!session || session.isRestDay || !session.workoutDay) {
+  // Rutina asignada pero hoy es descanso (isRestDay o sin workoutDay para hoy)
+  if (session.isRestDay || !session.workoutDay) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', paddingHorizontal: 24 }}>
         <Text style={{ fontSize: 48, marginBottom: 16 }}>😴</Text>

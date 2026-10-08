@@ -5,8 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { getProgress, getMuscleVolume, ActivityGridEntry } from '../../src/api/progress'
-import { useAuthStore } from '../../src/store/auth'
-import UpgradeWall from '../../src/components/UpgradeWall'
 import MuscleMap, { MuscleData } from '../../src/components/MuscleMap'
 
 const PHASE_COLOR: Record<string, string> = {
@@ -95,7 +93,6 @@ function ActivityHeatmap({ grid }: { grid: Record<string, ActivityGridEntry> }) 
 }
 
 export default function ProgressScreen() {
-  const { user } = useAuthStore()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { data, isLoading } = useQuery({ queryKey: ['progress'], queryFn: getProgress })
@@ -103,10 +100,6 @@ export default function ProgressScreen() {
     queryKey: ['progress-muscles'],
     queryFn: () => getMuscleVolume(7),
   })
-
-  if (!user?.features?.progress) {
-    return <UpgradeWall icon="📊" title="Progreso" description="Visualiza tu evolución de peso, FC y adherencia semana a semana con el plan Pro." />
-  }
 
   const GradientHeader = () => (
     <LinearGradient

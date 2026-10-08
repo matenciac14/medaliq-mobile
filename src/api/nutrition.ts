@@ -13,7 +13,7 @@ export type PendingNutritionAdjustment = {
 
 export type NutritionData = {
   hasNutritionPlan: boolean
-  dayType: 'hard' | 'easy' | 'rest'
+  dayType: 'hard' | 'easy' | 'low' | 'rest'
   macros: {
     kcal: number
     proteinG: number
@@ -59,7 +59,7 @@ export type MacroTotals = {
 
 export type FoodLogData = {
   date: string
-  dayType: 'hard' | 'easy' | 'rest'
+  dayType: 'hard' | 'easy' | 'low' | 'rest'
   logs: FoodLogEntry[]
   totals: MacroTotals
   target: MacroTotals | null
@@ -91,7 +91,7 @@ export type NextMealData = {
 
 export type NutritionPageData = {
   hasNutritionPlan: boolean
-  dayType: 'hard' | 'easy' | 'rest'
+  dayType: 'hard' | 'easy' | 'low' | 'rest'
   macros: NutritionData['macros']
   targets: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null
   dayTargets: {

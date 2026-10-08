@@ -14,8 +14,11 @@ const mockUser: SessionUser = {
   name: 'Miguel Test',
   email: 'miguel@test.com',
   role: 'ATHLETE',
+  status: 'ACTIVE',
   userPlan: 'TRIAL',
   onboardingCompleted: true,
+  activated: true,
+  isB2B: false,
   features: {
     plan: true,
     checkin: true,

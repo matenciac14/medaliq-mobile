@@ -1,9 +1,9 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
+import { AppState, AppStateStatus, Alert } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { useAuthStore } from '../../src/store/auth'
-import { getMe } from '../../src/api/auth'
+import { getMe, logout } from '../../src/api/auth'
 import { registerForPushNotificationsAsync } from '../../src/lib/notifications'
 import { registerPushToken } from '../../src/api/notifications'
 import { syncRecent } from '../../src/services/healthkit.service'
@@ -25,8 +25,31 @@ export default function AppLayout() {
   const pushRegisteredRef = useRef(false)
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (isLoading) return
+    if (!user) {
       router.replace('/(auth)/login')
+      return
+    }
+    // Paridad con web middleware: bloquear usuarios suspendidos/bloqueados
+    if (user.status === 'BLOCKED' || user.status === 'SUSPENDED') {
+      const msg = user.status === 'BLOCKED'
+        ? 'Tu cuenta ha sido bloqueada.'
+        : 'Tu cuenta está suspendida.'
+      Alert.alert('Cuenta inactiva', msg, [{
+        text: 'Entendido',
+        onPress: async () => { await logout(); setUser(null); router.replace('/(auth)/login') },
+      }])
+      return
+    }
+    // B2B no activado → redirigir a pending
+    if (user.role === 'ATHLETE' && user.isB2B && !user.activated && user.onboardingCompleted) {
+      router.replace('/(app)/pending' as any)
+      return
+    }
+    // Onboarding incompleto
+    if (user.role === 'ATHLETE' && !user.onboardingCompleted) {
+      router.replace('/(auth)/onboarding' as any)
+      return
     }
   }, [user, isLoading])
 

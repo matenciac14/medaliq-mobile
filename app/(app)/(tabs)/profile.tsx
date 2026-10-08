@@ -71,11 +71,11 @@ export default function ProfileScreen() {
     ])
   }
 
-  const plan = (user as any)?.userPlan ?? 'INACTIVE'
+  const plan = user?.userPlan ?? 'INACTIVE'
   const planLabel: Record<string, string> = {
     INACTIVE: 'Inactivo',
     FREE: 'Gratis',
-    PRO: 'Pro',
+    PRO: user?.isB2B ? 'Coach' : 'Pro',
   }
 
   const cardStyle = {

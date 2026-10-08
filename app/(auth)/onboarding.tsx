@@ -59,7 +59,7 @@ const GENDERS: { id: Gender; label: string }[] = [
   { id: 'other', label: 'Otro' },
 ]
 
-const DAYS = [2, 3, 4, 5, 6]
+const DAYS = [2, 3, 4, 5, 6, 7]
 
 const MIN_DOB = new Date(Date.now() - 80 * 365.25 * 24 * 60 * 60 * 1000)
 const MAX_DOB = new Date(Date.now() - 10 * 365.25 * 24 * 60 * 60 * 1000)
@@ -112,14 +112,32 @@ export default function OnboardingScreen() {
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || !form.dateOfBirth) return
+
+    // Validaciones de rango (paridad con web)
+    const h = parseFloat(form.heightCm)
+    const w = parseFloat(form.weightKg)
+    if (isNaN(h) || h < 100 || h > 250) {
+      Alert.alert('Dato invalido', 'La altura debe estar entre 100 y 250 cm.')
+      return
+    }
+    if (isNaN(w) || w < 20 || w > 300) {
+      Alert.alert('Dato invalido', 'El peso debe estar entre 20 y 300 kg.')
+      return
+    }
+    const wg = form.weightGoalKg ? parseFloat(form.weightGoalKg) : null
+    if (form.goal === 'LOSE_FAT' && wg != null && wg >= w) {
+      Alert.alert('Dato invalido', 'El peso objetivo debe ser menor al peso actual.')
+      return
+    }
+
     setLoading(true)
     try {
       const payload = {
         dateOfBirth: formatDate(form.dateOfBirth),
         gender: form.gender,
-        heightCm: parseFloat(form.heightCm),
-        weightKg: parseFloat(form.weightKg),
-        weightGoalKg: form.weightGoalKg ? parseFloat(form.weightGoalKg) : null,
+        heightCm: h,
+        weightKg: w,
+        weightGoalKg: wg,
         goal: form.goal,
         daysPerWeek: form.daysPerWeek,
       }

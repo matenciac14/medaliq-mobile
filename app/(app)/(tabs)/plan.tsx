@@ -12,7 +12,6 @@ import * as Haptics from 'expo-haptics'
 import { getPlan, getCalendarWeek, type PlannedSession, type PlanData, type LastCompletedPlan, type CalendarWeek, type CalendarDay } from '../../../src/api/plan'
 import { getDashboard } from '../../../src/api/dashboard'
 import { useAuthStore } from '../../../src/store/auth'
-import UpgradeWall from '../../../src/components/UpgradeWall'
 import CalendarStrip, { type DayCell } from '../../../src/components/CalendarStrip'
 import NutritionProgressCard from '../../../src/components/dashboard/NutritionProgressCard'
 import HydrationWidget from '../../../src/components/dashboard/HydrationWidget'
@@ -155,16 +154,6 @@ export default function PlanScreen() {
     mon.setHours(0, 0, 0, 0)
     return mon
   }, [])
-
-  if (!user?.features?.plan) {
-    return (
-      <UpgradeWall
-        icon="📅"
-        title="Mi Plan"
-        description="Accede a tu plan periodizado, CalendarStrip interactivo y métricas semanales con el plan Pro."
-      />
-    )
-  }
 
   if (isLoading) {
     return (
