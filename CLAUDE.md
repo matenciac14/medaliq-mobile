@@ -37,6 +37,28 @@ Para detalle de pantallas o API layer → leer los archivos directamente.
 Specs y domains: mismas que web → `../specs/<modulo>.spec.md`, `../domains/<modulo>.md`
 Traps por modulo: ver indice en `../MEDALIQ-PROJECT/CLAUDE.md`
 
+## Forge — cómo arrancar una feature mobile
+
+Features mobile se trabajan directamente en una rama `feature/` desde main (sin worktrees).
+Los agentes y pipeline Forge viven en `../MEDALIQ-PROJECT/agents/`.
+
+**Carril directo** (1-2 pantallas, sin cambios DB):
+```
+git checkout -b feature/<nombre>
+claude  # leer este CLAUDE.md + spec del módulo + implementar
+```
+
+**Pipeline completo** (feature nueva con endpoint + pantalla):
+```
+# 1. Arrancar en el worktree web correspondiente (wt.sh lo crea)
+# 2. El agente @mobile cubre la parte mobile dentro de ese mismo pipeline
+# 3. Al terminar: commit mobile + PR → main
+```
+
+Agentes disponibles (en `../MEDALIQ-PROJECT/agents/`):
+- `@mobile.md` — reglas UI, auth, NO HACER para mobile
+- `forge-survey.md` / `forge-build.md` / `forge-inspect.md` / `forge-seal.md`
+
 ## Build
 `npx expo start` · `eas build --profile preview --platform android` · `eas submit`
 
