@@ -7,7 +7,8 @@
 2026-10-28
 
 ## Estado técnico
-- Branch activa: main
+- Git flow: main ← develop ← feature/* (PRs siempre a develop)
+- Branch activa: develop
 - Pre-push gate: tsc --noEmit + pnpm test (hook en .git/hooks/pre-push) ✅ activo
 - Build: npx expo start (dev) · eas build --profile preview (staging)
 - Prisma import correcto en web: `@/generated/prisma/client` (no `@/generated/prisma`)
