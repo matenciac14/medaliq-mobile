@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MedaliqLogo } from '../../src/components/MedaliqLogo'
 import {
   View,
   Text,
@@ -84,9 +85,7 @@ export default function RegisterScreen() {
           alignItems: 'center',
           paddingTop: insets.top,
         }}>
-          <Text style={{ fontSize: 32, fontFamily: 'Inter_900Black', color: 'white', letterSpacing: -0.5 }}>
-            Medal<Text style={{ color: '#f97316' }}>iq</Text>
-          </Text>
+          <MedaliqLogo variant="dark" size="lg" />
           <Text style={{ fontSize: 14, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.55)', marginTop: 8 }}>
             Empieza gratis, sin tarjeta.
           </Text>
@@ -188,9 +187,10 @@ export default function RegisterScreen() {
             <View style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
           </View>
 
-          {/* Google placeholder */}
+          {/* Google — pendiente de implementar OAuth */}
           <TouchableOpacity
-            activeOpacity={0.85}
+            disabled
+            activeOpacity={1}
             style={{
               borderWidth: 1.5,
               borderColor: '#e2e8f0',
@@ -200,9 +200,11 @@ export default function RegisterScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
+              opacity: 0.45,
             }}
           >
             <Text style={{ color: '#374151', fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Continuar con Google</Text>
+            <Text style={{ color: '#94a3b8', fontSize: 12, fontFamily: 'Inter_400Regular' }}>(próximamente)</Text>
           </TouchableOpacity>
 
           {/* Login link */}

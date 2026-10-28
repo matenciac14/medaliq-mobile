@@ -2,7 +2,7 @@ node_modules/
 .expo/
 dist/
 .env
-.env.local
+.env.*
 *.log
 ios/
 android/
@@ -13,3 +13,11 @@ android/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Claude Code — ignorar settings locales, trackear memoria
+.claude/
+!.claude/memory/
+!.claude/memory/**
+
+# Claude Code — worktree local, no commitear
+CLAUDE.worktree.md

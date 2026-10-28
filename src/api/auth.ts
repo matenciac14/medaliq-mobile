@@ -10,8 +10,11 @@ export type SessionUser = {
   name: string
   email: string
   role: 'ATHLETE' | 'COACH' | 'ADMIN'
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'DELETED'
   userPlan: 'FREE' | 'TRIAL' | 'PRO' | 'INACTIVE'
   onboardingCompleted: boolean
+  activated: boolean
+  isB2B: boolean
   features: {
     plan: boolean
     checkin: boolean
@@ -21,6 +24,7 @@ export type SessionUser = {
     coach: boolean
     gym: boolean
   }
+  sport?: string
 }
 
 export async function login(payload: LoginPayload): Promise<SessionUser> {
@@ -56,6 +60,15 @@ export async function setMobileRole(role: 'ATHLETE' | 'COACH'): Promise<SessionU
   )
   await saveToken(res.token)
   return res.user
+}
+
+export async function syncTimezone(): Promise<void> {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (!tz) return
+  await apiFetch('/api/mobile/auth/me', {
+    method: 'PATCH',
+    body: { timezone: tz },
+  }).catch(() => {})
 }
 
 export async function refreshToken(): Promise<SessionUser['features']> {

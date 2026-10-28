@@ -1,11 +1,23 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
+import { AppState, AppStateStatus, Alert } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { useAuthStore } from '../../src/store/auth'
-import { getMe } from '../../src/api/auth'
+import { getMe, logout } from '../../src/api/auth'
 import { registerForPushNotificationsAsync } from '../../src/lib/notifications'
 import { registerPushToken } from '../../src/api/notifications'
+import { syncRecent } from '../../src/services/healthkit.service'
+
+// Mapa de screen → ruta Expo Router
+const SCREEN_ROUTES: Record<string, string> = {
+  notifications:  '/(app)/notifications',
+  checkin:        '/(app)/(tabs)/checkin',
+  plan:           '/(app)/(tabs)/plan',
+  gym:            '/(app)/(tabs)/gym',
+  progress:       '/(app)/(tabs)/progress',
+  nutrition:      '/(app)/(tabs)/nutrition',
+  messages:       '/(app)/messages',
+}
 
 export default function AppLayout() {
   const { user, isLoading, setUser } = useAuthStore()
@@ -13,8 +25,31 @@ export default function AppLayout() {
   const pushRegisteredRef = useRef(false)
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (isLoading) return
+    if (!user) {
       router.replace('/(auth)/login')
+      return
+    }
+    // Paridad con web middleware: bloquear usuarios suspendidos/bloqueados
+    if (user.status === 'BLOCKED' || user.status === 'SUSPENDED') {
+      const msg = user.status === 'BLOCKED'
+        ? 'Tu cuenta ha sido bloqueada.'
+        : 'Tu cuenta está suspendida.'
+      Alert.alert('Cuenta inactiva', msg, [{
+        text: 'Entendido',
+        onPress: async () => { await logout(); setUser(null); router.replace('/(auth)/login') },
+      }])
+      return
+    }
+    // B2B no activado → redirigir a pending
+    if (user.role === 'ATHLETE' && user.isB2B && !user.activated && user.onboardingCompleted) {
+      router.replace('/(app)/pending' as any)
+      return
+    }
+    // Onboarding incompleto
+    if (user.role === 'ATHLETE' && !user.onboardingCompleted) {
+      router.replace('/(auth)/onboarding' as any)
+      return
     }
   }, [user, isLoading])
 
@@ -26,8 +61,14 @@ export default function AppLayout() {
       .then(token => {
         if (token) return registerPushToken(token)
       })
-      .catch(() => {})
+      .catch(err => console.error('[push] Token registration failed:', err))
   }, [user])
+
+  // Sync HealthKit workouts al autenticar — fire-and-forget, no bloquea UI
+  useEffect(() => {
+    if (!user) return
+    syncRecent().catch(err => console.error('[healthkit] syncRecent failed:', err))
+  }, [user?.id])
 
   // Refresh features cuando la app vuelve al primer plano.
   // Garantiza que trial expirado, B2B activado u otros cambios de features
@@ -48,7 +89,7 @@ export default function AppLayout() {
     return () => sub.remove()
   }, [refreshUser])
 
-  // Escuchar notificaciones en foreground — si el coach activó features, refrescar JWT
+  // Foreground: recibir notificación — refrescar si es features_updated
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data as Record<string, unknown> | undefined
@@ -58,6 +99,21 @@ export default function AppLayout() {
     })
     return () => sub.remove()
   }, [refreshUser])
+
+  // Tap en notificación (foreground, background o killed) → navegar a la pantalla correcta
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined
+      const screen = data?.screen as string | undefined
+      if (screen && SCREEN_ROUTES[screen]) {
+        router.push(SCREEN_ROUTES[screen] as any)
+      } else {
+        // Fallback: abrir lista de notificaciones
+        router.push('/(app)/notifications')
+      }
+    })
+    return () => sub.remove()
+  }, [router])
 
   return <Stack screenOptions={{ headerShown: false }} />
 }

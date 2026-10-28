@@ -2,8 +2,9 @@ import { apiFetch } from './client'
 
 export type TodaySession = {
   id: string
+  logId: string | null
   type: string
-  durationMin: number
+  durationMin: number | null
   zoneTarget: string
   detailText: string
   completed: boolean
@@ -17,6 +18,7 @@ export type WeekSession = {
   id: string | null
   durationMin: number | null
   zoneTarget: string | null
+  gymLabel: string | null
 }
 
 export type DashboardData = {
@@ -40,6 +42,7 @@ export type DashboardData = {
   checkinPending: boolean
   // hero cards
   streakDays: number
+  weekStreak: number
   raceDays: number | null
   isRecomp: boolean
   formStatus: 'good' | 'moderate' | 'rest'
@@ -49,6 +52,7 @@ export type DashboardData = {
     hardestSessionRpe: number | null
     sleepHours: number | null
   } | null
+  lastCheckinDaysAgo: number | null
   weeklyWeightChange: number | null
   weightProgressPct: number | null
   currentVolume: number | null
@@ -60,7 +64,7 @@ export type DashboardData = {
     fatG: number
     label: string
   } | null
-  mode: 'TRAINING' | 'RECOVERY' | 'FREE'
+  mode: 'TRAINING' | 'RECOVERY' | 'FREE' | 'GYM'
   recoveryDaysLeft: number | null
   completedPlanName: string | null
   weeklyRoutine?: {
@@ -77,6 +81,50 @@ export type DashboardData = {
   todayLog: {
     weightKg: number | null
     energyLevel: number | null
+  } | null
+  hasEverLogged: boolean
+  // Coach & B2B info
+  coach: {
+    name: string
+    headline: string | null
+    initial: string
+  } | null
+  isB2B: boolean
+  workoutName: string | null
+  justCompletedPlan: {
+    name: string
+    totalWeeks: number
+    totalSessions: number
+    totalKm: number | null
+    seasonNumber: number
+    adherencePct: number | null
+  } | null
+  pendingSuggestionsCount: number
+  todayFoodTotals: {
+    kcal: number
+    proteinG: number
+    carbsG: number
+    fatG: number
+  }
+  // PERF-02: pre-hydrated data to avoid independent fetches
+  waterData: {
+    mlLogged: number
+    waterMlTarget: number
+  }
+  mealSlotLogs: { mealType: string; kcal: number }[]
+  checkInData: {
+    energyLevel: number | null
+    sleepHours: number | null
+    stressLevel: number | null
+    motivationLevel: number | null
+    recordedAt: string
+  } | null
+  hrZones: {
+    z1: { min: number; max: number }
+    z2: { min: number; max: number }
+    z3: { min: number; max: number }
+    z4: { min: number; max: number }
+    z5: { min: number; max: number }
   } | null
 }
 
