@@ -14,10 +14,11 @@ android/
 expo-env.d.ts
 # @end expo-cli
 
-# Claude Code — ignorar settings locales, trackear memoria
+# Claude Code — ignorar settings locales, trackear memoria y hooks compartidos
 .claude/
 !.claude/memory/
 !.claude/memory/**
+!.claude/settings.json
 
 # Claude Code — worktree local, no commitear
 CLAUDE.worktree.md

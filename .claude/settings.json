@@ -1,0 +1,26 @@
+{
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/miguelatencia/Desktop/FACTORY_AI_SOFTWARE/MEDALIQ/MEDALIQ-MOBILE && pnpm tsc --noEmit 2>&1 | tail -8"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/miguelatencia/Desktop/FACTORY_AI_SOFTWARE/MEDALIQ/MEDALIQ-MOBILE && pnpm tsc --noEmit 2>&1 | tail -5 && echo '✓ TypeScript OK — puedes declarar listo' || (echo '✗ TypeScript con errores — corrige antes de terminar' && exit 2)"
+          }
+        ]
+      }
+    ]
+  }
+}
