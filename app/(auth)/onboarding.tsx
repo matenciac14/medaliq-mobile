@@ -156,7 +156,7 @@ export default function OnboardingScreen() {
         Alert.alert(
           'Perfil creado',
           'Tu coach revisara tu perfil y activara tu cuenta.',
-          [{ text: 'Entendido', onPress: () => router.replace('/(app)/pending') }]
+          [{ text: 'Entendido', onPress: () => router.replace('/(app)/pending' as never) }]
         )
       } else {
         router.replace('/(app)/(tabs)/dashboard')

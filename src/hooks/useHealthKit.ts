@@ -42,7 +42,7 @@ export function useHealthKit(): HealthKitState & { requestAuthorization: () => P
     setState((s) => ({ ...s, loading: true, error: null }))
 
     await new Promise<void>((resolve) => {
-      AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
+      AppleHealthKit.initHealthKit(PERMISSIONS, (err: unknown) => {
         if (err) {
           // HealthKit no informa cuáles permisos fueron denegados — tratar como parcial
           console.warn('[HealthKit] init error (may be partial permissions):', err)

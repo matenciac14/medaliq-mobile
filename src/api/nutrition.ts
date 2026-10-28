@@ -397,3 +397,22 @@ export async function getWaterLog(): Promise<WaterLogData> {
 export async function logWater(delta: number): Promise<{ mlLogged: number }> {
   return apiFetch<{ mlLogged: number }>('/api/mobile/nutrition/water', { method: 'POST', body: { delta } })
 }
+
+export async function generateMeals(payload: {
+  availableFoods: string[]
+  restrictions: string[]
+  mealsPerDay: number
+  weighsFood: boolean
+  notes?: string
+}): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>('/api/mobile/nutrition/food-profile', {
+    method: 'POST',
+    body: {
+      availableFoodIds: payload.availableFoods,
+      restrictions: payload.restrictions,
+      mealsPerDay: payload.mealsPerDay,
+      weighsFood: payload.weighsFood,
+      notes: payload.notes,
+    },
+  })
+}
