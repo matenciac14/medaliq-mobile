@@ -37,22 +37,27 @@ Para detalle de pantallas o API layer → leer los archivos directamente.
 Specs y domains: mismas que web → `../specs/<modulo>.spec.md`, `../domains/<modulo>.md`
 Traps por modulo: ver indice en `../MEDALIQ-PROJECT/CLAUDE.md`
 
+## Git flow
+`main` ← `develop` ← `feature/<n>-kebab` · `bugfix/<n>-kebab`
+Commits: `feat:` · `fix:` · `chore:` · `docs:`
+**PRs siempre a `develop`** — `develop` → `main` solo en releases.
+
 ## Forge — cómo arrancar una feature mobile
 
-Features mobile se trabajan directamente en una rama `feature/` desde main (sin worktrees).
 Los agentes y pipeline Forge viven en `../MEDALIQ-PROJECT/agents/`.
 
 **Carril directo** (1-2 pantallas, sin cambios DB):
 ```
-git checkout -b feature/<nombre>
+git checkout -b feature/<nombre>   # desde develop
 claude  # leer este CLAUDE.md + spec del módulo + implementar
+# PR → develop
 ```
 
 **Pipeline completo** (feature nueva con endpoint + pantalla):
 ```
-# 1. Arrancar en el worktree web correspondiente (wt.sh lo crea)
-# 2. El agente @mobile cubre la parte mobile dentro de ese mismo pipeline
-# 3. Al terminar: commit mobile + PR → main
+# 1. Branch feature/<nombre> en web Y mobile desde develop
+# 2. El agente @mobile cubre la parte mobile dentro del mismo pipeline
+# 3. Al terminar: PR mobile → develop · PR web → develop
 ```
 
 Agentes disponibles (en `../MEDALIQ-PROJECT/agents/`):
