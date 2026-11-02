@@ -34,7 +34,8 @@
       "package": "com.medaliq.app",
       "versionCode": 1,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -65,11 +66,13 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "REEMPLAZAR_CON_EAS_PROJECT_ID"
-      }
+        "projectId": "0efb76d3-e075-4f0e-8d68-870f9d60fbf4"
+      },
+      "router": {}
     },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "miguelatencia"
   }
 }
