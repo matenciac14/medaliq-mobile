@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
-import { getProgress, getMuscleVolume } from '../../../src/api/progress'
+import { getProgress, getMuscleVolume, getRunningPrs, type RunningPr } from '../../../src/api/progress'
 import { useAuthStore } from '../../../src/store/auth'
 import MuscleMap from '../../../src/components/MuscleMap'
 
@@ -55,6 +55,12 @@ export default function ProgressScreen() {
     queryKey: ['progress-muscles'],
     queryFn: () => getMuscleVolume(7),
     enabled: !!(user?.features?.gym),
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: runningPrs } = useQuery({
+    queryKey: ['running-prs'],
+    queryFn: getRunningPrs,
     staleTime: 5 * 60_000,
   })
 
@@ -486,6 +492,53 @@ export default function ProgressScreen() {
           </View>
         </View>
       )}
+
+      {/* PRs Running */}
+      {(runningPrs ?? []).length > 0 && (() => {
+        const DISTANCES = ['1K', '5K', '10K', '21K', '42K']
+        const prMap: Record<string, RunningPr> = {}
+        ;(runningPrs ?? []).forEach(pr => { prMap[pr.distance] = pr })
+        return (
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, gap: 14, borderWidth: 1, borderColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <SectionHeader title="Récords personales — Running" />
+              <View style={{ backgroundColor: '#fff7ed', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: '#d97706' }}>🏃 PRs</Text>
+              </View>
+            </View>
+            <View style={{ gap: 0 }}>
+              {DISTANCES.map((dist, i) => {
+                const pr = prMap[dist]
+                const isLast = i === DISTANCES.length - 1
+                return (
+                  <View key={dist} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: isLast ? 0 : 1, borderColor: '#f3f4f6' }}>
+                    <Text style={{ width: 36, fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>{dist}</Text>
+                    <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>Ritmo</Text>
+                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+                          {pr?.bestPaceFormatted ?? '—'}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Inter_500Medium', color: '#9ca3af' }}>Tiempo</Text>
+                        <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+                          {pr?.bestTimeFormatted ?? '—'}
+                        </Text>
+                      </View>
+                    </View>
+                    {pr?.source === 'STRAVA' && (
+                      <View style={{ backgroundColor: '#fff7ed', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 9, fontFamily: 'Inter_700Bold', color: '#f97316' }}>S</Text>
+                      </View>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        )
+      })()}
 
       {/* Histórico 1RM por ejercicio */}
       {(data.gymPRHistory ?? []).length > 0 && (

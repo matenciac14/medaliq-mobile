@@ -1294,6 +1294,36 @@ export default function NutritionScreen() {
             waterTarget={data?.waterTarget ?? 2000}
           />
 
+          {/* Energy Balance entry point */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              router.push('/(app)/energy-balance' as any)
+            }}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: 'white', borderRadius: 16, borderWidth: 1,
+              borderColor: '#e5e7eb', paddingHorizontal: 16, paddingVertical: 14,
+              flexDirection: 'row', alignItems: 'center', gap: 12,
+            }}
+          >
+            <View style={{
+              width: 40, height: 40, borderRadius: 12,
+              backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 20 }}>⚡</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#111827' }}>
+                Balance energetico
+              </Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#9ca3af', marginTop: 1 }}>
+                Presupuesto, macros, hidratacion y peso
+              </Text>
+            </View>
+            <Text style={{ fontSize: 18, color: '#9ca3af' }}>›</Text>
+          </TouchableOpacity>
+
           {/* sin-plan & b2b: Activity after hydration */}
           {(data?.isB2B || !data?.hasNutritionPlan) && data?.gymKcalBurned != null && data.gymKcalBurned > 0 && (
             <View style={{

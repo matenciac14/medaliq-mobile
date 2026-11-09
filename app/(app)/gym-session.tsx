@@ -12,11 +12,13 @@ import * as Haptics from 'expo-haptics'
 import * as KeepAwake from 'expo-keep-awake'
 import {
   getTodayGymSession, completeGymSession, searchExercises, getExerciseAlternatives, getGymPRs,
+  getRestDefaults, RestTimerDefaults,
   SetLog, GymSessionData, PRResult, ExerciseOverride, ExerciseSearchResult, GymPR,
 } from '../../src/api/gym'
 import { saveDraft, loadDraft, clearDraft, savePendingSync, loadPendingSync, clearPendingSync } from '../../src/store/gymSessionDraft'
 import { useGymSessionStore } from '../../src/store/gymSession'
 import SharePreviewModal from '../../src/components/SharePreviewModal'
+import RestTimerOverlay from '../../src/components/RestTimerOverlay'
 import type { ShareCardProps } from '../../src/components/ShareCard'
 
 const MOBILE_SUPERSET_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -725,6 +727,7 @@ export default function GymSessionScreen() {
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0)
   const [showFinishModal, setShowFinishModal] = useState(false)
   const [prResults, setPrResults] = useState<PRResult[]>([])
+  const [completedSessionId, setCompletedSessionId] = useState<string | null>(null)
   const [shareCardProps, setShareCardProps] = useState<ShareCardProps | null>(null)
   const [swapTarget, setSwapTarget] = useState<{ workoutExerciseId: string; exerciseId?: string; bodyPart: string; originalName: string } | null>(null)
   const [exerciseOverrides, setExerciseOverrides] = useState<Map<string, { id: string; name: string }>>(new Map())
@@ -733,6 +736,13 @@ export default function GymSessionScreen() {
   const startTimeRef = useRef(Date.now())
   const localIdRef = useRef(1)
   const newLocalId = useCallback(() => `free-${localIdRef.current++}`, [])
+  const restDefaultsRef = useRef<RestTimerDefaults>({
+    autoStart: true,
+    soundEnabled: true,
+    vibrationEnabled: true,
+    defaultCompoundSeconds: 120,
+    defaultIsolationSeconds: 60,
+  })
 
   function handleSharePR(pr: PRResult) {
     const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
@@ -777,6 +787,13 @@ export default function GymSessionScreen() {
   useEffect(() => {
     KeepAwake.activateKeepAwakeAsync()
     return () => { KeepAwake.deactivateKeepAwake() }
+  }, [])
+
+  // Fetch rest timer defaults once on mount — store in ref to avoid re-renders
+  useEffect(() => {
+    getRestDefaults()
+      .then(defaults => { restDefaultsRef.current = defaults })
+      .catch(() => { /* keep defaults */ })
   }, [])
 
   // Restore draft or build fresh sets when session loads
@@ -834,10 +851,11 @@ export default function GymSessionScreen() {
       })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setShowFinishModal(false)
+      setCompletedSessionId(data.sessionId)
       if (data.newPRs.length > 0) {
         setPrResults(data.newPRs)
       } else {
-        router.back()
+        router.replace({ pathname: '/(app)/gym-session-summary', params: { sessionId: data.sessionId } })
       }
     },
     onError: (err: any) => {
@@ -939,10 +957,12 @@ export default function GymSessionScreen() {
       }
       return next
     })
-    // Start rest timer
-    const ex = session!.exercises.find(e => e.id === sets[idx].workoutExerciseId)
-    const restSeconds = ex?.restSeconds ?? 90
-    setRestTimer({ show: true, seconds: restSeconds })
+    // Start rest timer if autoStart is enabled
+    if (restDefaultsRef.current.autoStart) {
+      const ex = session?.exercises.find(e => e.id === sets[idx].workoutExerciseId)
+      const restSeconds = ex?.restSeconds ?? restDefaultsRef.current.defaultCompoundSeconds
+      setRestTimer({ show: true, seconds: restSeconds })
+    }
   }
 
   function handleFinish() {
@@ -1037,7 +1057,14 @@ export default function GymSessionScreen() {
       {prResults.length > 0 && !shareCardProps && (
         <PRModal
           prs={prResults}
-          onClose={() => { setPrResults([]); router.back() }}
+          onClose={() => {
+            setPrResults([])
+            if (completedSessionId) {
+              router.replace({ pathname: '/(app)/gym-session-summary', params: { sessionId: completedSessionId } })
+            } else {
+              router.back()
+            }
+          }}
           onShare={handleSharePR}
         />
       )}
@@ -1045,14 +1072,24 @@ export default function GymSessionScreen() {
         visible={shareCardProps !== null}
         card={shareCardProps ?? { variant: 'pr_gym' }}
         title="Compartir récord"
-        onClose={() => { setShareCardProps(null); setPrResults([]); router.back() }}
+        onClose={() => {
+          setShareCardProps(null)
+          setPrResults([])
+          if (completedSessionId) {
+            router.replace({ pathname: '/(app)/gym-session-summary', params: { sessionId: completedSessionId } })
+          } else {
+            router.back()
+          }
+        }}
       />
-      {restTimer.show && (
-        <RestTimerModal
-          seconds={restTimer.seconds}
-          onDone={() => setRestTimer({ show: false, seconds: 90 })}
-        />
-      )}
+      <RestTimerOverlay
+        visible={restTimer.show}
+        seconds={restTimer.seconds}
+        soundEnabled={restDefaultsRef.current.soundEnabled}
+        vibrationEnabled={restDefaultsRef.current.vibrationEnabled}
+        onDismiss={() => setRestTimer({ show: false, seconds: 90 })}
+        onSkip={() => setRestTimer({ show: false, seconds: 90 })}
+      />
       <FinishModal
         visible={showFinishModal}
         completedCount={completedCount}

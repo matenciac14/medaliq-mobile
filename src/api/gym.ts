@@ -191,3 +191,47 @@ export type PRResult = {
 export async function completeGymSession(payload: CompleteSessionPayload): Promise<{ sessionId: string; newPRs: PRResult[] }> {
   return apiFetch<{ sessionId: string; newPRs: PRResult[] }>('/api/mobile/gym/complete', { method: 'POST', body: payload })
 }
+
+// ── Rest Timer Config ───────────────────────────────────────────────────────
+
+export type RestTimerDefaults = {
+  autoStart: boolean
+  soundEnabled: boolean
+  vibrationEnabled: boolean
+  defaultCompoundSeconds: number
+  defaultIsolationSeconds: number
+}
+
+export async function getRestDefaults(): Promise<RestTimerDefaults> {
+  return apiFetch<RestTimerDefaults>('/api/mobile/gym/rest-defaults')
+}
+
+export async function updateRestDefaults(data: Partial<RestTimerDefaults>): Promise<RestTimerDefaults> {
+  return apiFetch<RestTimerDefaults>('/api/mobile/gym/rest-defaults', { method: 'PATCH', body: data })
+}
+
+export async function updateExerciseRestConfig(exerciseId: string, defaultRestSeconds: number) {
+  return apiFetch(`/api/mobile/gym/exercises/${exerciseId}/rest-config`, { method: 'PATCH', body: { defaultRestSeconds } })
+}
+
+// ── Session Summary ─────────────────────────────────────────────────────────
+
+export type GymSessionSummary = {
+  sessionId: string
+  type: 'gym'
+  completedAt: string
+  durationMin: number
+  totalVolume: number
+  totalSets: number
+  totalExercises: number
+  newPRs: { exerciseName: string; type: string; value: number; unit: string }[]
+  musclesWorked: { name: string; sets: number }[]
+  caloriesBurned: number
+  caloriesEstimated: boolean
+  workoutName: string | null
+  planContext: string | null
+}
+
+export async function getGymSessionSummary(sessionId: string): Promise<GymSessionSummary> {
+  return apiFetch<GymSessionSummary>(`/api/mobile/gym/session/${sessionId}/summary`)
+}

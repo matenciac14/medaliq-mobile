@@ -10,6 +10,7 @@ export type DayCell = {
   isToday: boolean
   canLog: boolean
   gymLabel?: string | null
+  dataSource?: string | null
 }
 
 type Props = {
@@ -112,6 +113,9 @@ export default function CalendarStrip({ days, selectedDow, onSelect }: Props) {
                     {activityDone && !day.isToday ? '✓' : day.dateNum}
                   </Text>
               </View>
+              {day.dataSource === 'STRAVA' && (
+                <Text style={{ fontSize: 8, fontFamily: 'Inter_700Bold', color: '#f97316' }}>S</Text>
+              )}
             </TouchableOpacity>
           )
         })}

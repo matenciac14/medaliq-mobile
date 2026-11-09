@@ -416,3 +416,26 @@ export async function generateMeals(payload: {
     },
   })
 }
+
+// ── Energy Balance ──────────────────────────────────────────────────────────
+
+export type EnergyBalanceData = {
+  date: string
+  tdeeBase: number
+  exerciseCalories: number
+  totalBudget: number
+  consumed: number
+  balance: number
+  macros: {
+    protein: { current: number; target: number }
+    carbs: { current: number; target: number }
+    fat: { current: number; target: number }
+  }
+  todaySession: { completed: boolean; type: string | null; durationMin: number | null; caloriesBurned: number | null } | null
+  water: { mlLogged: number; mlTarget: number }
+  weight: { current: number | null; previous: number | null; weeklyChange: number | null; trend: 'up' | 'down' | 'stable' | null }
+}
+
+export async function getEnergyBalance(): Promise<EnergyBalanceData> {
+  return apiFetch<EnergyBalanceData>('/api/mobile/energy-balance')
+}

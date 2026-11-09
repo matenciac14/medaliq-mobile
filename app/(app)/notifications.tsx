@@ -14,6 +14,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> =
   AJUSTE_NUTRICIONAL:   { icon: 'nutrition-outline',   color: '#22c55e', bg: '#f0fdf4' },
   LOGRO:                { icon: 'trophy-outline',      color: '#f59e0b', bg: '#fffbeb' },
   PROPUESTA_COACH:      { icon: 'person-outline',      color: '#1e3a5f', bg: '#f0f4ff' },
+  WEEKLY_RECAP:         { icon: 'bar-chart-outline',   color: '#f97316', bg: '#fff7ed' },
 }
 
 const DEFAULT_CONFIG = { icon: 'notifications-outline', color: '#6b7280', bg: '#f3f4f6' }
@@ -29,15 +30,10 @@ function formatRelative(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 }
 
-function NotificationRow({ item }: { item: AppNotification }) {
+function NotificationRow({ item, onPress }: { item: AppNotification; onPress?: () => void }) {
   const cfg = TYPE_CONFIG[item.type] ?? DEFAULT_CONFIG
-  return (
-    <View style={{
-      flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-      paddingHorizontal: 16, paddingVertical: 12,
-      backgroundColor: item.read ? 'white' : '#fafafa',
-      borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-    }}>
+  const inner = (
+    <>
       <View style={{
         width: 40, height: 40, borderRadius: 20,
         backgroundColor: cfg.bg, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -60,6 +56,34 @@ function NotificationRow({ item }: { item: AppNotification }) {
           {formatRelative(item.createdAt)}
         </Text>
       </View>
+    </>
+  )
+
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        onPress={() => { Haptics.selectionAsync(); onPress() }}
+        activeOpacity={0.75}
+        style={{
+          flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+          paddingHorizontal: 16, paddingVertical: 12,
+          backgroundColor: item.read ? 'white' : '#fafafa',
+          borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+        }}
+      >
+        {inner}
+      </TouchableOpacity>
+    )
+  }
+
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+      paddingHorizontal: 16, paddingVertical: 12,
+      backgroundColor: item.read ? 'white' : '#fafafa',
+      borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+    }}>
+      {inner}
     </View>
   )
 }
@@ -126,7 +150,12 @@ export default function NotificationsScreen() {
         <FlatList
           data={data?.notifications ?? []}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <NotificationRow item={item} />}
+          renderItem={({ item }) => (
+            <NotificationRow
+              item={item}
+              onPress={item.type === 'WEEKLY_RECAP' ? () => router.push('/(app)/weekly-recap') : undefined}
+            />
+          )}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />}
           ListEmptyComponent={
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 }}>
