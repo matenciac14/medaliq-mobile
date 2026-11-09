@@ -19,6 +19,7 @@ export type WeekSession = {
   durationMin: number | null
   zoneTarget: string | null
   gymLabel: string | null
+  dataSource?: string | null
 }
 
 export type DashboardData = {

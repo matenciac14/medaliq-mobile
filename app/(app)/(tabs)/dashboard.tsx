@@ -95,6 +95,7 @@ function sessionsToCalendarDays(sessions: WeekSession[], weekOffset: number): Da
       isToday: s.isToday,
       canLog: isPastUnlogged,
       gymLabel: hasGym ? s.gymLabel : null,
+      dataSource: s.dataSource ?? null,
     }
   })
 }
@@ -659,6 +660,27 @@ export default function DashboardScreen() {
         {d.hasEverLogged && (d.recentActivity?.length ?? 0) > 0 && (
           <RecentActivityCard activities={d.recentActivity ?? []} streakDays={d.streakDays} />
         )}
+
+        {/* Resumen semanal */}
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); router.push('/(app)/weekly-recap' as any) }}
+          activeOpacity={0.85}
+          style={{ backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', ...SHADOW }}
+        >
+          <View style={{ height: 3, backgroundColor: '#f97316' }} />
+          <View style={{ paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="bar-chart-outline" size={18} color="#f97316" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1e3a5f' }}>Resumen semanal</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#6b7280', marginTop: 1 }}>Ver sesiones, nutricion y PRs</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+          </View>
+        </TouchableOpacity>
 
         {/* ============================================================== */}
         {/* MODE-SPECIFIC: Bottom CTAs / Info cards                        */}

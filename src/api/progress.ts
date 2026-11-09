@@ -81,3 +81,41 @@ export async function getProgress(): Promise<ProgressData> {
 export async function getLastRunSession(type: string): Promise<{ log: LastRunSession | null }> {
   return apiFetch<{ log: LastRunSession | null }>(`/api/mobile/log/last-session?type=${encodeURIComponent(type)}`)
 }
+
+export type RunningPr = {
+  distance: string
+  bestPaceFormatted: string | null
+  bestTimeFormatted: string | null
+  achievedAt: string | null
+  source: string | null
+}
+
+export async function getRunningPrs(): Promise<RunningPr[]> {
+  const res = await apiFetch<{ prs: RunningPr[] }>('/api/mobile/running/prs')
+  return res.prs
+}
+
+export type WeeklyRecapData = {
+  weekStart: string
+  weekEnd: string
+  sessionsCompleted: number
+  totalDurationMin: number
+  totalVolume: number | null
+  newPRs: { exerciseName: string; type: string; value: number; unit: string }[]
+  avgKcal: number | null
+  daysLogged: number
+  avgProteinG: number | null
+  weightStart: number | null
+  weightEnd: number | null
+  weightChange: number | null
+  comparison: {
+    sessionsChange: number
+    avgKcalChange: number | null
+    volumeChange: number | null
+  } | null
+  currentStreak: number
+}
+
+export async function getWeeklyRecap(week: 'current' | 'previous' = 'previous'): Promise<WeeklyRecapData> {
+  return apiFetch<WeeklyRecapData>(`/api/mobile/recap/weekly?week=${week}`)
+}
