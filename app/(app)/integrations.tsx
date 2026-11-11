@@ -1,39 +1,13 @@
-import { View, Text, Switch, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native'
+import { View, Text, Switch, TouchableOpacity, ScrollView, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { useState, useEffect } from 'react'
-import { useHealthKit } from '../../src/hooks/useHealthKit'
-import { isSyncEnabled, setSyncEnabled } from '../../src/services/healthkit.service'
+import { useHealthSync } from '../../src/hooks/useHealthSync'
 
 export default function IntegrationsScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { authorized, loading, requestAuthorization } = useHealthKit()
-  const [hkEnabled, setHkEnabled] = useState(false)
-  const [toggling, setToggling] = useState(false)
-
-  useEffect(() => {
-    isSyncEnabled().then(setHkEnabled)
-  }, [])
-
-  async function handleToggleHealthKit(value: boolean) {
-    if (Platform.OS !== 'ios') {
-      Alert.alert('Solo iOS', 'Apple Health solo está disponible en iPhone.')
-      return
-    }
-
-    setToggling(true)
-    try {
-      if (value && !authorized) {
-        await requestAuthorization()
-      }
-      await setSyncEnabled(value)
-      setHkEnabled(value)
-    } finally {
-      setToggling(false)
-    }
-  }
+  const { isAvailable, isEnabled, loading, lastSync, toggle, syncNow } = useHealthSync()
 
   return (
     <ScrollView
@@ -58,8 +32,8 @@ export default function IntegrationsScreen() {
 
       <View style={{ padding: 16, gap: 12 }}>
 
-        {/* Apple Health */}
-        {Platform.OS === 'ios' && (
+        {/* Apple Health (iOS) */}
+        {Platform.OS === 'ios' && isAvailable && (
           <View style={{
             backgroundColor: 'white',
             borderRadius: 16,
@@ -79,21 +53,21 @@ export default function IntegrationsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '700', fontSize: 16, color: '#111827' }}>Apple Health</Text>
                 <Text style={{ color: '#6b7280', fontSize: 13 }}>
-                  {hkEnabled && authorized
+                  {isEnabled
                     ? 'Sincronizando entrenamientos automáticamente'
                     : 'Importa workouts, FC y sueño de tu Apple Watch'}
                 </Text>
               </View>
               <Switch
-                value={hkEnabled}
-                onValueChange={handleToggleHealthKit}
-                disabled={toggling}
+                value={isEnabled}
+                onValueChange={() => toggle()}
+                disabled={loading}
                 trackColor={{ true: '#f97316' }}
                 thumbColor="white"
               />
             </View>
 
-            {hkEnabled && authorized && (
+            {isEnabled && (
               <View style={{
                 backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10,
                 flexDirection: 'row', gap: 6, alignItems: 'center',
@@ -103,6 +77,70 @@ export default function IntegrationsScreen() {
                   Activo — los entrenamientos se importan al abrir la app
                 </Text>
               </View>
+            )}
+
+            {isEnabled && lastSync && (
+              <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 6 }}>
+                Ultima sincronizacion: {lastSync.toLocaleString()}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Google Health Connect (Android) */}
+        {Platform.OS === 'android' && (
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 16,
+            shadowColor: '#000',
+            shadowOpacity: 0.05,
+            shadowRadius: 8,
+            elevation: 2,
+            opacity: isAvailable ? 1 : 0.5,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <View style={{
+                width: 44, height: 44, borderRadius: 12,
+                backgroundColor: '#4285f4', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Ionicons name="fitness" size={22} color="white" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', fontSize: 16, color: '#111827' }}>Health Connect</Text>
+                <Text style={{ color: '#6b7280', fontSize: 13 }}>
+                  {!isAvailable
+                    ? 'Health Connect no disponible en este dispositivo'
+                    : isEnabled
+                      ? 'Sincronizando entrenamientos automaticamente'
+                      : 'Importa workouts, FC y sueno de tu wearable'}
+                </Text>
+              </View>
+              <Switch
+                value={isEnabled}
+                onValueChange={() => toggle()}
+                disabled={loading || !isAvailable}
+                trackColor={{ true: '#f97316' }}
+                thumbColor="white"
+              />
+            </View>
+
+            {isEnabled && isAvailable && (
+              <View style={{
+                backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10,
+                flexDirection: 'row', gap: 6, alignItems: 'center',
+              }}>
+                <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
+                <Text style={{ color: '#15803d', fontSize: 12, fontWeight: '600' }}>
+                  Activo — los entrenamientos se importan al abrir la app
+                </Text>
+              </View>
+            )}
+
+            {isEnabled && lastSync && (
+              <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 6 }}>
+                Ultima sincronizacion: {lastSync.toLocaleString()}
+              </Text>
             )}
           </View>
         )}
