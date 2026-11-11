@@ -1,0 +1,32 @@
+{
+  "_comment": "ASO metadata — usar al hacer eas submit o llenar manualmente en App Store Connect / Google Play Console",
+  "appName": "Medaliq — Tracking Deportivo",
+  "subtitle": "Gym, Running, Nutricion y Coach",
+  "shortDescription": "Registra entrenamientos, nutricion y progreso. Conecta con tu coach.",
+  "fullDescription": "Medaliq es la plataforma de tracking deportivo y coaching para LatAm.\n\nPara atletas:\n- Registra sesiones de gym con series, repeticiones y peso\n- Trackea running con distancia, pace y PRs personales\n- Controla tu nutricion con macros, hidratacion y balance energetico\n- Haz check-in semanal y visualiza tu progreso\n- Sincroniza con Apple Health y wearables\n\nPara coaches:\n- Diseña planes de entrenamiento personalizados\n- Asigna rutinas de gym y planes nutricionales\n- Monitorea adherencia y progreso de tus atletas\n- Comunicate directamente por mensajes\n\nCaracteristicas:\n- Balance energetico diario (TDEE + ejercicio vs consumido)\n- Records personales de running (1K, 5K, 10K, 21K, 42K)\n- Timer de descanso configurable para gym\n- Resumen semanal con metricas de progreso\n- Integracion con Strava y Apple Health\n- Soporte para COP, USD y MXN\n\nGratis para empezar. Pro para desbloquear todo tu potencial.",
+  "keywords": [
+    "gym tracker",
+    "running tracker",
+    "entrenamiento",
+    "nutricion",
+    "coach deportivo",
+    "macros",
+    "fitness",
+    "workout log",
+    "meal tracking",
+    "PRs running",
+    "plan entrenamiento",
+    "check-in semanal",
+    "balance energetico",
+    "wearables",
+    "strava"
+  ],
+  "category": {
+    "ios": "Health & Fitness",
+    "android": "Health & Fitness"
+  },
+  "contentRating": "Everyone",
+  "supportUrl": "https://medaliq.com/help",
+  "privacyUrl": "https://medaliq.com/privacidad",
+  "languages": ["es-419", "es-CO", "es-MX"]
+}

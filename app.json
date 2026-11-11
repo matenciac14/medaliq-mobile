@@ -12,6 +12,8 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e3a5f"
     },
+    "description": "Tu plataforma de tracking deportivo y coaching. Registra gym, running, nutricion y progreso. Conecta con tu coach o entrena solo.",
+    "primaryColor": "#1e3a5f",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.medaliq.app",

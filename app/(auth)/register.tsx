@@ -26,6 +26,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [referralCode, setReferralCode] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleRegister() {
@@ -42,7 +43,7 @@ export default function RegisterScreen() {
     try {
       await apiFetch('/api/auth/register', {
         method: 'POST',
-        body: { name: name.trim(), email: email.trim().toLowerCase(), password },
+        body: { name: name.trim(), email: email.trim().toLowerCase(), password, ...(referralCode.trim() ? { referralCode: referralCode.trim() } : {}) },
         auth: false,
       })
 
@@ -158,6 +159,16 @@ export default function RegisterScreen() {
                 style={inputStyle}
               />
             </View>
+
+            <TextInput
+              value={referralCode}
+              onChangeText={setReferralCode}
+              placeholder="Código de referido (opcional)"
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={inputStyle}
+            />
           </View>
 
           {/* Submit */}
